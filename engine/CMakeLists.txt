@@ -8,10 +8,18 @@ add_library(scrabble_engine
   src/movegen.cpp
   src/game.cpp
   src/greedy_bot.cpp
+  src/gcg.cpp
+  src/wordmap.cpp
+  src/kwg.cpp
+  src/cgp.cpp
 )
 
 add_executable(kingbble_selfplay apps/selfplay.cpp)
 target_link_libraries(kingbble_selfplay PRIVATE scrabble_engine)
+add_executable(kingbble_buildkwg apps/buildkwg.cpp)
+target_link_libraries(kingbble_buildkwg PRIVATE scrabble_engine)
+add_executable(kingbble_positions apps/positions.cpp)
+target_link_libraries(kingbble_positions PRIVATE scrabble_engine)
 target_include_directories(scrabble_engine PUBLIC include)
 target_compile_options(scrabble_engine PRIVATE
   $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic -Werror>)
@@ -34,6 +42,10 @@ if(SCRABBLE_BUILD_TESTS)
     tests/gaddag_test.cpp
     tests/movegen_test.cpp
     tests/game_test.cpp
+    tests/gcg_test.cpp
+    tests/wordmap_test.cpp
+    tests/kwg_test.cpp
+    tests/cgp_test.cpp
   )
   target_compile_definitions(engine_tests PRIVATE
     KINGBBLE_FIXTURES="${PROJECT_SOURCE_DIR}/lexica/fixtures")

@@ -25,6 +25,7 @@ class Game {
   int score(int player) const { return scores_[player]; }
   int to_move() const { return to_move_; }
   int bag_size() const { return bag_.Size(); }
+  int scoreless_turns() const { return scoreless_turns_; }
   bool over() const { return over_; }
 
   // Applies a legal move for the player to move. Placement scores are

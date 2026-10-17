@@ -4,6 +4,7 @@
 #include <fstream>
 #include <stdexcept>
 #include <unordered_map>
+#include <utility>
 
 namespace scrabble {
 
@@ -94,14 +95,18 @@ Gaddag Gaddag::FromWords(const std::vector<std::string>& words) {
       paths.push_back(std::move(p));
     }
   }
+  Gaddag g = FromPaths(std::move(paths));
+  g.num_words_ = n_words;
+  return g;
+}
+
+Gaddag Gaddag::FromPaths(std::vector<std::string> paths) {
   std::sort(paths.begin(), paths.end());
   paths.erase(std::unique(paths.begin(), paths.end()), paths.end());
-
   Gaddag g;
   GaddagBuilder b(g);
   for (const auto& p : paths) b.Add(p);
   b.Finish();
-  g.num_words_ = n_words;
   return g;
 }
 
@@ -128,6 +133,14 @@ Gaddag::Node Gaddag::Next(Node node, std::uint8_t letter) const {
     if (edges_[i].letter == letter) return edges_[i].target;
   }
   return kNone;
+}
+
+std::vector<std::uint8_t> Gaddag::Letters(Node node) const {
+  const FrozenNode& n = nodes_[node];
+  std::vector<std::uint8_t> out;
+  for (std::uint32_t i = n.first_edge; i < n.first_edge + n.num_edges; ++i)
+    out.push_back(edges_[i].letter);
+  return out;
 }
 
 bool Gaddag::Contains(std::string_view word) const {

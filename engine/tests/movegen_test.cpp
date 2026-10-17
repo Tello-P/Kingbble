@@ -7,6 +7,7 @@
 #include <fstream>
 #include <string>
 #include <tuple>
+#include <utility>
 
 #include "scrabble/game.hpp"
 #include "scrabble/greedy_bot.hpp"
@@ -151,6 +152,7 @@ TEST(ScoreMove, CountsCrossWords) {
 
 TEST(MoveGenerator, EmptyBoardMovesCoverCenter) {
   MoveGenerator gen(SmallGaddag());
+  gen.set_vertical_openings(true);
   Board b;
   auto moves = gen.Generate(b, *Rack::FromString("QIAETRS"));
   ASSERT_FALSE(moves.empty());
@@ -163,9 +165,28 @@ TEST(MoveGenerator, EmptyBoardMovesCoverCenter) {
   }
 }
 
+TEST(MoveGenerator, OpeningsAreHorizontalByDefault) {
+  MoveGenerator gen(SmallGaddag());
+  const Rack rack = *Rack::FromString("QIAETRS");
+  auto horizontal = gen.Generate(Board(), rack);
+  ASSERT_FALSE(horizontal.empty());
+  for (const Move& m : horizontal) EXPECT_EQ(m.dir, Direction::kHorizontal) << m.ToString();
+
+  gen.set_vertical_openings(true);
+  auto both = gen.Generate(Board(), rack);
+  EXPECT_EQ(both.size(), 2 * horizontal.size());
+  for (const Move& m : horizontal) {
+    Move t = m;
+    t.dir = Direction::kVertical;
+    std::swap(t.row, t.col);
+    EXPECT_NE(std::find(both.begin(), both.end(), t), both.end()) << m.ToString();
+  }
+}
+
 TEST(MoveGenerator, MatchesBruteForceDuringSelfPlay) {
   const Gaddag& g = SmallGaddag();
   MoveGenerator gen(g);
+  gen.set_vertical_openings(true);  // the reference tries both orientations
   GreedyBot bot(g);
   int positions = 0;
   for (std::uint64_t seed = 1; seed <= 3; ++seed) {

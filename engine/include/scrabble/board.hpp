@@ -26,6 +26,7 @@ class Board {
   bool IsEmpty(int row, int col) const { return cells_[row][col] == kEmpty; }
   std::uint8_t At(int row, int col) const { return cells_[row][col]; }
   void Place(int row, int col, Tile letter, bool from_blank);
+  void Clear(int row, int col) { cells_[row][col] = kEmpty; }
 
  private:
   std::array<std::array<std::uint8_t, kBoardDim>, kBoardDim> cells_;

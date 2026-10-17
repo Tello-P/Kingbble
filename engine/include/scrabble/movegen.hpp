@@ -21,6 +21,11 @@ class MoveGenerator {
  public:
   explicit MoveGenerator(const Gaddag& gaddag) : gaddag_(gaddag) {}
 
+  // On an empty board a vertical opening is the transpose of a horizontal one
+  // (same score, same premiums), so by default only horizontal openings are
+  // generated, as Macondo does. Enable to get both orientations.
+  void set_vertical_openings(bool on) { vertical_openings_ = on; }
+
   std::vector<Move> Generate(const Board& board, const Rack& rack);
 
  private:
@@ -39,6 +44,7 @@ class MoveGenerator {
   void Record(int start, int end);
 
   const Gaddag& gaddag_;
+  bool vertical_openings_ = false;
   // Per-line state.
   Square sq_[kBoardDim];
   Direction dir_ = Direction::kHorizontal;
