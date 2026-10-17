@@ -3,7 +3,7 @@
 
 Examples:
   # Official lexicon you already have (NWL2023 / CSW24), without redistributing it:
-  python scripts/fetch_lexicon.py --name NWL2023 --source ~/Descargas/NWL2023.txt
+  python scripts/fetch_lexicon.py --name NWL2023 --source ~/Downloads/NWL2023.txt
 
   # Free list (ENABLE, public domain) for development and tests:
   python scripts/fetch_lexicon.py --preset enable
