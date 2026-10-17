@@ -3,7 +3,15 @@ add_library(scrabble_engine
   src/rack.cpp
   src/bag.cpp
   src/board.cpp
+  src/gaddag.cpp
+  src/move.cpp
+  src/movegen.cpp
+  src/game.cpp
+  src/greedy_bot.cpp
 )
+
+add_executable(kingbble_selfplay apps/selfplay.cpp)
+target_link_libraries(kingbble_selfplay PRIVATE scrabble_engine)
 target_include_directories(scrabble_engine PUBLIC include)
 target_compile_options(scrabble_engine PRIVATE
   $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic -Werror>)
@@ -23,7 +31,12 @@ if(SCRABBLE_BUILD_TESTS)
     tests/rack_test.cpp
     tests/bag_test.cpp
     tests/board_test.cpp
+    tests/gaddag_test.cpp
+    tests/movegen_test.cpp
+    tests/game_test.cpp
   )
+  target_compile_definitions(engine_tests PRIVATE
+    KINGBBLE_FIXTURES="${PROJECT_SOURCE_DIR}/lexica/fixtures")
   target_link_libraries(engine_tests PRIVATE scrabble_engine GTest::gtest_main)
   include(GoogleTest)
   gtest_discover_tests(engine_tests)

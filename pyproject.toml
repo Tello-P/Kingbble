@@ -1,7 +1,7 @@
 [project]
 name = "kingbble"
 version = "0.0.1"
-description = "Bot de Scrabble con inferencia bayesiana del atril rival y RL (TFG)"
+description = "Scrabble bot with Bayesian opponent-rack inference and RL"
 requires-python = ">=3.11"
 dependencies = []
 
