@@ -10,6 +10,21 @@ int Move::TilesPlayed() const {
       std::count_if(tiles.begin(), tiles.end(), [](char c) { return c != '.'; }));
 }
 
+bool TiebreaksBetter(const Move& a, const Move& b) {
+  if (a.score != b.score) return a.score > b.score;
+  if (a.kind != b.kind) return a.kind < b.kind;
+  if (a.row != b.row) return a.row < b.row;
+  if (a.col != b.col) return a.col < b.col;
+  if (a.dir != b.dir) return a.dir == Direction::kHorizontal;
+  // Exchanges count the tiles returned, as Macondo does.
+  auto tiles = [](const Move& m) {
+    return m.kind == Move::Kind::kExchange ? static_cast<int>(m.tiles.size()) : m.TilesPlayed();
+  };
+  if (tiles(a) != tiles(b)) return tiles(a) < tiles(b);
+  if (a.tiles.size() != b.tiles.size()) return a.tiles.size() < b.tiles.size();
+  return a.tiles < b.tiles;
+}
+
 std::string Move::ToString() const {
   switch (kind) {
     case Kind::kPass:

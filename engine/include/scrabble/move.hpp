@@ -31,4 +31,10 @@ struct Move {
   bool operator==(const Move&) const = default;
 };
 
+// Deterministic order for moves of equal equity, independent of generation
+// order (as Macondo and MAGPIE): higher score, then placement before exchange
+// before pass, lower row, lower column, horizontal, fewer tiles, then tiles in
+// order ('.' < letters < blanks).
+bool TiebreaksBetter(const Move& a, const Move& b);
+
 }  // namespace scrabble

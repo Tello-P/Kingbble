@@ -8,6 +8,9 @@ add_library(scrabble_engine
   src/movegen.cpp
   src/game.cpp
   src/greedy_bot.cpp
+  src/leaves.cpp
+  src/equity.cpp
+  src/equity_bot.cpp
   src/gcg.cpp
   src/wordmap.cpp
   src/kwg.cpp
@@ -46,6 +49,8 @@ if(SCRABBLE_BUILD_TESTS)
     tests/wordmap_test.cpp
     tests/kwg_test.cpp
     tests/cgp_test.cpp
+    tests/leaves_test.cpp
+    tests/equity_test.cpp
   )
   target_compile_definitions(engine_tests PRIVATE
     KINGBBLE_FIXTURES="${PROJECT_SOURCE_DIR}/lexica/fixtures")
