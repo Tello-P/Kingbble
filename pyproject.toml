@@ -1,0 +1,24 @@
+[project]
+name = "kingbble"
+version = "0.0.1"
+description = "Bot de Scrabble con inferencia bayesiana del atril rival y RL (TFG)"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[tool.setuptools.packages.find]
+include = ["ml*", "app*"]
+
+[tool.ruff]
+line-length = 100
+extend-exclude = ["build*"]
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["ml/tests"]
+pythonpath = ["."]
