@@ -104,7 +104,9 @@ void MoveGenerator::PrepareLine(const Board& board, Direction dir, int line) {
                 (line < kBoardDim - 1 && CellAt(board, dir, line + 1, i) != Board::kEmpty);
     bool along = (i > 0 && sq_[i - 1].letter != Board::kEmpty) ||
                  (i < kBoardDim - 1 && CellAt(board, dir, line, i + 1) != Board::kEmpty);
-    s.anchor = side || along || (board_empty_ && line == kCenter && i == kCenter);
+    const bool opening_anchor = board_empty_ && line == kCenter && i == kCenter &&
+                                (dir == Direction::kHorizontal || vertical_openings_);
+    s.anchor = side || along || opening_anchor;
     if (lo == line && hi == line) continue;
 
     s.has_cross = true;

@@ -26,8 +26,13 @@ class Gaddag {
   static Gaddag FromWords(const std::vector<std::string>& words);
   // Reads one word per line (first token), as written by scripts/fetch_lexicon.py.
   static Gaddag FromFile(const std::string& path);
+  // Minimal automaton accepting exactly these paths (bytes are letters 1..26 or
+  // kSeparator). NumWords() is left at zero.
+  static Gaddag FromPaths(std::vector<std::string> paths);
 
   Node Root() const { return root_; }
+  // Outgoing letters of a node, in increasing order.
+  std::vector<std::uint8_t> Letters(Node node) const;
   Node Next(Node node, std::uint8_t letter) const;
   bool IsTerminal(Node node) const { return nodes_[node].terminal; }
 

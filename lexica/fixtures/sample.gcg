@@ -1,0 +1,19 @@
+#character-encoding UTF-8
+#player1 alice Alice Smith
+#player2 bob Bob Jones
+#lexicon ENABLE
+#id kingbble sample-1
+#note Hand-written game covering every move type.
+continuation of the note
+>alice: AERTXYZ 8E RATE +8 8
+>bob: SAAAAAA 8E RATES +5 5
+>alice: IEJKLMN G8 TIE +4 12
+>bob: AEIOUXY -AEIOU +0 5
+>alice: OXABCDE I8 (S)OX +11 23
+>alice: OXABCDE -- -11 12
+>bob: ?TBCDEF E8 .aT +2 7
+>bob: ?BCDEF (challenge) +5 12
+>alice: OXABCDE - +0 12
+>bob: BCDEF -3 +0 12
+>alice: OXABCDE (time) -10 2
+>bob: (AOX) +20 32
