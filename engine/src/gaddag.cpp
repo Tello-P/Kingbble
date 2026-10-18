@@ -1,6 +1,7 @@
 #include "scrabble/gaddag.hpp"
 
 #include <algorithm>
+#include <bit>
 #include <fstream>
 #include <stdexcept>
 #include <unordered_map>
@@ -65,7 +66,12 @@ class GaddagBuilder {
     auto it = register_.find(key);
     if (it != register_.end()) return it->second;
     Gaddag::Node id = static_cast<Gaddag::Node>(g_.nodes_.size());
-    g_.nodes_.push_back({static_cast<std::uint32_t>(g_.edges_.size()),
+    std::uint32_t letters = 0;
+    for (const auto& e : n.edges) {
+      if (letters >> e.letter) throw std::logic_error("gaddag edges out of order");
+      letters |= 1u << e.letter;
+    }
+    g_.nodes_.push_back({static_cast<std::uint32_t>(g_.edges_.size()), letters,
                          static_cast<std::uint8_t>(n.edges.size()), n.terminal});
     g_.edges_.insert(g_.edges_.end(), n.edges.begin(), n.edges.end());
     register_.emplace(std::move(key), id);
@@ -129,10 +135,9 @@ Gaddag Gaddag::FromFile(const std::string& path) {
 
 Gaddag::Node Gaddag::Next(Node node, std::uint8_t letter) const {
   const FrozenNode& n = nodes_[node];
-  for (std::uint32_t i = n.first_edge; i < n.first_edge + n.num_edges; ++i) {
-    if (edges_[i].letter == letter) return edges_[i].target;
-  }
-  return kNone;
+  const std::uint32_t bit = 1u << letter;
+  if (!(n.letters & bit)) return kNone;
+  return edges_[n.first_edge + std::popcount(n.letters & (bit - 1))].target;
 }
 
 std::vector<std::uint8_t> Gaddag::Letters(Node node) const {

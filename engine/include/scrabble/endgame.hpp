@@ -35,6 +35,17 @@ class EndgameSolver {
   // depth 1 always completes.
   EndgameResult Solve(const Game& game, int max_plies = 25, double time_limit_s = 0);
 
+  // Value for the player to move searched with the window (alpha, beta): exact
+  // when strictly inside it, otherwise a bound on the side it falls. Unlike
+  // Solve it keeps the transposition table of earlier calls (values are
+  // relative to the position, so they stay valid); ClearTable() empties it.
+  // With a time limit (seconds, 0 = none) check aborted() afterwards: the value
+  // is then meaningless.
+  int SolveWindow(const Game& game, int alpha, int beta, int max_plies = 25,
+                  double time_limit_s = 0);
+  bool aborted() const { return aborted_; }
+  void ClearTable() { tt_.clear(); }
+
  private:
   struct Entry {
     int depth;  // remaining plies searched (kExactDepth if no line was cut)
@@ -43,6 +54,7 @@ class EndgameSolver {
     Move best;
   };
 
+  void Load(const Game& game);
   int Search(int depth, int alpha, int beta, bool& complete);
   std::vector<Move> OrderedMoves(const Move* tt_move);
   int Play(const Move& m);  // returns points scored; updates hash, side and scoreless

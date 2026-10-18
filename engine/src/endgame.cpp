@@ -183,7 +183,7 @@ int EndgameSolver::Search(int depth, int alpha, int beta, bool& complete) {
   return best;
 }
 
-EndgameResult EndgameSolver::Solve(const Game& game, int max_plies, double time_limit_s) {
+void EndgameSolver::Load(const Game& game) {
   if (game.bag_size() != 0 || game.over())
     throw std::logic_error("endgame solver needs an empty bag");
   board_ = game.board();
@@ -191,12 +191,31 @@ EndgameResult EndgameSolver::Solve(const Game& game, int max_plies, double time_
   to_move_ = game.to_move();
   // As Macondo: one scoreless turn left only if the game was one away from ending.
   scoreless_ = game.scoreless_turns() + 1 >= Game::kMaxScorelessTurns ? 1 : 0;
-  tt_.clear();
   nodes_ = 0;
   aborted_ = false;
   deadline_ = 0;
-  const double start = Now();
   root_key_ = Hash();
+}
+
+int EndgameSolver::SolveWindow(const Game& game, int alpha, int beta, int max_plies,
+                               double time_limit_s) {
+  // A full table stops learning; entries of earlier positions matter least.
+  if (tt_.size() >= kMaxTableEntries) tt_.clear();
+  Load(game);
+  if (time_limit_s > 0) deadline_ = Now() + time_limit_s;
+  int value = 0;
+  for (int depth = 1; depth <= std::max(1, max_plies) && !aborted_; ++depth) {
+    bool complete = true;
+    value = Search(depth, alpha, beta, complete);
+    if (complete) break;
+  }
+  return value;
+}
+
+EndgameResult EndgameSolver::Solve(const Game& game, int max_plies, double time_limit_s) {
+  tt_.clear();
+  Load(game);
+  const double start = Now();
 
   EndgameResult result;
   for (int depth = 1; depth <= std::max(1, max_plies); ++depth) {

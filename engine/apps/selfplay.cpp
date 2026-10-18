@@ -5,7 +5,11 @@
 //   kingbble_selfplay --lexicon lexica/ENABLE.txt --leaves lexica/NWL23.klv2 --a equity --b greedy
 //   kingbble_selfplay ... --a sim --b equity --sim-candidates 10 --sim-iterations 200 --threads 8
 //   kingbble_selfplay ... --a equity+eg --b equity --endgame-time 5
-// A "+eg" suffix makes a bot solve the endgame once the bag is empty.
+//   kingbble_selfplay ... --a equity+peg+eg --b equity+eg --peg-bag 1 --peg-time 10
+// A "+eg" suffix makes a bot solve the endgame once the bag is empty; "+peg"
+// makes it solve the pre-endgame with 1..peg-bag tiles in the bag (the best
+// --peg-candidates plays by static equity, within --peg-time seconds).
+// Suffixes stack: "sim+peg+eg".
 
 #include <chrono>
 #include <cstdlib>
@@ -19,6 +23,7 @@
 #include "scrabble/game.hpp"
 #include "scrabble/greedy_bot.hpp"
 #include "scrabble/leaves.hpp"
+#include "scrabble/preendgame_bot.hpp"
 #include "scrabble/sim_bot.hpp"
 
 using namespace scrabble;
@@ -33,13 +38,25 @@ std::uint64_t MixSeed(std::uint64_t x) {
   return x ^ (x >> 31);
 }
 
+struct PegOptions {
+  int max_bag = 1;
+  PreEndgameParams params;
+};
+
 std::unique_ptr<Bot> MakeBot(const std::string& kind, const Gaddag& gaddag, const Leaves* leaves,
-                             const SimParams& sim, double endgame_time) {
-  const std::string suffix = "+eg";
-  if (kind.size() > suffix.size() && kind.ends_with(suffix)) {
-    return std::make_unique<EndgameBot>(
-        MakeBot(kind.substr(0, kind.size() - suffix.size()), gaddag, leaves, sim, endgame_time),
-        gaddag, endgame_time);
+                             const SimParams& sim, double endgame_time, const PegOptions& peg) {
+  for (const std::string suffix : {"+eg", "+peg"}) {
+    if (kind.size() <= suffix.size() || !kind.ends_with(suffix)) continue;
+    auto inner = MakeBot(kind.substr(0, kind.size() - suffix.size()), gaddag, leaves, sim,
+                         endgame_time, peg);
+    if (suffix == "+eg")
+      return std::make_unique<EndgameBot>(std::move(inner), gaddag, endgame_time);
+    if (!leaves) {
+      std::cerr << "bot '" << kind << "' needs --leaves\n";
+      std::exit(2);
+    }
+    return std::make_unique<PreEndgameBot>(std::move(inner), gaddag, *leaves, peg.max_bag,
+                                           peg.params);
   }
   if (kind == "greedy") return std::make_unique<GreedyBot>(gaddag);
   if ((kind == "equity" || kind == "sim") && !leaves) {
@@ -48,7 +65,8 @@ std::unique_ptr<Bot> MakeBot(const std::string& kind, const Gaddag& gaddag, cons
   }
   if (kind == "equity") return std::make_unique<EquityBot>(gaddag, *leaves);
   if (kind == "sim") return std::make_unique<SimBot>(gaddag, *leaves, sim);
-  std::cerr << "unknown bot: " << kind << " (greedy, equity, sim, optionally with +eg)\n";
+  std::cerr << "unknown bot: " << kind
+            << " (greedy, equity, sim, optionally with +peg and/or +eg)\n";
   std::exit(2);
 }
 
@@ -61,6 +79,9 @@ int main(int argc, char** argv) {
   bool verbose = false;
   SimParams sim;
   double endgame_time = 5;
+  PegOptions peg;
+  peg.params.candidates = 10;
+  peg.params.time_limit_s = 10;
   for (int i = 1; i < argc; ++i) {
     std::string a = argv[i];
     auto value = [&]() -> std::string {
@@ -84,6 +105,12 @@ int main(int argc, char** argv) {
       sim.max_iterations = std::stoi(value());
     } else if (a == "--endgame-time") {
       endgame_time = std::stod(value());
+    } else if (a == "--peg-bag") {
+      peg.max_bag = std::stoi(value());
+    } else if (a == "--peg-candidates") {
+      peg.params.candidates = std::stoi(value());
+    } else if (a == "--peg-time") {
+      peg.params.time_limit_s = std::stod(value());
     } else if (a == "--threads") {
       sim.threads = std::stoi(value());
     } else if (a == "--games") {
@@ -96,7 +123,7 @@ int main(int argc, char** argv) {
       std::cerr << "usage: " << argv[0]
                 << " --lexicon FILE [--leaves KLV] [--a BOT] [--b BOT] [--games N] [--seed S]"
                    " [--sim-candidates N] [--sim-iterations N] [--threads N] [--endgame-time S]"
-                   " [--verbose]\n";
+                   " [--peg-bag N] [--peg-candidates N] [--peg-time S] [--verbose]\n";
       return 2;
     }
   }
@@ -118,8 +145,8 @@ int main(int argc, char** argv) {
     std::cout << "leaves: " << leaves->Size() << "\n";
   }
   sim.seed = seed;
-  std::unique_ptr<Bot> bots[2] = {MakeBot(kind_a, gaddag, leaves.get(), sim, endgame_time),
-                                  MakeBot(kind_b, gaddag, leaves.get(), sim, endgame_time)};
+  std::unique_ptr<Bot> bots[2] = {MakeBot(kind_a, gaddag, leaves.get(), sim, endgame_time, peg),
+                                  MakeBot(kind_b, gaddag, leaves.get(), sim, endgame_time, peg)};
 
   long long turns = 0, generated = 0, total_score = 0, spread_a = 0;
   int wins[3] = {0, 0, 0};     // by seat: p1, p2, ties

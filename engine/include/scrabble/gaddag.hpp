@@ -34,6 +34,8 @@ class Gaddag {
   // Outgoing letters of a node, in increasing order.
   std::vector<std::uint8_t> Letters(Node node) const;
   Node Next(Node node, std::uint8_t letter) const;
+  // Bit L set for each outgoing letter L.
+  std::uint32_t LetterMask(Node node) const { return nodes_[node].letters; }
   bool IsTerminal(Node node) const { return nodes_[node].terminal; }
 
   // Dictionary lookup through the separator-free reversed path.
@@ -46,6 +48,7 @@ class Gaddag {
  private:
   struct FrozenNode {
     std::uint32_t first_edge;
+    std::uint32_t letters;  // bit L set for each outgoing letter; edges sorted by letter
     std::uint8_t num_edges;
     bool terminal;
   };

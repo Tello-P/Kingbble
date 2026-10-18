@@ -1,5 +1,6 @@
 #include "scrabble/movegen.hpp"
 
+#include <bit>
 #include <cctype>
 
 namespace scrabble {
@@ -71,6 +72,9 @@ std::vector<Move> MoveGenerator::Generate(const Board& board, const Rack& rack) 
   std::vector<Move> moves;
   board_ = &board;
   rack_ = rack;
+  rack_letters_ = 0;
+  for (int t = 0; t < kNumTileTypes; ++t)
+    if (rack.Count(Tile(t)) > 0) rack_letters_ |= 1u << t;
   out_ = &moves;
   board_empty_ = board.IsEmpty(kCenter, kCenter);
   for (Direction dir : {Direction::kHorizontal, Direction::kVertical}) {
@@ -112,18 +116,35 @@ void MoveGenerator::PrepareLine(const Board& board, Direction dir, int line) {
     s.has_cross = true;
     for (int k = lo; k <= hi; ++k)
       if (k != line) s.cross_score += CellValue(CellAt(board, perp, i, k));
+    // The cross set only depends on the perpendicular word around the square,
+    // which rarely changes between calls (endgame search): cache it.
+    CrossEntry key;
+    key.valid = true;
+    key.word[0] = static_cast<std::uint8_t>(line - lo);
+    key.word[1] = static_cast<std::uint8_t>(hi - lo);
+    for (int k = lo, j = 2; k <= hi; ++k)
+      if (k != line) key.word[j++] = LetterOf(CellAt(board, perp, i, k));
+    CrossEntry& cached = cross_cache_[static_cast<int>(dir)][line][i];
+    if (cached.valid && cached.word == key.word) {
+      s.cross = cached.cross;
+      continue;
+    }
     // Lookup reverse(before + L + after) = reverse(after) + L + reverse(before).
+    s.cross = 0;
     Gaddag::Node n = gaddag_.Root();
     for (int k = hi; k > line && n != Gaddag::kNone; --k)
       n = gaddag_.Next(n, LetterOf(CellAt(board, perp, i, k)));
-    s.cross = 0;
-    if (n == Gaddag::kNone) continue;
-    for (std::uint8_t L = 1; L <= 26; ++L) {
-      Gaddag::Node m = gaddag_.Next(n, L);
-      for (int k = line - 1; k >= lo && m != Gaddag::kNone; --k)
-        m = gaddag_.Next(m, LetterOf(CellAt(board, perp, i, k)));
-      if (m != Gaddag::kNone && gaddag_.IsTerminal(m)) s.cross |= 1u << L;
+    if (n != Gaddag::kNone) {
+      for (std::uint32_t bits = gaddag_.LetterMask(n) & kAllLetters; bits; bits &= bits - 1) {
+        const auto L = static_cast<std::uint8_t>(std::countr_zero(bits));
+        Gaddag::Node m = gaddag_.Next(n, L);
+        for (int k = line - 1; k >= lo && m != Gaddag::kNone; --k)
+          m = gaddag_.Next(m, LetterOf(CellAt(board, perp, i, k)));
+        if (m != Gaddag::kNone && gaddag_.IsTerminal(m)) s.cross |= 1u << L;
+      }
     }
+    key.cross = s.cross;
+    cached = key;
   }
 }
 
@@ -147,25 +168,24 @@ void MoveGenerator::Gen(int pos, Gaddag::Node node) {
     return;
   }
   if (rack_.Empty()) return;
-  const bool has_blank = rack_.Count(kBlank) > 0;
-  for (std::uint8_t L = 1; L <= 26; ++L) {
-    if (!(s.cross & (1u << L))) continue;
+  const bool has_blank = rack_letters_ & 1u;
+  const std::uint32_t playable = has_blank ? kAllLetters : rack_letters_;
+  for (std::uint32_t bits = s.cross & playable & gaddag_.LetterMask(node); bits; bits &= bits - 1) {
+    const auto L = static_cast<std::uint8_t>(std::countr_zero(bits));
     const bool has_letter = rack_.Count(L) > 0;
-    if (!has_letter && !has_blank) continue;
     Gaddag::Node next = gaddag_.Next(node, L);
-    if (next == Gaddag::kNone) continue;
     ++tiles_placed_;
     if (has_letter) {
-      rack_.Remove(L);
+      Take(L);
       placed_[idx] = TileToChar(L);
       GoOn(pos, L, false, next);
-      rack_.Add(L);
+      PutBack(L);
     }
     if (has_blank) {
-      rack_.Remove(kBlank);
+      Take(kBlank);
       placed_[idx] = static_cast<char>(std::tolower(TileToChar(L)));
       GoOn(pos, L, true, next);
-      rack_.Add(kBlank);
+      PutBack(kBlank);
     }
     placed_[idx] = 0;
     --tiles_placed_;
