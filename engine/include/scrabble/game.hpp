@@ -20,6 +20,11 @@ class Game {
 
   explicit Game(std::uint64_t seed);
 
+  // A game in progress: `bag` holds the tiles left to draw, shuffled by `seed`.
+  static Game FromPosition(const Board& board, const std::array<Rack, 2>& racks,
+                           const std::array<int, 2>& scores, int to_move, const Rack& bag,
+                           int scoreless_turns, std::uint64_t seed);
+
   const Board& board() const { return board_; }
   const Rack& rack(int player) const { return racks_[player]; }
   int score(int player) const { return scores_[player]; }
@@ -33,6 +38,8 @@ class Game {
   void Apply(const Move& move);
 
  private:
+  Game(const Board& board, const Bag& bag) : board_(board), bag_(bag) {}
+
   void Finish();
 
   Board board_;

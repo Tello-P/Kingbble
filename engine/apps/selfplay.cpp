@@ -3,6 +3,7 @@
 //
 //   kingbble_selfplay --lexicon lexica/ENABLE.txt --games 100 --seed 1 [--verbose]
 //   kingbble_selfplay --lexicon lexica/ENABLE.txt --leaves lexica/NWL23.klv2 --a equity --b greedy
+//   kingbble_selfplay ... --a sim --b equity --sim-candidates 10 --sim-iterations 200 --threads 8
 
 #include <chrono>
 #include <cstdlib>
@@ -15,6 +16,7 @@
 #include "scrabble/game.hpp"
 #include "scrabble/greedy_bot.hpp"
 #include "scrabble/leaves.hpp"
+#include "scrabble/sim_bot.hpp"
 
 using namespace scrabble;
 
@@ -28,16 +30,16 @@ std::uint64_t MixSeed(std::uint64_t x) {
   return x ^ (x >> 31);
 }
 
-std::unique_ptr<Bot> MakeBot(const std::string& kind, const Gaddag& gaddag, const Leaves* leaves) {
+std::unique_ptr<Bot> MakeBot(const std::string& kind, const Gaddag& gaddag, const Leaves* leaves,
+                             const SimParams& sim) {
   if (kind == "greedy") return std::make_unique<GreedyBot>(gaddag);
-  if (kind == "equity") {
-    if (!leaves) {
-      std::cerr << "bot 'equity' needs --leaves\n";
-      std::exit(2);
-    }
-    return std::make_unique<EquityBot>(gaddag, *leaves);
+  if ((kind == "equity" || kind == "sim") && !leaves) {
+    std::cerr << "bot '" << kind << "' needs --leaves\n";
+    std::exit(2);
   }
-  std::cerr << "unknown bot: " << kind << " (greedy, equity)\n";
+  if (kind == "equity") return std::make_unique<EquityBot>(gaddag, *leaves);
+  if (kind == "sim") return std::make_unique<SimBot>(gaddag, *leaves, sim);
+  std::cerr << "unknown bot: " << kind << " (greedy, equity, sim)\n";
   std::exit(2);
 }
 
@@ -48,6 +50,7 @@ int main(int argc, char** argv) {
   int games = 10;
   std::uint64_t seed = 1;
   bool verbose = false;
+  SimParams sim;
   for (int i = 1; i < argc; ++i) {
     std::string a = argv[i];
     auto value = [&]() -> std::string {
@@ -65,6 +68,12 @@ int main(int argc, char** argv) {
       kind_a = value();
     } else if (a == "--b") {
       kind_b = value();
+    } else if (a == "--sim-candidates") {
+      sim.candidates = std::stoi(value());
+    } else if (a == "--sim-iterations") {
+      sim.max_iterations = std::stoi(value());
+    } else if (a == "--threads") {
+      sim.threads = std::stoi(value());
     } else if (a == "--games") {
       games = std::stoi(value());
     } else if (a == "--seed") {
@@ -74,7 +83,7 @@ int main(int argc, char** argv) {
     } else {
       std::cerr << "usage: " << argv[0]
                 << " --lexicon FILE [--leaves KLV] [--a BOT] [--b BOT] [--games N] [--seed S]"
-                   " [--verbose]\n";
+                   " [--sim-candidates N] [--sim-iterations N] [--threads N] [--verbose]\n";
       return 2;
     }
   }
@@ -95,8 +104,9 @@ int main(int argc, char** argv) {
     leaves = std::make_unique<Leaves>(Leaves::FromFile(leaves_path));
     std::cout << "leaves: " << leaves->Size() << "\n";
   }
-  std::unique_ptr<Bot> bots[2] = {MakeBot(kind_a, gaddag, leaves.get()),
-                                  MakeBot(kind_b, gaddag, leaves.get())};
+  sim.seed = seed;
+  std::unique_ptr<Bot> bots[2] = {MakeBot(kind_a, gaddag, leaves.get(), sim),
+                                  MakeBot(kind_b, gaddag, leaves.get(), sim)};
 
   long long turns = 0, generated = 0, total_score = 0, spread_a = 0;
   int wins[3] = {0, 0, 0};     // by seat: p1, p2, ties
