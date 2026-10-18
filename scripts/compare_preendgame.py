@@ -120,10 +120,13 @@ def main() -> int:
         out = run(
             [
                 str(helper),
-                "-data", str(work / "data"),
-                "-lex", LEX_NAME,
+                "-data",
+                str(work / "data"),
+                "-lex",
+                LEX_NAME,
                 "-no-cutoff",
-                "-threads", str(args.macondo_threads),
+                "-threads",
+                str(args.macondo_threads),
             ],  # fmt: skip
             input=lines,
             capture_output=True,
