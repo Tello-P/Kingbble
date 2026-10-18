@@ -7,6 +7,11 @@ Bag::Bag(std::uint64_t seed) : rng_(seed) {
   for (int t = 0; t < kNumTileTypes; ++t) tiles_.insert(tiles_.end(), info[t].count, Tile(t));
 }
 
+Bag::Bag(const Rack& tiles, std::uint64_t seed) : rng_(seed) {
+  for (int t = 0; t < kNumTileTypes; ++t)
+    tiles_.insert(tiles_.end(), tiles.Count(Tile(t)), Tile(t));
+}
+
 Tile Bag::Draw() {
   std::uniform_int_distribution<std::size_t> dist(0, tiles_.size() - 1);
   std::size_t i = dist(rng_);

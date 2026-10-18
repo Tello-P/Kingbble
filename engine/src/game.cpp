@@ -18,6 +18,17 @@ Game::Game(std::uint64_t seed) : bag_(seed) {
   bag_.Refill(racks_[1]);
 }
 
+Game Game::FromPosition(const Board& board, const std::array<Rack, 2>& racks,
+                        const std::array<int, 2>& scores, int to_move, const Rack& bag,
+                        int scoreless_turns, std::uint64_t seed) {
+  Game g(board, Bag(bag, seed));
+  g.racks_ = racks;
+  g.scores_ = scores;
+  g.to_move_ = to_move;
+  g.scoreless_turns_ = scoreless_turns;
+  return g;
+}
+
 void Game::Apply(const Move& move) {
   if (over_) throw std::logic_error("game is over");
   Rack& rack = racks_[to_move_];

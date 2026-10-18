@@ -13,6 +13,8 @@ namespace scrabble {
 class Bag {
  public:
   explicit Bag(std::uint64_t seed);
+  // Bag holding exactly `tiles` (positions reconstructed from a game in progress).
+  Bag(const Rack& tiles, std::uint64_t seed);
 
   int Size() const { return static_cast<int>(tiles_.size()); }
   bool Empty() const { return tiles_.empty(); }
