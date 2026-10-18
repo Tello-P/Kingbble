@@ -11,7 +11,20 @@
 // With --endgame only the first empty-bag position of each game is written (or,
 // with --max-tiles N, the first one with at most N tiles on both racks); --solve
 // follows it with "<value>", our endgame solver's value for the player to move.
+//
+//   kingbble_positions --lexicon lexica/ENABLE.txt --leaves lexica/NWL23.klv2 --count 100
+//                      --preendgame 2 [--solve]
+//
+// With --preendgame N only the first position of each game with 1..N tiles in
+// the bag is written; --solve follows it with a JSON line holding our
+// pre-endgame solution: {"permutations", "endgames", "seconds", "plays": [{"move",
+// "wins", "spread"}]} with the analysed plays, best first ("spread" is null
+// without a tiebreak). --candidates N analyses only the N best plays by static
+// equity (and passing, with --pass); --exhaustive analyses every candidate fully
+// (no early cutoff, whatever it leaves in the bag, passing considered in nested
+// pre-endgames too); --endgame-plies sets the endgame depth.
 
+#include <chrono>
 #include <cstdlib>
 #include <iostream>
 #include <string>
@@ -21,14 +34,38 @@
 #include "scrabble/gaddag.hpp"
 #include "scrabble/game.hpp"
 #include "scrabble/greedy_bot.hpp"
+#include "scrabble/leaves.hpp"
 #include "scrabble/movegen.hpp"
+#include "scrabble/preendgame.hpp"
 
 using namespace scrabble;
 
+namespace {
+
+std::string PreEndgameJson(const PreEndgameResult& r, double seconds) {
+  std::string out = "{\"permutations\": " + std::to_string(static_cast<long long>(r.permutations)) +
+                    ", \"endgames\": " + std::to_string(r.endgames) +
+                    ", \"seconds\": " + std::to_string(seconds) + ", \"plays\": [";
+  bool first = true;
+  for (const PreEndgamePlay& p : r.plays) {
+    if (p.skipped || p.cut) continue;
+    if (!first) out += ", ";
+    first = false;
+    out += "{\"move\": \"" + (p.move.kind == Move::Kind::kPass ? "pass" : p.move.ToString()) +
+           "\", \"wins\": " + std::to_string(p.wins) + ", \"spread\": " +
+           (p.has_spread ? std::to_string(static_cast<long long>(p.spread)) : "null") + "}";
+  }
+  return out + "]}";
+}
+
+}  // namespace
+
 int main(int argc, char** argv) {
-  std::string lexicon, lexicon_name = "ENABLE";
+  std::string lexicon, leaves_file, lexicon_name = "ENABLE";
   int count = 100;
   int max_tiles = 2 * kRackSize;
+  int preendgame = 0;
+  PreEndgameParams peg_params;
   std::uint64_t seed = 1;
   bool with_moves = false, endgame = false, solve = false;
   for (int i = 1; i < argc; ++i) {
@@ -42,6 +79,20 @@ int main(int argc, char** argv) {
     };
     if (a == "--lexicon") {
       lexicon = value();
+    } else if (a == "--leaves") {
+      leaves_file = value();
+    } else if (a == "--preendgame") {
+      preendgame = std::stoi(value());
+    } else if (a == "--candidates") {
+      peg_params.candidates = std::stoi(value());
+    } else if (a == "--pass") {
+      peg_params.pass_candidate = true;
+    } else if (a == "--exhaustive") {
+      peg_params.early_cutoff = false;
+      peg_params.max_tiles_left = -1;
+      peg_params.skip_deep_pass = false;
+    } else if (a == "--endgame-plies") {
+      peg_params.endgame_plies = std::stoi(value());
     } else if (a == "--name") {
       lexicon_name = value();
     } else if (a == "--count") {
@@ -59,12 +110,14 @@ int main(int argc, char** argv) {
     } else {
       std::cerr << "usage: " << argv[0]
                 << " --lexicon FILE [--name LEX] [--count N] [--seed S] [--moves]"
-                   " [--endgame [--max-tiles N] [--solve]]\n";
+                   " [--endgame [--max-tiles N] [--solve]]"
+                   " [--leaves FILE --preendgame N [--solve] [--candidates N] [--pass]"
+                   " [--exhaustive] [--endgame-plies N]]\n";
       return 2;
     }
   }
-  if (lexicon.empty()) {
-    std::cerr << "--lexicon is required\n";
+  if (lexicon.empty() || (preendgame > 0 && leaves_file.empty())) {
+    std::cerr << "--lexicon is required (and --leaves with --preendgame)\n";
     return 2;
   }
 
@@ -72,9 +125,25 @@ int main(int argc, char** argv) {
   GreedyBot bot(gaddag);
   MoveGenerator gen(gaddag);
   EndgameSolver solver(gaddag);
+  Leaves leaves = leaves_file.empty() ? Leaves() : Leaves::FromFile(leaves_file);
+  PreEndgameSolver peg(gaddag, leaves);
   int written = 0;
   for (std::uint64_t g = 0; written < count; ++g) {
     Game game(seed * 1000003 + g);
+    if (preendgame > 0) {
+      while (!game.over() && game.bag_size() > preendgame) game.Apply(bot.Choose(game));
+      if (game.over() || game.bag_size() == 0) continue;
+      std::cout << GameToCgp(game, lexicon_name) << "\n";
+      if (solve) {
+        const auto start = std::chrono::steady_clock::now();
+        PreEndgameResult r = peg.Solve(game, peg_params);
+        const double secs =
+            std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+        std::cout << PreEndgameJson(r, secs) << std::endl;
+      }
+      ++written;
+      continue;
+    }
     if (endgame) {
       while (!game.over() &&
              (game.bag_size() > 0 || game.rack(0).Size() + game.rack(1).Size() > max_tiles))

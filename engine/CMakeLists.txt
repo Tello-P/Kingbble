@@ -14,6 +14,8 @@ add_library(scrabble_engine
   src/sim_bot.cpp
   src/endgame.cpp
   src/endgame_bot.cpp
+  src/preendgame.cpp
+  src/preendgame_bot.cpp
   src/gcg.cpp
   src/wordmap.cpp
   src/kwg.cpp
@@ -58,6 +60,7 @@ if(SCRABBLE_BUILD_TESTS)
     tests/equity_test.cpp
     tests/sim_bot_test.cpp
     tests/endgame_test.cpp
+    tests/preendgame_test.cpp
   )
   target_compile_definitions(engine_tests PRIVATE
     KINGBBLE_FIXTURES="${PROJECT_SOURCE_DIR}/lexica/fixtures")

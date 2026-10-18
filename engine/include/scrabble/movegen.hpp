@@ -1,5 +1,7 @@
 #pragma once
 
+#include <array>
+#include <cstdint>
 #include <vector>
 
 #include "scrabble/board.hpp"
@@ -42,9 +44,26 @@ class MoveGenerator {
   void Gen(int pos, Gaddag::Node node);
   void GoOn(int pos, std::uint8_t letter, bool blank, Gaddag::Node next);
   void Record(int start, int end);
+  void Take(Tile t) {
+    rack_.Remove(t);
+    if (rack_.Count(t) == 0) rack_letters_ &= ~(1u << t);
+  }
+  void PutBack(Tile t) {
+    rack_.Add(t);
+    rack_letters_ |= 1u << t;
+  }
+
+  struct CrossEntry {
+    // Index of the square in the perpendicular word, its length - 1, then its
+    // other letters.
+    std::array<std::uint8_t, kBoardDim + 1> word{};
+    std::uint32_t cross = 0;
+    bool valid = false;
+  };
 
   const Gaddag& gaddag_;
   bool vertical_openings_ = false;
+  CrossEntry cross_cache_[2][kBoardDim][kBoardDim];
   // Per-line state.
   Square sq_[kBoardDim];
   Direction dir_ = Direction::kHorizontal;
@@ -55,7 +74,8 @@ class MoveGenerator {
   // Per-call state.
   const Board* board_ = nullptr;
   Rack rack_;
-  char placed_[kBoardDim];  // '\0' = untouched square in the current partial move
+  std::uint32_t rack_letters_ = 0;  // bit t set while the rack holds tile t
+  char placed_[kBoardDim];          // '\0' = untouched square in the current partial move
   int tiles_placed_ = 0;
   std::vector<Move>* out_ = nullptr;
 };
