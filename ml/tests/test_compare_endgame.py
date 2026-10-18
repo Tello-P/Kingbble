@@ -1,0 +1,21 @@
+import importlib.util
+from pathlib import Path
+
+_PATH = Path(__file__).resolve().parents[2] / "scripts" / "compare_endgame.py"
+_spec = importlib.util.spec_from_file_location("compare_endgame", _PATH)
+ce = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(ce)
+
+CGP_A = "/".join(["15"] * 7 + ["5RATES5"] + ["15"] * 7) + " AB/CD 7/0 0 lex X;"
+CGP_B = "/".join(["15"] * 7 + ["5RATES5"] + ["15"] * 7) + " EF/GH 7/0 0 lex X;"
+
+
+def test_read_pairs_parses_values():
+    assert ce.read_pairs([CGP_A, "12", CGP_B, "-3"]) == [(CGP_A, 12), (CGP_B, -3)]
+
+
+def test_compare_counts_mismatched_values():
+    stats = ce.compare([(CGP_A, 12), (CGP_B, -3)], [12, -4])
+    assert stats["positions"] == 2
+    assert stats["mismatched"] == 1
+    assert stats["examples"] == [(CGP_B, -3, -4)]
