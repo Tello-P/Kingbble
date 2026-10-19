@@ -30,6 +30,17 @@ class EndgameSolver {
  public:
   explicit EndgameSolver(const Gaddag& gaddag);
 
+  // Solve first prunes the lexicon to the words still playable with the tiles
+  // left (on by default).
+  void set_pruning(bool on) { pruning_ = on; }
+  // Lexicon for SolveWindow, by default the full one. A pruned lexicon must
+  // hold the words playable from every position later solved with it; set it
+  // again whenever it changes.
+  void set_window_gaddag(const Gaddag& gaddag) {
+    window_gaddag_ = &gaddag;
+    gen_on_window_ = false;
+  }
+
   // Requires game.bag_size() == 0 and a game in progress. Stops at the first
   // exact iteration, at max_plies, or at the time limit (seconds, 0 = none);
   // depth 1 always completes.
@@ -61,6 +72,11 @@ class EndgameSolver {
   void Undo(const Move& m, int prev_scoreless, std::uint64_t prev_hash);
   std::uint64_t Hash() const;  // from scratch; hash_ is kept up to date incrementally
 
+  const Gaddag& gaddag_;
+  const Gaddag* window_gaddag_;
+  Gaddag pruned_;
+  bool pruning_ = true;
+  bool gen_on_window_ = false;  // gen_ is set to *window_gaddag_
   MoveGenerator gen_;
   Board board_;
   std::array<Rack, 2> racks_;

@@ -6,6 +6,8 @@
 #include <limits>
 #include <stdexcept>
 
+#include "scrabble/wordprune.hpp"
+
 namespace scrabble {
 
 namespace {
@@ -43,7 +45,8 @@ bool IsBlankChar(char ch) { return std::islower(static_cast<unsigned char>(ch));
 
 }  // namespace
 
-EndgameSolver::EndgameSolver(const Gaddag& gaddag) : gen_(gaddag) {}
+EndgameSolver::EndgameSolver(const Gaddag& gaddag)
+    : gaddag_(gaddag), window_gaddag_(&gaddag), gen_(gaddag) {}
 
 std::uint64_t EndgameSolver::Hash() const {
   std::uint64_t h = SideKey(to_move_, scoreless_);
@@ -230,6 +233,10 @@ int EndgameSolver::SolveWindow(const Game& game, int alpha, int beta, int max_pl
                                double time_limit_s) {
   // A full table stops learning; entries of earlier positions matter least.
   if (tt_.size() >= kMaxTableEntries) tt_.clear();
+  if (!gen_on_window_) {
+    gen_.set_gaddag(*window_gaddag_);
+    gen_on_window_ = true;
+  }
   Load(game);
   if (time_limit_s > 0) deadline_ = Now() + time_limit_s;
   int value = 0;
@@ -245,6 +252,16 @@ EndgameResult EndgameSolver::Solve(const Game& game, int max_plies, double time_
   tt_.clear();
   Load(game);
   const double start = Now();
+  gen_on_window_ = false;
+  if (pruning_) {
+    Rack pool = racks_[0];
+    for (int t = 0; t < kNumTileTypes; ++t)
+      for (int n = 0; n < racks_[1].Count(Tile(t)); ++n) pool.Add(Tile(t));
+    pruned_ = PruneLexicon(gaddag_, board_, pool);
+    gen_.set_gaddag(pruned_);
+  } else {
+    gen_.set_gaddag(gaddag_);
+  }
 
   EndgameResult result;
   for (int depth = 1; depth <= std::max(1, max_plies); ++depth) {

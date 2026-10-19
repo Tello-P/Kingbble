@@ -21,7 +21,11 @@ int ScoreMove(const Board& board, const Move& move);
 // Each move appears once; one-tile plays are reported in a single direction.
 class MoveGenerator {
  public:
-  explicit MoveGenerator(const Gaddag& gaddag) : gaddag_(gaddag) {}
+  explicit MoveGenerator(const Gaddag& gaddag) : gaddag_(&gaddag) {}
+
+  // Generates with another lexicon from now on (e.g. one pruned for an
+  // endgame). Call it again if the lexicon changes in place.
+  void set_gaddag(const Gaddag& gaddag);
 
   // On an empty board a vertical opening is the transpose of a horizontal one
   // (same score, same premiums), so by default only horizontal openings are
@@ -67,7 +71,7 @@ class MoveGenerator {
     bool valid = false;
   };
 
-  const Gaddag& gaddag_;
+  const Gaddag* gaddag_;
   bool vertical_openings_ = false;
   CrossEntry cross_cache_[2][kBoardDim][kBoardDim];
   // Square data by direction, line and index for prepared_board_.

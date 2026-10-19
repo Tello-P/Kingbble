@@ -69,6 +69,14 @@ int ScoreMove(const Board& board, const Move& move) {
   return main * word_mult + cross_total + (move.TilesPlayed() == kRackSize ? kBingoBonus : 0);
 }
 
+void MoveGenerator::set_gaddag(const Gaddag& gaddag) {
+  gaddag_ = &gaddag;
+  prepared_ = false;
+  for (auto& by_line : cross_cache_)
+    for (auto& line : by_line)
+      for (CrossEntry& e : line) e.valid = false;
+}
+
 std::vector<Move> MoveGenerator::Generate(const Board& board, const Rack& rack) {
   std::vector<Move> moves;
   Generate(board, rack, moves);
@@ -178,16 +186,16 @@ MoveGenerator::Square MoveGenerator::ComputeSquare(const Board& board, Direction
   }
   // Lookup reverse(before + L + after) = reverse(after) + L + reverse(before).
   s.cross = 0;
-  Gaddag::Node n = gaddag_.Root();
+  Gaddag::Node n = gaddag_->Root();
   for (int k = hi; k > line && n != Gaddag::kNone; --k)
-    n = gaddag_.Next(n, LetterOf(CellAt(board, perp, i, k)));
+    n = gaddag_->Next(n, LetterOf(CellAt(board, perp, i, k)));
   if (n != Gaddag::kNone) {
-    for (std::uint32_t bits = gaddag_.LetterMask(n) & kAllLetters; bits; bits &= bits - 1) {
+    for (std::uint32_t bits = gaddag_->LetterMask(n) & kAllLetters; bits; bits &= bits - 1) {
       const auto L = static_cast<std::uint8_t>(std::countr_zero(bits));
-      Gaddag::Node m = gaddag_.Next(n, L);
+      Gaddag::Node m = gaddag_->Next(n, L);
       for (int k = line - 1; k >= lo && m != Gaddag::kNone; --k)
-        m = gaddag_.Next(m, LetterOf(CellAt(board, perp, i, k)));
-      if (m != Gaddag::kNone && gaddag_.IsTerminal(m)) s.cross |= 1u << L;
+        m = gaddag_->Next(m, LetterOf(CellAt(board, perp, i, k)));
+      if (m != Gaddag::kNone && gaddag_->IsTerminal(m)) s.cross |= 1u << L;
     }
   }
   key.cross = s.cross;
@@ -201,7 +209,7 @@ void MoveGenerator::GenLine(Direction, int) {
     if (!sq_[a].anchor) continue;
     anchor_ = a;
     tiles_placed_ = 0;
-    Gen(0, gaddag_.Root());
+    Gen(0, gaddag_->Root());
   }
 }
 
@@ -210,17 +218,18 @@ void MoveGenerator::Gen(int pos, Gaddag::Node node) {
   const Square& s = sq_[idx];
   if (s.letter != Board::kEmpty) {
     std::uint8_t L = LetterOf(s.letter);
-    Gaddag::Node next = gaddag_.Next(node, L);
+    Gaddag::Node next = gaddag_->Next(node, L);
     if (next != Gaddag::kNone) GoOn(pos, L, false, next);
     return;
   }
   if (rack_.Empty()) return;
   const bool has_blank = rack_letters_ & 1u;
   const std::uint32_t playable = has_blank ? kAllLetters : rack_letters_;
-  for (std::uint32_t bits = s.cross & playable & gaddag_.LetterMask(node); bits; bits &= bits - 1) {
+  for (std::uint32_t bits = s.cross & playable & gaddag_->LetterMask(node); bits;
+       bits &= bits - 1) {
     const auto L = static_cast<std::uint8_t>(std::countr_zero(bits));
     const bool has_letter = rack_.Count(L) > 0;
-    Gaddag::Node next = gaddag_.Next(node, L);
+    Gaddag::Node next = gaddag_->Next(node, L);
     ++tiles_placed_;
     if (has_letter) {
       Take(L);
@@ -243,12 +252,12 @@ void MoveGenerator::GoOn(int pos, std::uint8_t, bool, Gaddag::Node next) {
   const int idx = anchor_ + pos;
   auto empty_at = [&](int i) { return i < 0 || i >= kBoardDim || sq_[i].letter == Board::kEmpty; };
   if (pos <= 0) {
-    if (gaddag_.IsTerminal(next) && empty_at(idx - 1) && empty_at(anchor_ + 1))
+    if (gaddag_->IsTerminal(next) && empty_at(idx - 1) && empty_at(anchor_ + 1))
       Record(idx, anchor_);
     // Extend left, but never onto an empty anchor: that move belongs to it.
     if (idx > 0 && !(sq_[idx - 1].letter == Board::kEmpty && sq_[idx - 1].anchor))
       Gen(pos - 1, next);
-    Gaddag::Node sep = gaddag_.Next(next, Gaddag::kSeparator);
+    Gaddag::Node sep = gaddag_->Next(next, Gaddag::kSeparator);
     if (sep != Gaddag::kNone && empty_at(idx - 1) && anchor_ + 1 < kBoardDim) {
       int saved = left_;
       left_ = idx;
@@ -256,7 +265,7 @@ void MoveGenerator::GoOn(int pos, std::uint8_t, bool, Gaddag::Node next) {
       left_ = saved;
     }
   } else {
-    if (gaddag_.IsTerminal(next) && empty_at(idx + 1)) Record(left_, idx);
+    if (gaddag_->IsTerminal(next) && empty_at(idx + 1)) Record(left_, idx);
     if (idx + 1 < kBoardDim) Gen(pos + 1, next);
   }
 }
