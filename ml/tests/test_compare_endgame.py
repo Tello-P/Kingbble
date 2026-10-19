@@ -19,3 +19,9 @@ def test_compare_counts_mismatched_values():
     assert stats["positions"] == 2
     assert stats["mismatched"] == 1
     assert stats["examples"] == [(CGP_B, -3, -4)]
+
+
+def test_interleave_undoes_a_round_robin_split():
+    items = list(range(7))
+    assert ce.interleave([items[j::3] for j in range(3)]) == items
+    assert ce.interleave([items]) == items
