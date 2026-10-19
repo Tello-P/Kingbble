@@ -9,7 +9,10 @@
 // A "+eg" suffix makes a bot solve the endgame once the bag is empty; "+peg"
 // makes it solve the pre-endgame with 1..peg-bag tiles in the bag (the best
 // --peg-candidates plays by static equity, within --peg-time seconds).
-// Suffixes stack: "sim+peg+eg".
+// "+apeg" plays the approximate pre-endgame with peg-bag + 1..6 tiles in the bag
+// (--apeg-candidates plays, --apeg-samples deals, --apeg-plies endgame depth,
+// within --apeg-time seconds, on --threads threads).
+// Suffixes stack: "sim+peg+eg", "equity+apeg+peg+eg".
 
 #include <chrono>
 #include <cstdlib>
@@ -17,6 +20,7 @@
 #include <memory>
 #include <string>
 
+#include "scrabble/approx_preendgame_bot.hpp"
 #include "scrabble/endgame_bot.hpp"
 #include "scrabble/equity_bot.hpp"
 #include "scrabble/gaddag.hpp"
@@ -41,11 +45,12 @@ std::uint64_t MixSeed(std::uint64_t x) {
 struct PegOptions {
   int max_bag = 1;
   PreEndgameParams params;
+  ApproxPreEndgameParams approx;
 };
 
 std::unique_ptr<Bot> MakeBot(const std::string& kind, const Gaddag& gaddag, const Leaves* leaves,
                              const SimParams& sim, double endgame_time, const PegOptions& peg) {
-  for (const std::string suffix : {"+eg", "+peg"}) {
+  for (const std::string suffix : {"+eg", "+peg", "+apeg"}) {
     if (kind.size() <= suffix.size() || !kind.ends_with(suffix)) continue;
     auto inner = MakeBot(kind.substr(0, kind.size() - suffix.size()), gaddag, leaves, sim,
                          endgame_time, peg);
@@ -54,6 +59,13 @@ std::unique_ptr<Bot> MakeBot(const std::string& kind, const Gaddag& gaddag, cons
     if (!leaves) {
       std::cerr << "bot '" << kind << "' needs --leaves\n";
       std::exit(2);
+    }
+    if (suffix == "+apeg") {
+      ApproxPreEndgameParams approx = peg.approx;
+      approx.threads = sim.threads;
+      approx.seed = sim.seed;
+      return std::make_unique<ApproxPreEndgameBot>(std::move(inner), gaddag, *leaves,
+                                                   peg.max_bag + 1, 6, approx);
     }
     return std::make_unique<PreEndgameBot>(std::move(inner), gaddag, *leaves, peg.max_bag,
                                            peg.params);
@@ -66,7 +78,7 @@ std::unique_ptr<Bot> MakeBot(const std::string& kind, const Gaddag& gaddag, cons
   if (kind == "equity") return std::make_unique<EquityBot>(gaddag, *leaves);
   if (kind == "sim") return std::make_unique<SimBot>(gaddag, *leaves, sim);
   std::cerr << "unknown bot: " << kind
-            << " (greedy, equity, sim, optionally with +peg and/or +eg)\n";
+            << " (greedy, equity, sim, optionally with +apeg, +peg and/or +eg)\n";
   std::exit(2);
 }
 
@@ -82,6 +94,7 @@ int main(int argc, char** argv) {
   PegOptions peg;
   peg.params.candidates = 10;
   peg.params.time_limit_s = 10;
+  peg.approx.time_limit_s = 10;
   for (int i = 1; i < argc; ++i) {
     std::string a = argv[i];
     auto value = [&]() -> std::string {
@@ -111,6 +124,14 @@ int main(int argc, char** argv) {
       peg.params.candidates = std::stoi(value());
     } else if (a == "--peg-time") {
       peg.params.time_limit_s = std::stod(value());
+    } else if (a == "--apeg-candidates") {
+      peg.approx.candidates = std::stoi(value());
+    } else if (a == "--apeg-samples") {
+      peg.approx.samples = std::stoi(value());
+    } else if (a == "--apeg-plies") {
+      peg.approx.endgame_plies = std::stoi(value());
+    } else if (a == "--apeg-time") {
+      peg.approx.time_limit_s = std::stod(value());
     } else if (a == "--threads") {
       sim.threads = std::stoi(value());
     } else if (a == "--games") {
@@ -123,7 +144,8 @@ int main(int argc, char** argv) {
       std::cerr << "usage: " << argv[0]
                 << " --lexicon FILE [--leaves KLV] [--a BOT] [--b BOT] [--games N] [--seed S]"
                    " [--sim-candidates N] [--sim-iterations N] [--threads N] [--endgame-time S]"
-                   " [--peg-bag N] [--peg-candidates N] [--peg-time S] [--verbose]\n";
+                   " [--peg-bag N] [--peg-candidates N] [--peg-time S] [--apeg-candidates N]"
+                   " [--apeg-samples N] [--apeg-plies N] [--apeg-time S] [--verbose]\n";
       return 2;
     }
   }
