@@ -14,6 +14,7 @@ namespace scrabble {
 namespace {
 
 constexpr double kEps = 1e-9;
+constexpr int kInf = std::numeric_limits<int>::max() / 4;
 
 double Now() {
   return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
@@ -158,28 +159,58 @@ std::vector<Move> PreEndgameSolver::Replies(const State& s, bool with_pass) {
   return moves;
 }
 
-PegOutcome PreEndgameSolver::Endgame(const State& s) {
+std::uint64_t PreEndgameSolver::EndgameKey(const State& s) const {
+  std::uint64_t key =
+      Mix(0xE9D0ULL + static_cast<std::uint64_t>(s.to_move * 2 + (s.scoreless > 0)));
+  for (int r = 0; r < kBoardDim; ++r)
+    for (int c = 0; c < kBoardDim; ++c)
+      if (!s.board.IsEmpty(r, c)) key ^= Mix(1000003ULL * (r * kBoardDim + c) + s.board.At(r, c));
+  for (int p = 0; p < 2; ++p)
+    for (int t = 0; t < kNumTileTypes; ++t)
+      key ^= Mix(0xC0FFEE00ULL + 4096ULL * p + 64ULL * t + s.racks[p].Count(Tile(t)));
+  return key;
+}
+
+int PreEndgameSolver::EndgameValue(const State& s, int alpha, int beta) {
+  EndgameBounds& b = endgame_cache_[EndgameKey(s)];
+  if (b.lo >= beta || b.hi <= alpha || b.lo == b.hi) return b.lo >= beta ? b.lo : b.hi;
   ++endgames_;
   // Game counts scoreless turns up to 6; the endgame solver maps 5 to "one left".
   Game g = Game::FromPosition(s.board, s.racks, {0, 0}, s.to_move, Rack{}, s.scoreless ? 5 : 0, 0);
-  // A window around the value that ties the game is enough to tell who wins.
-  const int tie = s.to_move == me_ ? -s.spread : s.spread;
-  const int v = endgame_.SolveWindow(g, tie - 1, tie + 1, params_.endgame_plies, TimeLeft());
+  const int v = endgame_.SolveWindow(g, alpha, beta, params_.endgame_plies, TimeLeft());
   if (endgame_.aborted()) {
     aborted_ = true;
-    return PegOutcome::kUnknown;
+    return 0;
   }
+  if (v <= alpha) {
+    b.hi = std::min(b.hi, v);
+  } else if (v >= beta) {
+    b.lo = std::max(b.lo, v);
+  } else {
+    b.lo = b.hi = v;
+  }
+  return v;
+}
+
+PegOutcome PreEndgameSolver::Endgame(const State& s) {
+  // A window around the value that ties the game is enough to tell who wins.
+  const int tie = s.to_move == me_ ? -s.spread : s.spread;
+  const int v = EndgameValue(s, tie - 1, tie + 1);
+  if (aborted_) return PegOutcome::kUnknown;
   return Sign(s.to_move == me_ ? s.spread + v : s.spread - v);
 }
 
 int PreEndgameSolver::FinalSpread(const State& s) {
   if (s.over) return s.spread;
-  ++endgames_;
-  Game g = Game::FromPosition(s.board, s.racks, {0, 0}, s.to_move, Rack{}, s.scoreless ? 5 : 0, 0);
-  constexpr int kInf = std::numeric_limits<int>::max() / 4;
-  const int v = endgame_.SolveWindow(g, -kInf, kInf, params_.endgame_plies, TimeLeft());
-  if (endgame_.aborted()) aborted_ = true;
+  const int v = EndgameValue(s, -kInf, kInf);
   return s.to_move == me_ ? s.spread + v : s.spread - v;
+}
+
+int PreEndgameSolver::Hardness(const State& s) {
+  if (s.over || s.to_move == me_) return s.spread;
+  int best = 0;
+  for (const Move& m : gen_.Generate(s.board, s.racks[s.to_move])) best = std::max(best, m.score);
+  return s.spread - best;
 }
 
 PegOutcome PreEndgameSolver::Continue(const State& s, int nested) {
@@ -300,6 +331,7 @@ PreEndgameResult PreEndgameSolver::Solve(const Game& game, const PreEndgameParam
   aborted_ = false;
   deadline_ = params.time_limit_s > 0 ? Now() + params.time_limit_s : 0;
   nested_cache_.clear();
+  endgame_cache_.clear();
   endgame_.ClearTable();
 
   const Rack& rack = game.rack(me_);
@@ -334,8 +366,13 @@ PreEndgameResult PreEndgameSolver::Solve(const Game& game, const PreEndgameParam
               return a.equity != b.equity ? a.equity > b.equity : TiebreaksBetter(a.move, b.move);
             });
 
-  // Upper bound on the losses of the play that will end up with the most wins.
-  double fewest_possible = std::numeric_limits<double>::infinity();
+  // The candidates, each with its draws ordered hardest first.
+  struct Candidate {
+    PreEndgamePlay* play;
+    std::vector<Draw> groups;
+    PegOutcome first = PegOutcome::kUnknown;  // against groups[0]
+  };
+  std::vector<Candidate> candidates;
   int rank = 0;
   for (PreEndgamePlay& p : result.plays) {
     const int played = p.move.TilesPlayed();
@@ -345,19 +382,60 @@ PreEndgameResult PreEndgameSolver::Solve(const Game& game, const PreEndgameParam
       p.skipped = true;
       continue;
     }
+    Candidate c{&p, Group(draws, std::min(played, k), nullptr)};
+    std::vector<int> hardness;
+    for (const Draw& g : c.groups) {
+      State s = root;
+      Deal(s, unseen, g);
+      Apply(s, p.move);
+      hardness.push_back(Hardness(s));
+    }
+    std::vector<int> order(c.groups.size());
+    for (std::size_t i = 0; i < order.size(); ++i) order[i] = static_cast<int>(i);
+    std::stable_sort(order.begin(), order.end(),
+                     [&](int a, int b) { return hardness[a] < hardness[b]; });
+    std::vector<Draw> sorted;
+    for (int i : order) sorted.push_back(c.groups[i]);
+    c.groups = std::move(sorted);
+    candidates.push_back(std::move(c));
+  }
+
+  // Each play against its hardest draw first: the plays that survive it are
+  // analysed first, so a strong play soon bounds how many losses the others
+  // may have.
+  for (Candidate& c : candidates) {
+    if (TimeUp()) break;
+    State s = root;
+    Deal(s, unseen, c.groups[0]);
+    Apply(s, c.play->move);
+    c.first = Continue(s, 0);
+  }
+  std::stable_sort(
+      candidates.begin(), candidates.end(), [](const Candidate& a, const Candidate& b) {
+        return LossPoints(a.first) - WinPoints(a.first) < LossPoints(b.first) - WinPoints(b.first);
+      });
+
+  // Upper bound on the losses of the play that will end up with the most wins.
+  double fewest_possible = std::numeric_limits<double>::infinity();
+  for (Candidate& c : candidates) {
+    PreEndgamePlay& p = *c.play;
     if (aborted_) {
       p.cut = true;
       continue;
     }
-    for (const Draw& g : Group(draws, std::min(played, k), nullptr)) {
+    for (std::size_t i = 0; i < c.groups.size(); ++i) {
+      const Draw& g = c.groups[i];
       if (params.early_cutoff && p.losses > fewest_possible + kEps) {
         p.cut = true;
         break;
       }
-      State s = root;
-      Deal(s, unseen, g);
-      Apply(s, p.move);
-      const PegOutcome o = Continue(s, 0);
+      PegOutcome o = c.first;
+      if (i > 0) {
+        State s = root;
+        Deal(s, unseen, g);
+        Apply(s, p.move);
+        o = Continue(s, 0);
+      }
       if (aborted_) {
         p.cut = true;
         break;
