@@ -222,6 +222,46 @@ TEST_F(PreEndgameTest, CutoffKeepsTheWinsOfTheAnalysedPlays) {
   }
 }
 
+TEST_F(PreEndgameTest, ThreadsGiveTheSameResults) {
+  for (std::uint64_t seed : {3, 7}) {
+    for (int bag : {1, 2}) {
+      Game g = PreEndgame(seed, bag, 9);
+      for (bool cutoff : {false, true}) {
+        PreEndgameParams params;
+        params.candidates = 6;
+        params.early_cutoff = cutoff;
+        PreEndgameSolver solver(gaddag_, leaves_);
+        PreEndgameResult one = solver.Solve(g, params);
+        params.threads = 4;
+        PreEndgameResult four = solver.Solve(g, params);
+        ASSERT_TRUE(one.complete && four.complete);
+        ASSERT_EQ(one.plays.size(), four.plays.size());
+        EXPECT_EQ(one.plays[0].move, four.plays[0].move);
+        for (const PreEndgamePlay& p : one.plays) {
+          auto it = std::find_if(four.plays.begin(), four.plays.end(),
+                                 [&](const PreEndgamePlay& q) { return q.move == p.move; });
+          ASSERT_NE(it, four.plays.end());
+          // With the cutoff, which plays are cut depends on the timing.
+          if (cutoff && (p.cut || it->cut)) continue;
+          EXPECT_EQ(p.skipped, it->skipped);
+          EXPECT_EQ(p.cut, it->cut);
+          EXPECT_DOUBLE_EQ(p.wins, it->wins) << p.move.ToString();
+          EXPECT_DOUBLE_EQ(p.spread, it->spread) << p.move.ToString();
+        }
+      }
+    }
+  }
+}
+
+TEST_F(PreEndgameTest, ThreadsStopAtTheTimeLimit) {
+  Game g = PreEndgame(6, 2, 14);
+  PreEndgameParams params;
+  params.time_limit_s = 0.05;
+  params.threads = 4;
+  PreEndgameSolver solver(gaddag_, leaves_);
+  EXPECT_FALSE(solver.Solve(g, params).complete);
+}
+
 TEST_F(PreEndgameTest, StopsAtTheTimeLimit) {
   Game g = PreEndgame(6, 2, 14);
   PreEndgameParams params;

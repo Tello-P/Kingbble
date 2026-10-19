@@ -1,10 +1,12 @@
 #include "scrabble/preendgame.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <chrono>
 #include <limits>
 #include <stdexcept>
+#include <thread>
 
 #include "scrabble/equity.hpp"
 #include "scrabble/wordprune.hpp"
@@ -69,7 +71,12 @@ std::vector<PreEndgameSolver::Draw> Group(const std::vector<PreEndgameSolver::Dr
 }  // namespace
 
 PreEndgameSolver::PreEndgameSolver(const Gaddag& gaddag, const Leaves& leaves)
-    : gaddag_(gaddag), gen_(gaddag), leaves_(leaves), endgame_(gaddag) {}
+    : gaddag_(gaddag),
+      gen_(gaddag),
+      leaves_(leaves),
+      endgame_(gaddag),
+      own_shared_(std::make_unique<Shared>()),
+      shared_(own_shared_.get()) {}
 
 std::vector<PreEndgameSolver::Draw> PreEndgameSolver::Permutations(const Rack& pool, int k) {
   std::vector<Draw> out;
@@ -172,8 +179,14 @@ std::uint64_t PreEndgameSolver::EndgameKey(const State& s) const {
 }
 
 int PreEndgameSolver::EndgameValue(const State& s, int alpha, int beta) {
-  EndgameBounds& b = endgame_cache_[EndgameKey(s)];
-  if (b.lo >= beta || b.hi <= alpha || b.lo == b.hi) return b.lo >= beta ? b.lo : b.hi;
+  const std::uint64_t key = EndgameKey(s);
+  {
+    std::lock_guard<std::mutex> lock(shared_->mutex);
+    if (auto it = shared_->endgames.find(key); it != shared_->endgames.end()) {
+      const EndgameBounds& b = it->second;
+      if (b.lo >= beta || b.hi <= alpha || b.lo == b.hi) return b.lo >= beta ? b.lo : b.hi;
+    }
+  }
   ++endgames_;
   // Game counts scoreless turns up to 6; the endgame solver maps 5 to "one left".
   Game g = Game::FromPosition(s.board, s.racks, {0, 0}, s.to_move, Rack{}, s.scoreless ? 5 : 0, 0);
@@ -182,6 +195,8 @@ int PreEndgameSolver::EndgameValue(const State& s, int alpha, int beta) {
     aborted_ = true;
     return 0;
   }
+  std::lock_guard<std::mutex> lock(shared_->mutex);
+  EndgameBounds& b = shared_->endgames[key];
   if (v <= alpha) {
     b.hi = std::min(b.hi, v);
   } else if (v >= beta) {
@@ -251,8 +266,11 @@ PegOutcome PreEndgameSolver::Nested(const State& s, int nested) {
     key ^= Mix(0xA11CE000ULL + 64ULL * t + s.racks[me_].Count(Tile(t)));
     key ^= Mix(0xB0B00000ULL + 64ULL * t + unseen.Count(Tile(t)));
   }
-  if (auto it = nested_cache_.find(key); it != nested_cache_.end()) {
-    if (auto v = it->second.find(actual); v != it->second.end()) return v->second;
+  {
+    std::lock_guard<std::mutex> lock(shared_->mutex);
+    if (auto it = shared_->nested.find(key); it != shared_->nested.end()) {
+      if (auto v = it->second.find(actual); v != it->second.end()) return v->second;
+    }
   }
 
   const std::vector<Draw> draws = Permutations(unseen, k);
@@ -299,7 +317,8 @@ PegOutcome PreEndgameSolver::Nested(const State& s, int nested) {
     if (all_won) {
       // Wins whatever the draw: no other play can do better.
       for (const Draw& d : draws) verdicts[Signature(d.tiles.data(), k)] = PegOutcome::kWin;
-      nested_cache_[key] = verdicts;
+      std::lock_guard<std::mutex> lock(shared_->mutex);
+      shared_->nested[key] = std::move(verdicts);
       return PegOutcome::kWin;
     }
   }
@@ -317,8 +336,47 @@ PegOutcome PreEndgameSolver::Nested(const State& s, int nested) {
     verdicts[Signature(draws[i].tiles.data(), k)] = any ? worst : PegOutcome::kLoss;
   }
   const PegOutcome result = verdicts[actual];
-  nested_cache_[key] = std::move(verdicts);
+  std::lock_guard<std::mutex> lock(shared_->mutex);
+  shared_->nested[key] = std::move(verdicts);
   return result;
+}
+
+std::vector<PreEndgameSolver*> PreEndgameSolver::Workers(int threads, const Gaddag& lexicon) {
+  std::vector<PreEndgameSolver*> workers = {this};
+  for (int i = 1; i < threads; ++i) {
+    if (static_cast<int>(helpers_.size()) < i)
+      helpers_.push_back(std::make_unique<PreEndgameSolver>(gaddag_, leaves_));
+    PreEndgameSolver& w = *helpers_[i - 1];
+    w.params_ = params_;
+    w.me_ = me_;
+    w.endgames_ = 0;
+    w.deadline_ = deadline_;
+    w.aborted_ = false;
+    w.shared_ = shared_;
+    w.gen_.set_gaddag(lexicon);
+    w.endgame_.set_window_gaddag(lexicon);
+    w.endgame_.ClearTable();
+    workers.push_back(&w);
+  }
+  return workers;
+}
+
+void PreEndgameSolver::RunTasks(const std::vector<PreEndgameSolver*>& workers, std::size_t n,
+                                const std::function<void(PreEndgameSolver&, std::size_t)>& task) {
+  std::atomic<std::size_t> next{0};
+  auto work = [&](PreEndgameSolver& w) {
+    for (std::size_t i; !w.TimeUp() && (i = next++) < n;) task(w, i);
+  };
+  std::vector<std::thread> threads;
+  for (std::size_t i = 1; i < workers.size(); ++i)
+    threads.emplace_back(work, std::ref(*workers[i]));
+  work(*workers[0]);
+  for (std::thread& t : threads) t.join();
+}
+
+bool PreEndgameSolver::Aborted(const std::vector<PreEndgameSolver*>& workers) {
+  return std::any_of(workers.begin(), workers.end(),
+                     [](const PreEndgameSolver* w) { return w->aborted_; });
 }
 
 PreEndgameResult PreEndgameSolver::Solve(const Game& game, const PreEndgameParams& params) {
@@ -330,8 +388,8 @@ PreEndgameResult PreEndgameSolver::Solve(const Game& game, const PreEndgameParam
   endgames_ = 0;
   aborted_ = false;
   deadline_ = params.time_limit_s > 0 ? Now() + params.time_limit_s : 0;
-  nested_cache_.clear();
-  endgame_cache_.clear();
+  shared_->nested.clear();
+  shared_->endgames.clear();
   endgame_.ClearTable();
 
   const Rack& rack = game.rack(me_);
@@ -341,6 +399,7 @@ PreEndgameResult PreEndgameSolver::Solve(const Game& game, const PreEndgameParam
   const Gaddag& lexicon = pruning_ ? pruned_ : gaddag_;
   gen_.set_gaddag(lexicon);
   endgame_.set_window_gaddag(lexicon);
+  std::vector<PreEndgameSolver*> workers = Workers(params.threads, lexicon);
   State root;
   root.board = game.board();
   root.racks[me_] = rack;
@@ -403,49 +462,60 @@ PreEndgameResult PreEndgameSolver::Solve(const Game& game, const PreEndgameParam
   // Each play against its hardest draw first: the plays that survive it are
   // analysed first, so a strong play soon bounds how many losses the others
   // may have.
-  for (Candidate& c : candidates) {
-    if (TimeUp()) break;
+  RunTasks(workers, candidates.size(), [&](PreEndgameSolver& w, std::size_t i) {
+    Candidate& c = candidates[i];
     State s = root;
     Deal(s, unseen, c.groups[0]);
     Apply(s, c.play->move);
-    c.first = Continue(s, 0);
-  }
+    c.first = w.Continue(s, 0);
+  });
   std::stable_sort(
       candidates.begin(), candidates.end(), [](const Candidate& a, const Candidate& b) {
         return LossPoints(a.first) - WinPoints(a.first) < LossPoints(b.first) - WinPoints(b.first);
       });
 
-  // Upper bound on the losses of the play that will end up with the most wins.
+  // Every draw of every play, in that order. Upper bound on the losses of the
+  // play that will end up with the most wins.
+  std::vector<std::pair<std::size_t, std::size_t>> tasks;
+  for (std::size_t c = 0; c < candidates.size(); ++c)
+    for (std::size_t g = 0; g < candidates[c].groups.size(); ++g) tasks.emplace_back(c, g);
   double fewest_possible = std::numeric_limits<double>::infinity();
-  for (Candidate& c : candidates) {
+  std::vector<std::size_t> done(candidates.size(), 0);  // draws finished or skipped
+  std::mutex mutex;
+  RunTasks(workers, tasks.size(), [&](PreEndgameSolver& w, std::size_t t) {
+    const Candidate& c = candidates[tasks[t].first];
+    const std::size_t i = tasks[t].second;
     PreEndgamePlay& p = *c.play;
-    if (aborted_) {
-      p.cut = true;
-      continue;
-    }
-    for (std::size_t i = 0; i < c.groups.size(); ++i) {
-      const Draw& g = c.groups[i];
+    {
+      std::lock_guard<std::mutex> lock(mutex);
+      ++done[tasks[t].first];
+      if (p.cut) return;
       if (params.early_cutoff && p.losses > fewest_possible + kEps) {
         p.cut = true;
-        break;
+        return;
       }
-      PegOutcome o = c.first;
-      if (i > 0) {
-        State s = root;
-        Deal(s, unseen, g);
-        Apply(s, p.move);
-        o = Continue(s, 0);
-      }
-      if (aborted_) {
-        p.cut = true;
-        break;
-      }
-      p.wins += g.count * WinPoints(o);
-      p.losses += g.count * LossPoints(o);
-      fewest_possible = std::min(fewest_possible, result.permutations - p.wins);
     }
-  }
-  result.complete = !aborted_;
+    PegOutcome o = c.first;
+    if (i > 0) {
+      State s = root;
+      Deal(s, unseen, c.groups[i]);
+      Apply(s, p.move);
+      o = w.Continue(s, 0);
+    }
+    std::lock_guard<std::mutex> lock(mutex);
+    if (w.aborted_) {
+      p.cut = true;
+      --done[tasks[t].first];
+      return;
+    }
+    p.wins += c.groups[i].count * WinPoints(o);
+    p.losses += c.groups[i].count * LossPoints(o);
+    fewest_possible = std::min(fewest_possible, result.permutations - p.wins);
+  });
+  // Plays the time limit stopped short of are cut too.
+  for (std::size_t c = 0; c < candidates.size(); ++c)
+    if (done[c] < candidates[c].groups.size()) candidates[c].play->cut = true;
+  result.complete = !Aborted(workers);
 
   auto analysed = [](const PreEndgamePlay& p) { return !p.skipped && !p.cut; };
   std::stable_sort(result.plays.begin(), result.plays.end(),
@@ -470,18 +540,20 @@ PreEndgameResult PreEndgameSolver::Solve(const Game& game, const PreEndgameParam
         return result.plays[a].move.score > result.plays[b].move.score;
       });
       tied.resize(std::min(tied.size(), static_cast<std::size_t>(params.tiebreak_plays)));
-      for (std::size_t i : tied) {
-        PreEndgamePlay& p = result.plays[i];
-        for (const Draw& g : Group(draws, k, nullptr)) {
-          State s = root;
-          Deal(s, unseen, g);
-          Apply(s, p.move);
-          p.spread += g.count * FinalSpread(s);
-          if (TimeUp()) break;
-        }
+      const std::vector<Draw> groups = Group(draws, k, nullptr);
+      std::mutex mutex;
+      RunTasks(workers, tied.size() * groups.size(), [&](PreEndgameSolver& w, std::size_t t) {
+        PreEndgamePlay& p = result.plays[tied[t / groups.size()]];
+        const Draw& g = groups[t % groups.size()];
+        State s = root;
+        Deal(s, unseen, g);
+        Apply(s, p.move);
+        const int spread = w.FinalSpread(s);
+        std::lock_guard<std::mutex> lock(mutex);
+        p.spread += g.count * spread;
         p.has_spread = true;
-      }
-      if (aborted_) {
+      });
+      if (Aborted(workers)) {
         result.complete = false;
         for (std::size_t i : tied) result.plays[i].has_spread = false;
       } else {
@@ -493,7 +565,7 @@ PreEndgameResult PreEndgameSolver::Solve(const Game& game, const PreEndgameParam
       }
     }
   }
-  result.endgames = endgames_;
+  for (const PreEndgameSolver* w : workers) result.endgames += w->endgames_;
   return result;
 }
 

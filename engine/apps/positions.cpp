@@ -22,7 +22,8 @@
 // without a tiebreak). --candidates N analyses only the N best plays by static
 // equity (and passing, with --pass); --exhaustive analyses every candidate fully
 // (no early cutoff, whatever it leaves in the bag, passing considered in nested
-// pre-endgames too); --endgame-plies sets the endgame depth.
+// pre-endgames too); --endgame-plies sets the endgame depth; --threads the
+// number of solver threads.
 
 #include <chrono>
 #include <cstdlib>
@@ -91,6 +92,8 @@ int main(int argc, char** argv) {
       peg_params.early_cutoff = false;
       peg_params.max_tiles_left = -1;
       peg_params.skip_deep_pass = false;
+    } else if (a == "--threads") {
+      peg_params.threads = std::stoi(value());
     } else if (a == "--endgame-plies") {
       peg_params.endgame_plies = std::stoi(value());
     } else if (a == "--name") {
@@ -112,7 +115,7 @@ int main(int argc, char** argv) {
                 << " --lexicon FILE [--name LEX] [--count N] [--seed S] [--moves]"
                    " [--endgame [--max-tiles N] [--solve]]"
                    " [--leaves FILE --preendgame N [--solve] [--candidates N] [--pass]"
-                   " [--exhaustive] [--endgame-plies N]]\n";
+                   " [--exhaustive] [--endgame-plies N] [--threads N]]\n";
       return 2;
     }
   }
