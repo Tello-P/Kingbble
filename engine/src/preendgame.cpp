@@ -7,6 +7,7 @@
 #include <stdexcept>
 
 #include "scrabble/equity.hpp"
+#include "scrabble/wordprune.hpp"
 
 namespace scrabble {
 
@@ -67,7 +68,7 @@ std::vector<PreEndgameSolver::Draw> Group(const std::vector<PreEndgameSolver::Dr
 }  // namespace
 
 PreEndgameSolver::PreEndgameSolver(const Gaddag& gaddag, const Leaves& leaves)
-    : gen_(gaddag), leaves_(leaves), endgame_(gaddag) {}
+    : gaddag_(gaddag), gen_(gaddag), leaves_(leaves), endgame_(gaddag) {}
 
 std::vector<PreEndgameSolver::Draw> PreEndgameSolver::Permutations(const Rack& pool, int k) {
   std::vector<Draw> out;
@@ -303,6 +304,11 @@ PreEndgameResult PreEndgameSolver::Solve(const Game& game, const PreEndgameParam
 
   const Rack& rack = game.rack(me_);
   const Rack unseen = UnseenTiles(game.board(), rack);
+  // Every tile off the board: ours and the unseen ones.
+  if (pruning_) pruned_ = PruneLexicon(gaddag_, game.board(), UnseenTiles(game.board(), Rack{}));
+  const Gaddag& lexicon = pruning_ ? pruned_ : gaddag_;
+  gen_.set_gaddag(lexicon);
+  endgame_.set_window_gaddag(lexicon);
   State root;
   root.board = game.board();
   root.racks[me_] = rack;

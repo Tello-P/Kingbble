@@ -71,6 +71,10 @@ class PreEndgameSolver {
  public:
   PreEndgameSolver(const Gaddag& gaddag, const Leaves& leaves);
 
+  // Solve first prunes the lexicon to the words still playable with the tiles
+  // off the board (on by default).
+  void set_pruning(bool on) { pruning_ = on; }
+
   // Requires 1..6 tiles in the bag and a full rack for the player to move; the
   // opponent's rack is ignored (it is part of the unseen tiles).
   PreEndgameResult Solve(const Game& game, const PreEndgameParams& params);
@@ -109,6 +113,9 @@ class PreEndgameSolver {
   bool TimeUp();
   double TimeLeft() const;  // seconds, 0 = no limit
 
+  const Gaddag& gaddag_;
+  Gaddag pruned_;
+  bool pruning_ = true;
   MoveGenerator gen_;
   const Leaves& leaves_;
   EndgameSolver endgame_;
