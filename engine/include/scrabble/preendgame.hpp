@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -105,8 +106,15 @@ class PreEndgameSolver {
 
   void Apply(State& s, const Move& m) const;
   void Deal(State& s, const Rack& unseen, const Draw& d) const;
+  // How well we stand after our play: the spread less the opponent's best
+  // reply. Draws are tried from the lowest, where losses show up first.
+  int Hardness(const State& s);
   PegOutcome Continue(const State& s, int nested);
   PegOutcome Nested(const State& s, int nested);
+  // Value of the endgame for the player to move searched with the window
+  // (alpha, beta) as EndgameSolver::SolveWindow, through endgame_cache_.
+  int EndgameValue(const State& s, int alpha, int beta);
+  std::uint64_t EndgameKey(const State& s) const;
   PegOutcome Endgame(const State& s);
   int FinalSpread(const State& s);
   std::vector<Move> Replies(const State& s, bool with_pass);
@@ -126,6 +134,13 @@ class PreEndgameSolver {
   bool aborted_ = false;
   // Nested pre-endgames by information state: the outcome for each ordered bag.
   std::unordered_map<std::uint64_t, std::unordered_map<std::string, PegOutcome>> nested_cache_;
+  // Bounds on the value of each endgame solved so far (for the player to move),
+  // shared by every play and draw that reaches it.
+  struct EndgameBounds {
+    int lo = std::numeric_limits<int>::min();
+    int hi = std::numeric_limits<int>::max();
+  };
+  std::unordered_map<std::uint64_t, EndgameBounds> endgame_cache_;
 };
 
 }  // namespace scrabble

@@ -197,6 +197,31 @@ TEST_F(PreEndgameTest, SolvesNestedPreEndgames) {
   }
 }
 
+TEST_F(PreEndgameTest, CutoffKeepsTheWinsOfTheAnalysedPlays) {
+  // Pruned plays aside, the early cutoff and the draw and play ordering must
+  // not change any result.
+  for (std::uint64_t seed : {2, 5, 9}) {
+    Game g = PreEndgame(seed, 1, 10);
+    PreEndgameParams params;
+    params.candidates = 8;
+    PreEndgameSolver solver(gaddag_, leaves_);
+    PreEndgameResult pruned = solver.Solve(g, params);
+    params.early_cutoff = false;
+    PreEndgameResult full = solver.Solve(g, params);
+    ASSERT_TRUE(pruned.complete && full.complete);
+    EXPECT_LE(pruned.endgames, full.endgames);
+    EXPECT_EQ(pruned.plays[0].move, full.plays[0].move) << "seed " << seed;
+    for (const PreEndgamePlay& p : pruned.plays) {
+      if (p.skipped || p.cut) continue;
+      auto it = std::find_if(full.plays.begin(), full.plays.end(),
+                             [&](const PreEndgamePlay& q) { return q.move == p.move; });
+      ASSERT_NE(it, full.plays.end());
+      EXPECT_DOUBLE_EQ(p.wins, it->wins);
+      EXPECT_DOUBLE_EQ(p.spread, it->spread);
+    }
+  }
+}
+
 TEST_F(PreEndgameTest, StopsAtTheTimeLimit) {
   Game g = PreEndgame(6, 2, 14);
   PreEndgameParams params;
