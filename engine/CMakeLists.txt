@@ -16,6 +16,8 @@ add_library(scrabble_engine
   src/endgame_bot.cpp
   src/preendgame.cpp
   src/preendgame_bot.cpp
+  src/approx_preendgame.cpp
+  src/approx_preendgame_bot.cpp
   src/gcg.cpp
   src/wordmap.cpp
   src/kwg.cpp
@@ -62,6 +64,7 @@ if(SCRABBLE_BUILD_TESTS)
     tests/sim_bot_test.cpp
     tests/endgame_test.cpp
     tests/preendgame_test.cpp
+    tests/approx_preendgame_test.cpp
     tests/wordprune_test.cpp
   )
   target_compile_definitions(engine_tests PRIVATE
