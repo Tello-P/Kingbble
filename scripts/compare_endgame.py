@@ -8,7 +8,7 @@ compares the values (the spread gained from there to the end with best play).
 Requires a build of this repo (kingbble_positions, kingbble_buildkwg), Go and a
 Macondo checkout:
 
-  python scripts/compare_endgame.py --macondo ~/src/macondo --count 200 --max-tiles 10
+  python scripts/compare_endgame.py --macondo ~/src/macondo --count 200 --max-tiles 10 --jobs 8
 """
 
 from __future__ import annotations
@@ -17,6 +17,8 @@ import argparse
 import shutil
 import subprocess
 import sys
+import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -28,6 +30,12 @@ LEX_NAME = "NWL_ENABLE"
 def read_pairs(lines: list[str]) -> list[tuple[str, int]]:
     """'<cgp>\\n<value>' pairs."""
     return [(lines[i], int(lines[i + 1])) for i in range(0, len(lines), 2)]
+
+
+def interleave(parts: list[list]) -> list:
+    """Undoes a round-robin split: item i comes from part i % n, at i // n."""
+    n = len(parts)
+    return [parts[i % n][i // n] for i in range(sum(map(len, parts)))]
 
 
 def compare(ours: list[tuple[str, int]], theirs: list[int]) -> dict:
@@ -54,6 +62,7 @@ def main() -> int:
     ap.add_argument("--count", type=int, default=200)
     ap.add_argument("--max-tiles", type=int, default=10)
     ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--jobs", type=int, default=1, help="parallel processes on each side")
     ap.add_argument("--go", default=shutil.which("go") or str(Path.home() / ".local/go/bin/go"))
     args = ap.parse_args()
 
@@ -74,32 +83,43 @@ def main() -> int:
     helper = work / "kingbble_endgame"
     run([args.go, "build", "-o", str(helper), "./cmd/kingbble_endgame"], cwd=args.macondo)
 
-    dump = run(
-        [
+    def ours_job(j: int) -> list[tuple[str, int]]:
+        cmd = [
             str(apps / "kingbble_positions"),
-            "--lexicon",
-            str(args.lexicon),
-            "--name",
-            LEX_NAME,
-            "--count",
-            str(args.count),
-            "--seed",
-            str(args.seed),
+            "--lexicon", str(args.lexicon),
+            "--name", LEX_NAME,
+            "--count", str(args.count),
+            "--seed", str(args.seed),
             "--endgame",
-            "--max-tiles",
-            str(args.max_tiles),
+            "--max-tiles", str(args.max_tiles),
             "--solve",
-        ],
-        capture_output=True,
-    ).stdout.splitlines()
-    ours = read_pairs(dump)
-    cgps = "\n".join(cgp for cgp, _ in ours) + "\n"
-    mac = run(
-        [str(helper), "-data", str(work / "data"), "-lex", LEX_NAME],
-        input=cgps,
-        capture_output=True,
-    ).stdout.split()
-    theirs = [int(v) for v in mac]
+            "--shard", f"{j}/{args.jobs}",
+        ]  # fmt: skip
+        return read_pairs(run(cmd, capture_output=True).stdout.splitlines())
+
+    def macondo_job(cgps: list[str]) -> list[int]:
+        if not cgps:
+            return []
+        out = run(
+            [str(helper), "-data", str(work / "data"), "-lex", LEX_NAME],
+            input="\n".join(cgps) + "\n",
+            capture_output=True,
+        ).stdout
+        return [int(v) for v in out.split()]
+
+    with ThreadPoolExecutor(args.jobs) as pool:
+        start = time.monotonic()
+        shards = list(pool.map(ours_job, range(args.jobs)))
+        ours_time = time.monotonic() - start
+        # Shard j holds positions j, j + jobs, j + 2 * jobs...
+        ours = interleave(shards)
+        start = time.monotonic()
+        cgps = [cgp for cgp, _ in ours]
+        chunks = [cgps[j :: args.jobs] for j in range(args.jobs)]
+        answers = list(pool.map(macondo_job, chunks))
+        theirs = interleave(answers)
+        macondo_time = time.monotonic() - start
+    print(f"ours: {ours_time:.1f} s, macondo: {macondo_time:.1f} s")
 
     stats = compare(ours, theirs)
     print(f"positions: {stats['positions']}, mismatched values: {stats['mismatched']}")

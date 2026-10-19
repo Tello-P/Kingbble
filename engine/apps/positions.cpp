@@ -11,6 +11,8 @@
 // With --endgame only the first empty-bag position of each game is written (or,
 // with --max-tiles N, the first one with at most N tiles on both racks); --solve
 // follows it with "<value>", our endgame solver's value for the player to move.
+// --shard J/N keeps only the positions whose index is J modulo N, so that N
+// processes split the same positions.
 //
 //   kingbble_positions --lexicon lexica/ENABLE.txt --leaves lexica/NWL23.klv2 --count 100
 //                      --preendgame 2 [--solve]
@@ -68,6 +70,7 @@ int main(int argc, char** argv) {
   int preendgame = 0;
   PreEndgameParams peg_params;
   std::uint64_t seed = 1;
+  int shard = 0, shards = 1;
   bool with_moves = false, endgame = false, solve = false;
   for (int i = 1; i < argc; ++i) {
     std::string a = argv[i];
@@ -92,6 +95,15 @@ int main(int argc, char** argv) {
       peg_params.early_cutoff = false;
       peg_params.max_tiles_left = -1;
       peg_params.skip_deep_pass = false;
+    } else if (a == "--shard") {
+      const std::string v = value();
+      const auto slash = v.find('/');
+      if (slash == std::string::npos) {
+        std::cerr << "--shard takes J/N\n";
+        return 2;
+      }
+      shard = std::stoi(v.substr(0, slash));
+      shards = std::stoi(v.substr(slash + 1));
     } else if (a == "--threads") {
       peg_params.threads = std::stoi(value());
     } else if (a == "--endgame-plies") {
@@ -113,7 +125,7 @@ int main(int argc, char** argv) {
     } else {
       std::cerr << "usage: " << argv[0]
                 << " --lexicon FILE [--name LEX] [--count N] [--seed S] [--moves]"
-                   " [--endgame [--max-tiles N] [--solve]]"
+                   " [--endgame [--max-tiles N] [--solve] [--shard J/N]]"
                    " [--leaves FILE --preendgame N [--solve] [--candidates N] [--pass]"
                    " [--exhaustive] [--endgame-plies N] [--threads N]]\n";
       return 2;
@@ -152,9 +164,9 @@ int main(int argc, char** argv) {
              (game.bag_size() > 0 || game.rack(0).Size() + game.rack(1).Size() > max_tiles))
         game.Apply(bot.Choose(game));
       if (game.over()) continue;
+      if (written++ % shards != shard) continue;
       std::cout << GameToCgp(game, lexicon_name) << "\n";
       if (solve) std::cout << solver.Solve(game).value << std::endl;
-      ++written;
       continue;
     }
     while (!game.over() && written < count) {
