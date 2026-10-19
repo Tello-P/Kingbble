@@ -2,7 +2,10 @@
 
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <limits>
+#include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -37,6 +40,9 @@ struct PreEndgameParams {
   bool tiebreak = true;
   int tiebreak_plays = 20;
   double time_limit_s = 0;  // 0 = none
+  // Plays and draws are solved by this many threads, each with its own
+  // endgame solver. Only which plays are cut early can change with it.
+  int threads = 1;
 };
 
 struct PreEndgamePlay {
@@ -112,7 +118,7 @@ class PreEndgameSolver {
   PegOutcome Continue(const State& s, int nested);
   PegOutcome Nested(const State& s, int nested);
   // Value of the endgame for the player to move searched with the window
-  // (alpha, beta) as EndgameSolver::SolveWindow, through endgame_cache_.
+  // (alpha, beta) as EndgameSolver::SolveWindow, through the shared cache.
   int EndgameValue(const State& s, int alpha, int beta);
   std::uint64_t EndgameKey(const State& s) const;
   PegOutcome Endgame(const State& s);
@@ -132,15 +138,31 @@ class PreEndgameSolver {
   long long endgames_ = 0;
   double deadline_ = 0;
   bool aborted_ = false;
-  // Nested pre-endgames by information state: the outcome for each ordered bag.
-  std::unordered_map<std::uint64_t, std::unordered_map<std::string, PegOutcome>> nested_cache_;
-  // Bounds on the value of each endgame solved so far (for the player to move),
-  // shared by every play and draw that reaches it.
+
+  // Caches every worker of a solve shares.
   struct EndgameBounds {
     int lo = std::numeric_limits<int>::min();
     int hi = std::numeric_limits<int>::max();
   };
-  std::unordered_map<std::uint64_t, EndgameBounds> endgame_cache_;
+  struct Shared {
+    std::mutex mutex;
+    // Nested pre-endgames by information state: the outcome for each ordered bag.
+    std::unordered_map<std::uint64_t, std::unordered_map<std::string, PegOutcome>> nested;
+    // Bounds on the value of each endgame solved so far (for the player to
+    // move), shared by every play and draw that reaches it.
+    std::unordered_map<std::uint64_t, EndgameBounds> endgames;
+  };
+  std::unique_ptr<Shared> own_shared_;
+  Shared* shared_;
+
+  // This solver and threads - 1 helpers set up for the current solve.
+  std::vector<PreEndgameSolver*> Workers(int threads, const Gaddag& lexicon);
+  // Calls task(worker, i) for i in [0, n) on every worker's thread until the
+  // time limit.
+  static void RunTasks(const std::vector<PreEndgameSolver*>& workers, std::size_t n,
+                       const std::function<void(PreEndgameSolver&, std::size_t)>& task);
+  static bool Aborted(const std::vector<PreEndgameSolver*>& workers);
+  std::vector<std::unique_ptr<PreEndgameSolver>> helpers_;
 };
 
 }  // namespace scrabble
