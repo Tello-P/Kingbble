@@ -35,6 +35,10 @@ std::uint64_t RackKey(int player, int tile, int count) {
   return Mix(0xABCDEF0000ULL + 4096ULL * player + 64ULL * tile + count);
 }
 
+std::uint64_t SideKey(int to_move, int scoreless) {
+  return Mix(0x5151515151ULL + static_cast<std::uint64_t>(to_move * 4 + scoreless));
+}
+
 bool IsBlankChar(char ch) { return std::islower(static_cast<unsigned char>(ch)); }
 
 }  // namespace
@@ -42,7 +46,7 @@ bool IsBlankChar(char ch) { return std::islower(static_cast<unsigned char>(ch));
 EndgameSolver::EndgameSolver(const Gaddag& gaddag) : gen_(gaddag) {}
 
 std::uint64_t EndgameSolver::Hash() const {
-  std::uint64_t h = Mix(0x5151515151ULL + static_cast<std::uint64_t>(to_move_ * 4 + scoreless_));
+  std::uint64_t h = SideKey(to_move_, scoreless_);
   for (int r = 0; r < kBoardDim; ++r)
     for (int c = 0; c < kBoardDim; ++c)
       if (!board_.IsEmpty(r, c)) h ^= SquareKey(r * kBoardDim + c, board_.At(r, c));
@@ -53,27 +57,36 @@ std::uint64_t EndgameSolver::Hash() const {
 }
 
 int EndgameSolver::Play(const Move& m) {
+  hash_ ^= SideKey(to_move_, scoreless_);
   int score = 0;
   if (m.kind == Move::Kind::kPlace) {
     score = ScoreMove(board_, m);
     const int dr = m.dir == Direction::kVertical ? 1 : 0;
     const int dc = 1 - dr;
+    Rack& rack = racks_[to_move_];
     for (std::size_t k = 0; k < m.tiles.size(); ++k) {
       char ch = m.tiles[k];
       if (ch == '.') continue;
       bool blank = IsBlankChar(ch);
       Tile letter = *TileFromChar(ch);
-      racks_[to_move_].Remove(blank ? kBlank : letter);
-      board_.Place(m.row + dr * static_cast<int>(k), m.col + dc * static_cast<int>(k), letter,
-                   blank);
+      const Tile t = blank ? kBlank : letter;
+      const int n = rack.Count(t);
+      hash_ ^= RackKey(to_move_, t, n);
+      if (n > 1) hash_ ^= RackKey(to_move_, t, n - 1);
+      rack.Remove(t);
+      const int r = m.row + dr * static_cast<int>(k), c = m.col + dc * static_cast<int>(k);
+      board_.Place(r, c, letter, blank);
+      hash_ ^= SquareKey(r * kBoardDim + c, board_.At(r, c));
     }
   }
   scoreless_ = score > 0 ? 0 : scoreless_ + 1;
   to_move_ = 1 - to_move_;
+  hash_ ^= SideKey(to_move_, scoreless_);
   return score;
 }
 
-void EndgameSolver::Undo(const Move& m, int prev_scoreless) {
+void EndgameSolver::Undo(const Move& m, int prev_scoreless, std::uint64_t prev_hash) {
+  hash_ = prev_hash;
   to_move_ = 1 - to_move_;
   scoreless_ = prev_scoreless;
   if (m.kind != Move::Kind::kPlace) return;
@@ -87,22 +100,27 @@ void EndgameSolver::Undo(const Move& m, int prev_scoreless) {
   }
 }
 
-std::vector<Move> EndgameSolver::OrderedMoves(const Move* tt_move) {
+void EndgameSolver::OrderedMoves(const Move* tt_move, std::vector<Move>& moves) {
   const Rack& rack = racks_[to_move_];
-  std::vector<Move> moves = gen_.Generate(board_, rack);
+  gen_.Generate(board_, rack, moves);
   moves.emplace_back();  // pass
-  auto key = [&](const Move& m) {
-    // Going out first, then by score; the pass last.
-    if (m.kind == Move::Kind::kPass) return -1;
-    return (m.TilesPlayed() == rack.Size() ? 1000 : 0) + m.score;
-  };
-  std::stable_sort(moves.begin(), moves.end(),
-                   [&](const Move& a, const Move& b) { return key(a) > key(b); });
+  // Going out first, then by score; the pass last. Ties keep generation order.
+  order_.clear();
+  for (std::size_t i = 0; i < moves.size(); ++i) {
+    const Move& m = moves[i];
+    const int key = m.kind == Move::Kind::kPass
+                        ? -1
+                        : (m.TilesPlayed() == rack.Size() ? 1000 : 0) + m.score;
+    order_.emplace_back(-key, static_cast<int>(i));
+  }
+  std::sort(order_.begin(), order_.end());
+  sorted_.clear();
+  for (const auto& [key, i] : order_) sorted_.push_back(std::move(moves[i]));
+  moves.swap(sorted_);
   if (tt_move) {
     auto it = std::find(moves.begin(), moves.end(), *tt_move);
     if (it != moves.end()) std::rotate(moves.begin(), it, it + 1);
   }
-  return moves;
 }
 
 int EndgameSolver::Search(int depth, int alpha, int beta, bool& complete) {
@@ -116,7 +134,7 @@ int EndgameSolver::Search(int depth, int alpha, int beta, bool& complete) {
     return RackValue(racks_[1 - me]) - RackValue(racks_[me]);
   }
 
-  const std::uint64_t key = Hash();
+  const std::uint64_t key = hash_;
   const Move* tt_move = nullptr;
   if (auto it = tt_.find(key); it != tt_.end()) {
     const Entry& e = it->second;
@@ -132,9 +150,14 @@ int EndgameSolver::Search(int depth, int alpha, int beta, bool& complete) {
   int best = -kInf;
   Move best_move;
   bool all_complete = true;
-  std::vector<Move> moves = OrderedMoves(tt_move);
+  // One move list per ply, reused across calls.
+  if (ply_ == static_cast<int>(move_lists_.size())) move_lists_.emplace_back();
+  std::vector<Move>& moves = move_lists_[ply_];
+  OrderedMoves(tt_move, moves);
+  ++ply_;
   for (const Move& m : moves) {
     const int prev_scoreless = scoreless_;
+    const std::uint64_t prev_hash = hash_;
     const int gained = Play(m);
     int value;
     bool child_complete = true;
@@ -157,8 +180,11 @@ int EndgameSolver::Search(int depth, int alpha, int beta, bool& complete) {
         }
       }
     }
-    Undo(m, prev_scoreless);
-    if (aborted_) return 0;
+    Undo(m, prev_scoreless, prev_hash);
+    if (aborted_) {
+      --ply_;
+      return 0;
+    }
     all_complete = all_complete && child_complete;
     if (value > best) {
       best = value;
@@ -167,6 +193,7 @@ int EndgameSolver::Search(int depth, int alpha, int beta, bool& complete) {
     if (best >= beta) break;
     alpha = std::max(alpha, best);
   }
+  --ply_;
 
   if (!all_complete) complete = false;
   Entry e{all_complete ? kExactDepth : depth, best,
@@ -194,7 +221,9 @@ void EndgameSolver::Load(const Game& game) {
   nodes_ = 0;
   aborted_ = false;
   deadline_ = 0;
-  root_key_ = Hash();
+  hash_ = Hash();
+  root_key_ = hash_;
+  ply_ = 0;
 }
 
 int EndgameSolver::SolveWindow(const Game& game, int alpha, int beta, int max_plies,
@@ -232,19 +261,24 @@ EndgameResult EndgameSolver::Solve(const Game& game, int max_plies, double time_
   result.nodes = nodes_;
 
   // Principal variation from the table.
-  std::vector<std::pair<Move, int>> played;
+  struct Played {
+    Move move;
+    int scoreless;
+    std::uint64_t hash;
+  };
+  std::vector<Played> played;
   for (int i = 0; i < result.depth; ++i) {
-    auto it = tt_.find(Hash());
+    auto it = tt_.find(hash_);
     if (it == tt_.end()) break;
     Move m = it->second.best;
     const int me = to_move_;
-    const int prev = scoreless_;
+    played.push_back({m, scoreless_, hash_});
     Play(m);
-    played.emplace_back(m, prev);
     result.pv.push_back(m);
     if (racks_[me].Empty() || scoreless_ >= kMaxScoreless) break;
   }
-  for (auto it = played.rbegin(); it != played.rend(); ++it) Undo(it->first, it->second);
+  for (auto it = played.rbegin(); it != played.rend(); ++it)
+    Undo(it->move, it->scoreless, it->hash);
   return result;
 }
 
