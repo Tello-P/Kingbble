@@ -24,6 +24,7 @@ add_library(scrabble_engine
   src/cgp.cpp
   src/wordprune.cpp
   src/features.cpp
+  src/inference.cpp
 )
 
 add_executable(kingbble_selfplay apps/selfplay.cpp)
@@ -72,6 +73,7 @@ if(SCRABBLE_BUILD_TESTS)
     tests/approx_preendgame_test.cpp
     tests/wordprune_test.cpp
     tests/features_test.cpp
+    tests/inference_test.cpp
   )
   target_compile_definitions(engine_tests PRIVATE
     KINGBBLE_FIXTURES="${PROJECT_SOURCE_DIR}/lexica/fixtures")
