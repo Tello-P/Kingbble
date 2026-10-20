@@ -25,7 +25,9 @@ def _rating(value) -> int | None:
     return int(m.group()) if m else None
 
 
-def game_rows(game_id: str, gcg: str, meta: dict | None, salt: str) -> list[dict]:
+def game_rows(
+    game_id: str, gcg: str, meta: dict | None, salt: str, source: str = "woogles"
+) -> list[dict]:
     """Turns of one game with its metadata: lexicon, bot flag and rating of the mover.
 
     The mover's nickname is replaced by its pseudonym (player_id), which also
@@ -42,6 +44,7 @@ def game_rows(game_id: str, gcg: str, meta: dict | None, salt: str) -> list[dict
         row.update(
             player_id=player_id,
             split=split_of(player_id),
+            source=source,
             game_id=game_id,
             lexicon=lexicon,
             is_bot=bool(p.get("is_bot", nickname in BOTS)),
@@ -53,8 +56,16 @@ def game_rows(game_id: str, gcg: str, meta: dict | None, salt: str) -> list[dict
     return rows
 
 
-def build(raw: Path = DEFAULT_RAW, store: Path = DEFAULT_STORE, salt: str | None = None) -> dict:
-    """Rewrites the store from every <game_id>.gcg under `raw`; salt defaults to load_salt()."""
+def build(
+    raw: Path = DEFAULT_RAW,
+    store: Path = DEFAULT_STORE,
+    salt: str | None = None,
+    source: str = "woogles",
+) -> dict:
+    """Rewrites the store from every <game_id>.gcg under `raw`; salt defaults to load_salt().
+
+    source labels where the games come from: "woogles" (human play) or "selfplay".
+    """
     import pyarrow as pa
     import pyarrow.dataset as ds
 
@@ -69,7 +80,7 @@ def build(raw: Path = DEFAULT_RAW, store: Path = DEFAULT_STORE, salt: str | None
     rows, games, failed = [], 0, 0
     for path in sorted(raw.glob("*.gcg")):
         try:
-            rows.extend(game_rows(path.stem, path.read_text(), metas.get(path.stem), salt))
+            rows.extend(game_rows(path.stem, path.read_text(), metas.get(path.stem), salt, source))
             games += 1
         except GcgError:
             failed += 1
@@ -109,9 +120,10 @@ def main() -> int:
     ap.add_argument("command", choices=["build", "stats"])
     ap.add_argument("--raw", type=Path, default=DEFAULT_RAW)
     ap.add_argument("--store", type=Path, default=DEFAULT_STORE)
+    ap.add_argument("--source", choices=["woogles", "selfplay"], default="woogles")
     args = ap.parse_args()
     if args.command == "build":
-        print(build(args.raw, args.store))
+        print(build(args.raw, args.store, source=args.source))
         return 0
     total = 0
     for lexicon, games, n, human, with_rack in stats(args.store):
