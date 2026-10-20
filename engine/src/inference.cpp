@@ -3,6 +3,9 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <fstream>
+#include <sstream>
+#include <stdexcept>
 #include <unordered_map>
 
 namespace scrabble {
@@ -135,6 +138,93 @@ double RangeFinderModel::Likelihood(const Observation& obs, const Rack& rack) {
   for (int i : OptionRanker::Matches(obs, options))
     if (options[i].equity >= best - tau_ - 1e-9) return 1;
   return 0;
+}
+
+HumanModelParams::Weights HumanModelParams::DefaultWeights() {
+  Weights w{};
+  w[kFeatGap] = -0.35;
+  w[kFeatLogRank] = -0.5;
+  return w;
+}
+
+HumanModelParams HumanModelParams::FromFile(const std::string& path) {
+  std::ifstream in(path);
+  if (!in) throw std::runtime_error("cannot open " + path);
+  HumanModelParams p;
+  p.band_ratings.clear();
+  p.band_weights.clear();
+  std::string line;
+  for (int number = 1; std::getline(in, line); ++number) {
+    line = line.substr(0, line.find('#'));
+    std::istringstream ss(line);
+    std::string key;
+    if (!(ss >> key)) continue;
+    bool ok = true;
+    if (key == "top_k") {
+      ok = static_cast<bool>(ss >> p.top_k) && p.top_k > 0;
+    } else if (key == "epsilon") {
+      ok = static_cast<bool>(ss >> p.epsilon) && p.epsilon >= 0 && p.epsilon <= 1;
+    } else if (key == "residual") {
+      ok = static_cast<bool>(ss >> p.residual) && p.residual >= 0 && p.residual < 1;
+    } else if (key == "band") {
+      int rating = 0;
+      Weights w{};
+      ok = static_cast<bool>(ss >> rating);
+      for (double& x : w) ok = ok && static_cast<bool>(ss >> x);
+      if (ok) {
+        p.band_ratings.push_back(rating);
+        p.band_weights.push_back(w);
+      }
+    } else {
+      ok = false;
+    }
+    if (!ok) throw std::runtime_error(path + ":" + std::to_string(number) + ": bad line");
+  }
+  if (p.band_ratings.empty()) throw std::runtime_error(path + ": no band");
+  for (std::size_t i = 1; i < p.band_ratings.size(); ++i)
+    if (p.band_ratings[i] <= p.band_ratings[i - 1])
+      throw std::runtime_error(path + ": bands must be sorted by rating");
+  return p;
+}
+
+const HumanModelParams::Weights& HumanModelParams::WeightsFor(int rating) const {
+  std::size_t band = 0;
+  while (band + 1 < band_ratings.size() && rating >= band_ratings[band + 1]) ++band;
+  return band_weights[band];
+}
+
+std::vector<double> HumanMoveModel::OptionProbabilities(const std::vector<Option>& options,
+                                                        const HumanModelParams& params,
+                                                        int rating) {
+  const int n = static_cast<int>(options.size());
+  const int k = std::min(n, params.top_k);
+  const auto& w = params.WeightsFor(rating);
+  std::vector<double> p(n + 1);
+  double max_u = -INFINITY;
+  for (int i = 0; i < k; ++i) {
+    double u = 0;
+    for (int f = 0; f < kNumMoveFeatures; ++f) u += w[f] * options[i].features[f];
+    p[i] = u;
+    max_u = std::max(max_u, u);
+  }
+  double z = 0;
+  for (int i = 0; i < k; ++i) z += p[i] = std::exp(p[i] - max_u);
+  const double outside = n - k + 1;  // options below the top_k and the unmatched slot
+  const double uniform = params.epsilon / (n + 1);
+  for (int i = 0; i < k; ++i)
+    p[i] = (1 - params.epsilon) * (1 - params.residual) * p[i] / z + uniform;
+  for (int i = k; i <= n; ++i) p[i] = (1 - params.epsilon) * params.residual / outside + uniform;
+  return p;
+}
+
+double HumanMoveModel::Likelihood(const Observation& obs, const Rack& rack) {
+  std::vector<Option> options = ranker_.Rank(obs, rack);
+  std::vector<double> p = OptionProbabilities(options, params_, obs.rating);
+  std::vector<int> matches = OptionRanker::Matches(obs, options);
+  if (matches.empty()) return p.back();
+  double sum = 0;
+  for (int i : matches) sum += p[i];
+  return sum;
 }
 
 void RackPosterior::Normalize() {
