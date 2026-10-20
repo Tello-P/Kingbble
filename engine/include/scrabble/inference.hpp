@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <functional>
 #include <random>
@@ -80,6 +81,50 @@ class RangeFinderModel : public MoveModel {
  private:
   OptionRanker ranker_;
   double tau_;
+};
+
+// Parameters of the human move model, as written by ml/human_model/logit.py:
+//   top_k 64
+//   epsilon 0.05
+//   residual 0.03
+//   band <min rating> <one weight per feature, in MoveFeatureNames() order>
+// '#' starts a comment. A rating below every band (or 0, unknown) uses the first.
+struct HumanModelParams {
+  using Weights = std::array<double, kNumMoveFeatures>;
+
+  int top_k = 64;
+  double epsilon = 0.05;   // weight of the uniform component
+  double residual = 0.03;  // human mass shared by the options outside the top_k
+  std::vector<int> band_ratings{0};
+  std::vector<Weights> band_weights{DefaultWeights()};
+
+  // Hand-set weights: humans mostly play near the top by equity.
+  static Weights DefaultWeights();
+  // Throws std::runtime_error on a malformed file.
+  static HumanModelParams FromFile(const std::string& path);
+  const Weights& WeightsFor(int rating) const;
+};
+
+// Hierarchical mixture: P(move | rack) = (1 - epsilon) * human + epsilon * uniform
+// over the n legal options. The human part is a conditional logit (softmax of
+// the weighted features) over the top_k options by static equity, scaled by
+// 1 - residual; the options outside the top_k share the residual, so a rare
+// move is never impossible. A move we do not generate (a phony) counts as one
+// more option outside the top_k.
+class HumanMoveModel : public MoveModel {
+ public:
+  HumanMoveModel(const Gaddag& gaddag, const Leaves& leaves, HumanModelParams params)
+      : ranker_(gaddag, leaves), params_(std::move(params)) {}
+  double Likelihood(const Observation& obs, const Rack& rack) override;
+
+  // Probability of each of the n options, then of an option outside them (n + 1 values).
+  static std::vector<double> OptionProbabilities(const std::vector<Option>& options,
+                                                 const HumanModelParams& params, int rating);
+  const HumanModelParams& params() const { return params_; }
+
+ private:
+  OptionRanker ranker_;
+  HumanModelParams params_;
 };
 
 // A weighted set of full racks the opponent may have held before the move.
