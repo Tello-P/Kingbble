@@ -33,7 +33,7 @@ inline std::unique_ptr<Bot> MakeBot(const std::string& kind, const Gaddag& gadda
     auto inner = MakeBot(kind.substr(0, kind.size() - suffix.size()), gaddag, leaves, sim,
                          endgame_time, peg);
     if (suffix == "+eg")
-      return std::make_unique<EndgameBot>(std::move(inner), gaddag, endgame_time);
+      return std::make_unique<EndgameBot>(std::move(inner), gaddag, endgame_time, sim.threads);
     if (!leaves) {
       std::cerr << "bot '" << kind << "' needs --leaves\n";
       std::exit(2);

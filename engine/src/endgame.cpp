@@ -4,7 +4,9 @@
 #include <cctype>
 #include <chrono>
 #include <limits>
+#include <random>
 #include <stdexcept>
+#include <thread>
 
 #include "scrabble/wordprune.hpp"
 
@@ -46,7 +48,39 @@ bool IsBlankChar(char ch) { return std::islower(static_cast<unsigned char>(ch));
 }  // namespace
 
 EndgameSolver::EndgameSolver(const Gaddag& gaddag)
-    : gaddag_(gaddag), window_gaddag_(&gaddag), gen_(gaddag) {}
+    : gaddag_(gaddag),
+      window_gaddag_(&gaddag),
+      gen_(gaddag),
+      own_table_(std::make_unique<Table>()),
+      tt_(own_table_.get()) {}
+
+bool EndgameSolver::Table::Probe(std::uint64_t key, Entry& out) {
+  Shard& s = ShardOf(key);
+  std::lock_guard<std::mutex> lock(s.mutex);
+  auto it = s.map.find(key);
+  if (it == s.map.end()) return false;
+  out = it->second;
+  return true;
+}
+
+void EndgameSolver::Table::Store(std::uint64_t key, Entry e) {
+  Shard& s = ShardOf(key);
+  std::lock_guard<std::mutex> lock(s.mutex);
+  if (auto it = s.map.find(key); it != s.map.end()) {
+    it->second = std::move(e);
+  } else if (size_ < kMaxTableEntries) {
+    s.map.emplace(key, std::move(e));
+    ++size_;
+  }
+}
+
+void EndgameSolver::Table::Clear() {
+  for (Shard& s : shards_) {
+    std::lock_guard<std::mutex> lock(s.mutex);
+    s.map.clear();
+  }
+  size_ = 0;
+}
 
 std::uint64_t EndgameSolver::Hash() const {
   std::uint64_t h = SideKey(to_move_, scoreless_);
@@ -111,15 +145,20 @@ void EndgameSolver::OrderedMoves(const Move* tt_move, std::vector<Move>& moves) 
   order_.clear();
   for (std::size_t i = 0; i < moves.size(); ++i) {
     const Move& m = moves[i];
-    const int key = m.kind == Move::Kind::kPass
-                        ? -1
-                        : (m.TilesPlayed() == rack.Size() ? 1000 : 0) + m.score;
+    const int key =
+        m.kind == Move::Kind::kPass ? -1 : (m.TilesPlayed() == rack.Size() ? 1000 : 0) + m.score;
     order_.emplace_back(-key, static_cast<int>(i));
   }
   std::sort(order_.begin(), order_.end());
   sorted_.clear();
   for (const auto& [key, i] : order_) sorted_.push_back(std::move(moves[i]));
   moves.swap(sorted_);
+  // Helpers try the moves after the first few in their own order, so that
+  // they fill the shared table with other parts of the tree.
+  if (helper_ > 0 && moves.size() > 3) {
+    std::mt19937 rng(static_cast<std::uint32_t>(helper_ * 7919 + ply_));
+    std::shuffle(moves.begin() + 2, moves.end(), rng);
+  }
   if (tt_move) {
     auto it = std::find(moves.begin(), moves.end(), *tt_move);
     if (it != moves.end()) std::rotate(moves.begin(), it, it + 1);
@@ -128,6 +167,7 @@ void EndgameSolver::OrderedMoves(const Move* tt_move, std::vector<Move>& moves) 
 
 int EndgameSolver::Search(int depth, int alpha, int beta, bool& complete) {
   ++nodes_;
+  if (stop_ && stop_->load(std::memory_order_relaxed)) aborted_ = true;
   if (deadline_ > 0 && (nodes_ & 255) == 0 && Now() > deadline_) aborted_ = true;
   if (aborted_) return 0;
 
@@ -139,8 +179,8 @@ int EndgameSolver::Search(int depth, int alpha, int beta, bool& complete) {
 
   const std::uint64_t key = hash_;
   const Move* tt_move = nullptr;
-  if (auto it = tt_.find(key); it != tt_.end()) {
-    const Entry& e = it->second;
+  Entry e;
+  if (tt_->Probe(key, e)) {
     if (e.depth >= depth && (e.bound == kExactBound || (e.bound == kLower && e.value >= beta) ||
                              (e.bound == kUpper && e.value <= alpha))) {
       if (e.depth < kExactDepth) complete = false;
@@ -199,17 +239,12 @@ int EndgameSolver::Search(int depth, int alpha, int beta, bool& complete) {
   --ply_;
 
   if (!all_complete) complete = false;
-  Entry e{all_complete ? kExactDepth : depth, best,
-          best <= alpha0 ? kUpper
-          : best >= beta ? kLower
-                         : kExactBound,
-          best_move};
-  if (key == root_key_) root_best_ = e.best;
-  if (auto it = tt_.find(key); it != tt_.end()) {
-    it->second = std::move(e);
-  } else if (tt_.size() < kMaxTableEntries) {
-    tt_.emplace(key, std::move(e));
-  }
+  if (key == root_key_) root_best_ = best_move;
+  tt_->Store(key, {all_complete ? kExactDepth : depth, best,
+                   best <= alpha0 ? kUpper
+                   : best >= beta ? kLower
+                                  : kExactBound,
+                   std::move(best_move)});
   return best;
 }
 
@@ -232,7 +267,7 @@ void EndgameSolver::Load(const Game& game) {
 int EndgameSolver::SolveWindow(const Game& game, int alpha, int beta, int max_plies,
                                double time_limit_s) {
   // A full table stops learning; entries of earlier positions matter least.
-  if (tt_.size() >= kMaxTableEntries) tt_.clear();
+  if (tt_->Size() >= kMaxTableEntries) tt_->Clear();
   if (!gen_on_window_) {
     gen_.set_gaddag(*window_gaddag_);
     gen_on_window_ = true;
@@ -249,7 +284,7 @@ int EndgameSolver::SolveWindow(const Game& game, int alpha, int beta, int max_pl
 }
 
 EndgameResult EndgameSolver::Solve(const Game& game, int max_plies, double time_limit_s) {
-  tt_.clear();
+  tt_->Clear();
   Load(game);
   const double start = Now();
   gen_on_window_ = false;
@@ -263,6 +298,29 @@ EndgameResult EndgameSolver::Solve(const Game& game, int max_plies, double time_
     gen_.set_gaddag(gaddag_);
   }
 
+  // Helpers search the same position into the shared table, half of them one
+  // ply deeper, until this search is done.
+  std::atomic<bool> stop{false};
+  std::vector<std::thread> threads;
+  for (int i = 1; i < threads_; ++i) {
+    if (static_cast<int>(helpers_.size()) < i)
+      helpers_.push_back(std::make_unique<EndgameSolver>(gaddag_));
+    EndgameSolver& h = *helpers_[i - 1];
+    h.tt_ = tt_;
+    h.stop_ = &stop;
+    h.helper_ = i;
+    h.gen_.set_gaddag(pruning_ ? pruned_ : gaddag_);
+    h.gen_on_window_ = false;
+    h.Load(game);
+    threads.emplace_back([&h, i, max_plies] {
+      for (int depth = 1 + i % 2; depth <= std::max(1, max_plies); ++depth) {
+        bool complete = true;
+        h.Search(depth, -kInf, kInf, complete);
+        if (h.aborted_ || complete) break;
+      }
+    });
+  }
+
   EndgameResult result;
   for (int depth = 1; depth <= std::max(1, max_plies); ++depth) {
     if (depth > 1 && time_limit_s > 0) deadline_ = start + time_limit_s;
@@ -272,10 +330,18 @@ EndgameResult EndgameSolver::Solve(const Game& game, int max_plies, double time_
     result.value = value;
     result.depth = depth;
     result.exact = complete;
-    result.move = root_best_;
+    // A helper may have stored the root first.
+    Entry root;
+    result.move = tt_->Probe(root_key_, root) ? root.best : root_best_;
     if (complete) break;
   }
+  stop = true;
+  for (std::thread& t : threads) t.join();
   result.nodes = nodes_;
+  for (int i = 1; i < threads_; ++i) {
+    result.nodes += helpers_[i - 1]->nodes_;
+    helpers_[i - 1]->stop_ = nullptr;
+  }
 
   // Principal variation from the table.
   struct Played {
@@ -285,9 +351,9 @@ EndgameResult EndgameSolver::Solve(const Game& game, int max_plies, double time_
   };
   std::vector<Played> played;
   for (int i = 0; i < result.depth; ++i) {
-    auto it = tt_.find(hash_);
-    if (it == tt_.end()) break;
-    Move m = it->second.best;
+    Entry e;
+    if (!tt_->Probe(hash_, e)) break;
+    Move m = e.best;
     const int me = to_move_;
     played.push_back({m, scoreless_, hash_});
     Play(m);

@@ -113,6 +113,38 @@ TEST_F(EndgameTest, BestMoveAchievesTheValue) {
   }
 }
 
+TEST_F(EndgameTest, ThreadsGiveTheSameValues) {
+  EndgameSolver one(gaddag_), four(gaddag_);
+  four.set_threads(4);
+  for (const Game& g : SmallEndgames(gaddag_, 8, 9)) {
+    EndgameResult a = one.Solve(g), b = four.Solve(g);
+    ASSERT_TRUE(a.exact && b.exact);
+    EXPECT_EQ(a.value, b.value);
+    // The move may differ but must be worth the same.
+    Game next = g;
+    const int me = g.to_move();
+    const int before = next.score(me) - next.score(1 - me);
+    next.Apply(b.move);
+    const int gained = next.score(me) - next.score(1 - me) - before;
+    if (next.over()) {
+      EXPECT_EQ(b.value, gained);
+    } else if (b.move.kind != Move::Kind::kPass) {
+      EXPECT_EQ(b.value, gained - one.Solve(next).value);
+    }
+  }
+}
+
+TEST_F(EndgameTest, ThreadsRespectTheTimeLimit) {
+  std::vector<Game> positions = SmallEndgames(gaddag_, 1, 14);
+  ASSERT_FALSE(positions.empty());
+  EndgameSolver solver(gaddag_);
+  solver.set_threads(4);
+  EndgameResult r = solver.Solve(positions[0], 25, 0.05);
+  EXPECT_GE(r.depth, 1);
+  Game g = positions[0];
+  g.Apply(r.move);
+}
+
 TEST_F(EndgameTest, RespectsTheTimeLimit) {
   std::vector<Game> positions = SmallEndgames(gaddag_, 1, 14);
   ASSERT_FALSE(positions.empty());
