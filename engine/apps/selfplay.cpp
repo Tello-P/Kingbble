@@ -1,7 +1,7 @@
 // Self-play: builds the GADDAG, plays N games between two bots and reports
 // results and throughput. Bots swap seats every game, so each starts half of them.
 //
-//   kingbble_selfplay --lexicon lexica/ENABLE.txt --games 100 --seed 1 [--verbose]
+//   kingbble_selfplay --lexicon lexica/ENABLE.txt --games 100 --seed 1 [--verbose] [--progress]
 //   kingbble_selfplay --lexicon lexica/ENABLE.txt --leaves lexica/NWL23.klv2 --a equity --b greedy
 //   kingbble_selfplay ... --a sim --b equity --sim-candidates 10 --sim-iterations 200 --threads 8
 //   kingbble_selfplay ... --a equity+eg --b equity --endgame-time 5
@@ -43,6 +43,7 @@ int main(int argc, char** argv) {
   int games = 10;
   std::uint64_t seed = 1;
   bool verbose = false;
+  bool progress = false;  // "progress: G/N" on stderr after each game
   SimParams sim;
   double endgame_time = 5;
   PegOptions peg;
@@ -94,12 +95,15 @@ int main(int argc, char** argv) {
       seed = std::stoull(value());
     } else if (a == "--verbose") {
       verbose = true;
+    } else if (a == "--progress") {
+      progress = true;
     } else {
       std::cerr << "usage: " << argv[0]
                 << " --lexicon FILE [--leaves KLV] [--a BOT] [--b BOT] [--games N] [--seed S]"
                    " [--sim-candidates N] [--sim-iterations N] [--threads N] [--endgame-time S]"
                    " [--peg-bag N] [--peg-candidates N] [--peg-time S] [--apeg-candidates N]"
-                   " [--apeg-samples N] [--apeg-plies N] [--apeg-time S] [--verbose]\n";
+                   " [--apeg-samples N] [--apeg-plies N] [--apeg-time S] [--verbose]"
+                   " [--progress]\n";
       return 2;
     }
   }
@@ -151,6 +155,7 @@ int main(int argc, char** argv) {
     spread_a += sa - sb;
     ++wins_ab[sa > sb ? 0 : sb > sa ? 1 : 2];
     if (verbose) std::cout << "game " << g + 1 << ": " << s0 << " - " << s1 << "\n";
+    if (progress) std::cerr << "progress: " << g + 1 << "/" << games << std::endl;
   }
   std::cout << "games: " << games << ", wins p1/p2/ties: " << wins[0] << "/" << wins[1] << "/"
             << wins[2] << ", avg score per player: " << (games ? total_score / (2.0 * games) : 0)
