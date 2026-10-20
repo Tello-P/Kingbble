@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 import time
 import urllib.request
 from collections import deque
@@ -87,8 +88,12 @@ def crawl(
     delay: float = 1.0,
     games_per_player: int = 50,
     sleep: Callable[[float], None] = time.sleep,
+    on_save: Callable[[int], None] | None = None,
 ) -> int:
-    """Saves up to max_games new games; returns how many were saved."""
+    """Saves up to max_games new games; returns how many were saved.
+
+    on_save, if given, is called with the running count after each saved game.
+    """
     out.mkdir(parents=True, exist_ok=True)
     have = {p.stem for p in out.glob("*.gcg")}
     queue, seen = deque(seeds), set(seeds)
@@ -118,6 +123,8 @@ def crawl(
                 index.flush()
                 have.add(meta["game_id"])
                 saved += 1
+                if on_save:
+                    on_save(saved)
                 if saved >= max_games:
                     break
     return saved
@@ -129,8 +136,19 @@ def main() -> int:
     ap.add_argument("--max-games", type=int, default=1000)
     ap.add_argument("--delay", type=float, default=1.0, help="seconds between requests")
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    ap.add_argument("--progress", action="store_true", help='"progress: N/max" on stderr')
     args = ap.parse_args()
-    saved = crawl(args.players.split(","), args.max_games, args.out, delay=args.delay)
+
+    def report(saved: int) -> None:
+        print(f"progress: {saved}/{args.max_games}", file=sys.stderr, flush=True)
+
+    saved = crawl(
+        args.players.split(","),
+        args.max_games,
+        args.out,
+        delay=args.delay,
+        on_save=report if args.progress else None,
+    )
     print(f"saved {saved} games to {args.out}")
     return 0
 

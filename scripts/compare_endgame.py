@@ -17,6 +17,7 @@ import argparse
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -53,6 +54,42 @@ def run(cmd: list[str], **kw) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, check=True, text=True, **kw)
 
 
+class Progress:
+    """Prints "progress: done/total" on stderr as positions finish, for wrappers."""
+
+    def __init__(self, total: int):
+        self.total, self.done, self.lock = total, 0, threading.Lock()
+
+    def step(self) -> None:
+        with self.lock:
+            self.done += 1
+            print(f"progress: {self.done}/{self.total}", file=sys.stderr, flush=True)
+
+
+def stream(
+    cmd: list[str], lines_per_item: int, progress: Progress, input: str | None = None
+) -> str:
+    """Like run(cmd, capture_output=True).stdout, ticking progress every lines_per_item lines."""
+    with subprocess.Popen(
+        cmd, stdin=subprocess.PIPE if input is not None else None, stdout=subprocess.PIPE, text=True
+    ) as proc:
+        if input is not None:
+
+            def feed() -> None:
+                proc.stdin.write(input)
+                proc.stdin.close()
+
+            threading.Thread(target=feed, daemon=True).start()
+        lines = []
+        for line in proc.stdout:
+            lines.append(line)
+            if len(lines) % lines_per_item == 0:
+                progress.step()
+    if proc.returncode:
+        raise subprocess.CalledProcessError(proc.returncode, cmd)
+    return "".join(lines)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--macondo", type=Path, default=Path.home() / "src" / "macondo")
@@ -83,6 +120,8 @@ def main() -> int:
     helper = work / "kingbble_endgame"
     run([args.go, "build", "-o", str(helper), "./cmd/kingbble_endgame"], cwd=args.macondo)
 
+    progress = Progress(2 * args.count)
+
     def ours_job(j: int) -> list[tuple[str, int]]:
         cmd = [
             str(apps / "kingbble_positions"),
@@ -95,16 +134,17 @@ def main() -> int:
             "--solve",
             "--shard", f"{j}/{args.jobs}",
         ]  # fmt: skip
-        return read_pairs(run(cmd, capture_output=True).stdout.splitlines())
+        return read_pairs(stream(cmd, 2, progress).splitlines())
 
     def macondo_job(cgps: list[str]) -> list[int]:
         if not cgps:
             return []
-        out = run(
+        out = stream(
             [str(helper), "-data", str(work / "data"), "-lex", LEX_NAME],
+            1,
+            progress,
             input="\n".join(cgps) + "\n",
-            capture_output=True,
-        ).stdout
+        )
         return [int(v) for v in out.split()]
 
     with ThreadPoolExecutor(args.jobs) as pool:
