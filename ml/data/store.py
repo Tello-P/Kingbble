@@ -13,6 +13,7 @@ import shutil
 from pathlib import Path
 
 from ml.data.gcg import GcgError, parse_gcg, turns
+from ml.data.pseudonym import load_salt, pseudonym
 from ml.data.woogles import BOTS, DEFAULT_OUT as DEFAULT_RAW
 
 DEFAULT_STORE = Path(__file__).resolve().parents[2] / "data" / "turns"
@@ -23,18 +24,23 @@ def _rating(value) -> int | None:
     return int(m.group()) if m else None
 
 
-def game_rows(game_id: str, gcg: str, meta: dict | None) -> list[dict]:
-    """Turns of one game with its metadata: lexicon, bot flag and rating of the mover."""
+def game_rows(game_id: str, gcg: str, meta: dict | None, salt: str) -> list[dict]:
+    """Turns of one game with its metadata: lexicon, bot flag and rating of the mover.
+
+    The mover's nickname is replaced by its pseudonym (player_id).
+    """
     game = parse_gcg(gcg)
     players = {p["nickname"]: p for p in (meta or {}).get("players", [])}
     lexicon = (meta or {}).get("lexicon") or game.lexicon or "unknown"
     rows = []
     for row in turns(game):
-        p = players.get(row["nickname"], {})
+        nickname = row.pop("nickname")
+        p = players.get(nickname, {})
         row.update(
+            player_id=pseudonym(nickname, salt),
             game_id=game_id,
             lexicon=lexicon,
-            is_bot=bool(p.get("is_bot", row["nickname"] in BOTS)),
+            is_bot=bool(p.get("is_bot", nickname in BOTS)),
             rating=_rating(p.get("rating")),
             end_reason=(meta or {}).get("end_reason", ""),
             created_at=(meta or {}).get("created_at", ""),
@@ -43,11 +49,12 @@ def game_rows(game_id: str, gcg: str, meta: dict | None) -> list[dict]:
     return rows
 
 
-def build(raw: Path = DEFAULT_RAW, store: Path = DEFAULT_STORE) -> dict:
-    """Rewrites the store from every <game_id>.gcg under `raw`."""
+def build(raw: Path = DEFAULT_RAW, store: Path = DEFAULT_STORE, salt: str | None = None) -> dict:
+    """Rewrites the store from every <game_id>.gcg under `raw`; salt defaults to load_salt()."""
     import pyarrow as pa
     import pyarrow.dataset as ds
 
+    salt = salt if salt is not None else load_salt()
     metas = {}
     index = raw / "index.jsonl"
     if index.exists():
@@ -58,7 +65,7 @@ def build(raw: Path = DEFAULT_RAW, store: Path = DEFAULT_STORE) -> dict:
     rows, games, failed = [], 0, 0
     for path in sorted(raw.glob("*.gcg")):
         try:
-            rows.extend(game_rows(path.stem, path.read_text(), metas.get(path.stem)))
+            rows.extend(game_rows(path.stem, path.read_text(), metas.get(path.stem), salt))
             games += 1
         except GcgError:
             failed += 1
