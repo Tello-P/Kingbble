@@ -97,8 +97,8 @@ def build(
     return {"games": games, "failed": failed, "turns": len(rows)}
 
 
-def stats(store: Path = DEFAULT_STORE) -> list[tuple]:
-    """Per lexicon: games, turns, human turns and human turns with a known rack."""
+def stats(store: Path = DEFAULT_STORE, lexicon: str | None = None) -> list[tuple]:
+    """Per lexicon (or only `lexicon`): games, turns, human turns and human turns with a rack."""
     import duckdb
 
     con = duckdb.connect()
@@ -110,8 +110,9 @@ def stats(store: Path = DEFAULT_STORE) -> list[tuple]:
                count(*) AS turns,
                count(*) FILTER (WHERE NOT is_bot) AS human_turns,
                count(*) FILTER (WHERE NOT is_bot AND rack <> '') AS human_turns_with_rack
-        FROM turns GROUP BY lexicon ORDER BY lexicon
-        """
+        FROM turns WHERE ? IS NULL OR lexicon = ? GROUP BY lexicon ORDER BY lexicon
+        """,
+        [lexicon, lexicon],
     ).fetchall()
 
 
@@ -120,13 +121,14 @@ def main() -> int:
     ap.add_argument("command", choices=["build", "stats"])
     ap.add_argument("--raw", type=Path, default=DEFAULT_RAW)
     ap.add_argument("--store", type=Path, default=DEFAULT_STORE)
+    ap.add_argument("--lexicon", help="stats: only this lexicon")
     ap.add_argument("--source", choices=["woogles", "selfplay"], default="woogles")
     args = ap.parse_args()
     if args.command == "build":
         print(build(args.raw, args.store, source=args.source))
         return 0
     total = 0
-    for lexicon, games, n, human, with_rack in stats(args.store):
+    for lexicon, games, n, human, with_rack in stats(args.store, args.lexicon):
         print(f"{lexicon}: {games} games, {n} turns, {human} human, {with_rack} human with rack")
         total += with_rack
     print(f"human turns with rack: {total}")

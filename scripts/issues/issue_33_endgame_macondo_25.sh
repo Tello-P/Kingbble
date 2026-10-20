@@ -10,5 +10,5 @@ issue_init 33 $((2 * COUNT)) "$@"
 need "$HOME/src/macondo" "clone https://github.com/domino14/macondo to ~/src/macondo"
 build_engine
 
-step $((2 * COUNT)) "" python3 -u scripts/compare_endgame.py --count $COUNT --max-tiles 8 --jobs 8 \
+step $((2 * COUNT)) "" "$PY" -u scripts/compare_endgame.py --count $COUNT --max-tiles 8 --jobs 8 \
   --build "$ROOT/build" --work "$ROOT/build/macondo_compare"

@@ -42,3 +42,4 @@ def test_build_and_stats(tmp_path):
     assert build(raw, store, salt="salt") == {"games": 2, "failed": 1, "turns": 6}
     # Per game: ann's two turns are human, one of them without a rack.
     assert stats(store) == [("CSW21", 1, 3, 2, 1), ("NWL23", 1, 3, 2, 1)]
+    assert stats(store, "NWL23") == [("NWL23", 1, 3, 2, 1)]

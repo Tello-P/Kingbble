@@ -89,10 +89,13 @@ def crawl(
     games_per_player: int = 50,
     sleep: Callable[[float], None] = time.sleep,
     on_save: Callable[[int], None] | None = None,
+    lexicon: str | None = None,
 ) -> int:
     """Saves up to max_games new games; returns how many were saved.
 
     on_save, if given, is called with the running count after each saved game.
+    With a lexicon, games in other lexicons are skipped and their players are
+    not queued.
     """
     out.mkdir(parents=True, exist_ok=True)
     have = {p.stem for p in out.glob("*.gcg")}
@@ -108,6 +111,8 @@ def crawl(
             sleep(delay)
             for info in _get(listing, "game_info", "gameInfo", default=[]) or []:
                 meta = game_metadata(info)
+                if lexicon and meta["lexicon"] != lexicon:
+                    continue
                 for p in meta["players"]:
                     if not p["is_bot"] and p["nickname"] and p["nickname"] not in seen:
                         seen.add(p["nickname"])
@@ -136,6 +141,7 @@ def main() -> int:
     ap.add_argument("--max-games", type=int, default=1000)
     ap.add_argument("--delay", type=float, default=1.0, help="seconds between requests")
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    ap.add_argument("--lexicon", default="NWL23", help='only this lexicon; "" for all')
     ap.add_argument("--progress", action="store_true", help='"progress: N/max" on stderr')
     args = ap.parse_args()
 
@@ -148,6 +154,7 @@ def main() -> int:
         args.out,
         delay=args.delay,
         on_save=report if args.progress else None,
+        lexicon=args.lexicon or None,
     )
     print(f"saved {saved} games to {args.out}")
     return 0

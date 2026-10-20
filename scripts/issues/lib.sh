@@ -10,6 +10,8 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$ROOT"
 LOG_DIR=$ROOT/build/issue_runs
+# The repo's virtualenv has the data dependencies (duckdb, pyarrow).
+PY=${PYTHON:-$([[ -x .venv/bin/python ]] && echo .venv/bin/python || echo python3)}
 DRY_RUN=0
 ARGS=()  # arguments left after the common ones
 ISSUE=""

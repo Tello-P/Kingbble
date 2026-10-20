@@ -13,7 +13,7 @@ build_engine
 
 for bag in 1 2; do
   note "max-bag $bag"
-  step $RUN_UNITS "" python3 -u scripts/compare_preendgame.py --count $COUNT --jobs $JOBS \
+  step $RUN_UNITS "" "$PY" -u scripts/compare_preendgame.py --count $COUNT --jobs $JOBS \
     --max-bag $bag --candidates 3 --pass --build "$ROOT/build" --work "$ROOT/build/macondo_compare"
 done
 ((DRY_RUN)) || grep -E "mismatched positions|wall time" "$LOG" | tail -4
