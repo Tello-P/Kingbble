@@ -68,3 +68,9 @@ def test_crawl_saves_finished_classic_games_once(tmp_path):
 
 def test_crawl_stops_at_max_games(tmp_path):
     assert crawl(["ann"], 1, tmp_path, post=FakeApi(), delay=0, sleep=lambda s: None) == 1
+
+
+def test_crawl_skips_other_lexicons(tmp_path):
+    kw = dict(post=FakeApi(), delay=0, sleep=lambda s: None)
+    assert crawl(["ann"], 10, tmp_path / "a", lexicon="CSW21", **kw) == 0
+    assert crawl(["ann"], 10, tmp_path / "b", lexicon="NWL23", **kw) == 3
