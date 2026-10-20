@@ -14,6 +14,7 @@ from pathlib import Path
 
 from ml.data.gcg import GcgError, parse_gcg, turns
 from ml.data.pseudonym import load_salt, pseudonym
+from ml.data.split import split_of
 from ml.data.woogles import BOTS, DEFAULT_OUT as DEFAULT_RAW
 
 DEFAULT_STORE = Path(__file__).resolve().parents[2] / "data" / "turns"
@@ -27,7 +28,8 @@ def _rating(value) -> int | None:
 def game_rows(game_id: str, gcg: str, meta: dict | None, salt: str) -> list[dict]:
     """Turns of one game with its metadata: lexicon, bot flag and rating of the mover.
 
-    The mover's nickname is replaced by its pseudonym (player_id).
+    The mover's nickname is replaced by its pseudonym (player_id), which also
+    picks the turn's split.
     """
     game = parse_gcg(gcg)
     players = {p["nickname"]: p for p in (meta or {}).get("players", [])}
@@ -36,8 +38,10 @@ def game_rows(game_id: str, gcg: str, meta: dict | None, salt: str) -> list[dict
     for row in turns(game):
         nickname = row.pop("nickname")
         p = players.get(nickname, {})
+        player_id = pseudonym(nickname, salt)
         row.update(
-            player_id=pseudonym(nickname, salt),
+            player_id=player_id,
+            split=split_of(player_id),
             game_id=game_id,
             lexicon=lexicon,
             is_bot=bool(p.get("is_bot", nickname in BOTS)),

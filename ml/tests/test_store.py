@@ -24,6 +24,7 @@ def test_game_rows_take_metadata_from_the_index():
     rows = game_rows("g1", GAME, meta, "salt")
     assert all("nickname" not in r for r in rows)
     assert rows[0]["player_id"] == rows[2]["player_id"] != rows[1]["player_id"]
+    assert rows[0]["split"] == rows[2]["split"] in ("train", "val", "test")
     assert [r["is_bot"] for r in rows] == [False, True, False]
     assert rows[0]["rating"] == 1612 and rows[1]["rating"] is None
     assert rows[2]["rack"] == ""
