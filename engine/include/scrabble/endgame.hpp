@@ -56,16 +56,21 @@ class EndgameSolver {
 
   void Load(const Game& game);
   int Search(int depth, int alpha, int beta, bool& complete);
-  std::vector<Move> OrderedMoves(const Move* tt_move);
+  void OrderedMoves(const Move* tt_move, std::vector<Move>& moves);
   int Play(const Move& m);  // returns points scored; updates hash, side and scoreless
-  void Undo(const Move& m, int prev_scoreless);
-  std::uint64_t Hash() const;
+  void Undo(const Move& m, int prev_scoreless, std::uint64_t prev_hash);
+  std::uint64_t Hash() const;  // from scratch; hash_ is kept up to date incrementally
 
   MoveGenerator gen_;
   Board board_;
   std::array<Rack, 2> racks_;
   int to_move_ = 0;
   int scoreless_ = 0;
+  std::uint64_t hash_ = 0;
+  int ply_ = 0;
+  std::vector<std::vector<Move>> move_lists_;  // by ply
+  std::vector<std::pair<int, int>> order_;     // OrderedMoves scratch
+  std::vector<Move> sorted_;
   std::unordered_map<std::uint64_t, Entry> tt_;
   std::uint64_t root_key_ = 0;
   Move root_best_;

@@ -26,9 +26,14 @@ class MoveGenerator {
   // On an empty board a vertical opening is the transpose of a horizontal one
   // (same score, same premiums), so by default only horizontal openings are
   // generated, as Macondo does. Enable to get both orientations.
-  void set_vertical_openings(bool on) { vertical_openings_ = on; }
+  void set_vertical_openings(bool on) {
+    vertical_openings_ = on;
+    prepared_ = false;
+  }
 
   std::vector<Move> Generate(const Board& board, const Rack& rack);
+  // Same, into `out` (cleared first), reusing its storage.
+  void Generate(const Board& board, const Rack& rack, std::vector<Move>& out);
 
  private:
   struct Square {
@@ -39,7 +44,8 @@ class MoveGenerator {
     bool anchor;
   };
 
-  void PrepareLine(const Board& board, Direction dir, int line);
+  void Prepare(const Board& board);
+  Square ComputeSquare(const Board& board, Direction dir, int line, int i);
   void GenLine(Direction dir, int line);
   void Gen(int pos, Gaddag::Node node);
   void GoOn(int pos, std::uint8_t letter, bool blank, Gaddag::Node next);
@@ -64,8 +70,12 @@ class MoveGenerator {
   const Gaddag& gaddag_;
   bool vertical_openings_ = false;
   CrossEntry cross_cache_[2][kBoardDim][kBoardDim];
+  // Square data by direction, line and index for prepared_board_.
+  Square squares_[2][kBoardDim][kBoardDim];
+  Board prepared_board_;
+  bool prepared_ = false;
   // Per-line state.
-  Square sq_[kBoardDim];
+  const Square* sq_ = nullptr;
   Direction dir_ = Direction::kHorizontal;
   int line_ = 0;
   int anchor_ = 0;

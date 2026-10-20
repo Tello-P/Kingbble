@@ -1,5 +1,6 @@
 #include "scrabble/movegen.hpp"
 
+#include <algorithm>
 #include <bit>
 #include <cctype>
 
@@ -70,82 +71,128 @@ int ScoreMove(const Board& board, const Move& move) {
 
 std::vector<Move> MoveGenerator::Generate(const Board& board, const Rack& rack) {
   std::vector<Move> moves;
+  Generate(board, rack, moves);
+  return moves;
+}
+
+void MoveGenerator::Generate(const Board& board, const Rack& rack, std::vector<Move>& out) {
+  out.clear();
   board_ = &board;
   rack_ = rack;
   rack_letters_ = 0;
   for (int t = 0; t < kNumTileTypes; ++t)
     if (rack.Count(Tile(t)) > 0) rack_letters_ |= 1u << t;
-  out_ = &moves;
-  board_empty_ = board.IsEmpty(kCenter, kCenter);
+  out_ = &out;
+  Prepare(board);
   for (Direction dir : {Direction::kHorizontal, Direction::kVertical}) {
     for (int line = 0; line < kBoardDim; ++line) {
-      PrepareLine(board, dir, line);
+      dir_ = dir;
+      line_ = line;
+      sq_ = squares_[static_cast<int>(dir)][line];
       GenLine(dir, line);
     }
   }
-  return moves;
 }
 
-void MoveGenerator::PrepareLine(const Board& board, Direction dir, int line) {
-  dir_ = dir;
-  line_ = line;
-  const Direction perp =
-      dir == Direction::kHorizontal ? Direction::kVertical : Direction::kHorizontal;
-  for (int i = 0; i < kBoardDim; ++i) {
-    Square& s = sq_[i];
-    s.letter = CellAt(board, dir, line, i);
-    s.cross = kAllLetters;
-    s.has_cross = false;
-    s.cross_score = 0;
-    s.anchor = false;
-    if (s.letter != Board::kEmpty) continue;
-
-    // Perpendicular neighbours: tiles before (lower index) and after this square.
-    int lo = line, hi = line;
-    while (lo > 0 && CellAt(board, perp, i, lo - 1) != Board::kEmpty) --lo;
-    while (hi < kBoardDim - 1 && CellAt(board, perp, i, hi + 1) != Board::kEmpty) ++hi;
-    bool side = (line > 0 && CellAt(board, dir, line - 1, i) != Board::kEmpty) ||
-                (line < kBoardDim - 1 && CellAt(board, dir, line + 1, i) != Board::kEmpty);
-    bool along = (i > 0 && sq_[i - 1].letter != Board::kEmpty) ||
-                 (i < kBoardDim - 1 && CellAt(board, dir, line, i + 1) != Board::kEmpty);
-    const bool opening_anchor = board_empty_ && line == kCenter && i == kCenter &&
-                                (dir == Direction::kHorizontal || vertical_openings_);
-    s.anchor = side || along || opening_anchor;
-    if (lo == line && hi == line) continue;
-
-    s.has_cross = true;
-    for (int k = lo; k <= hi; ++k)
-      if (k != line) s.cross_score += CellValue(CellAt(board, perp, i, k));
-    // The cross set only depends on the perpendicular word around the square,
-    // which rarely changes between calls (endgame search): cache it.
-    CrossEntry key;
-    key.valid = true;
-    key.word[0] = static_cast<std::uint8_t>(line - lo);
-    key.word[1] = static_cast<std::uint8_t>(hi - lo);
-    for (int k = lo, j = 2; k <= hi; ++k)
-      if (k != line) key.word[j++] = LetterOf(CellAt(board, perp, i, k));
-    CrossEntry& cached = cross_cache_[static_cast<int>(dir)][line][i];
-    if (cached.valid && cached.word == key.word) {
-      s.cross = cached.cross;
-      continue;
-    }
-    // Lookup reverse(before + L + after) = reverse(after) + L + reverse(before).
-    s.cross = 0;
-    Gaddag::Node n = gaddag_.Root();
-    for (int k = hi; k > line && n != Gaddag::kNone; --k)
-      n = gaddag_.Next(n, LetterOf(CellAt(board, perp, i, k)));
-    if (n != Gaddag::kNone) {
-      for (std::uint32_t bits = gaddag_.LetterMask(n) & kAllLetters; bits; bits &= bits - 1) {
-        const auto L = static_cast<std::uint8_t>(std::countr_zero(bits));
-        Gaddag::Node m = gaddag_.Next(n, L);
-        for (int k = line - 1; k >= lo && m != Gaddag::kNone; --k)
-          m = gaddag_.Next(m, LetterOf(CellAt(board, perp, i, k)));
-        if (m != Gaddag::kNone && gaddag_.IsTerminal(m)) s.cross |= 1u << L;
+void MoveGenerator::Prepare(const Board& board) {
+  // Square data only changes around tiles that differ from the board of the
+  // previous call (consecutive calls in a search differ by a move or two).
+  const bool empty = board.IsEmpty(kCenter, kCenter);
+  const bool all = !prepared_ || empty != board_empty_;
+  board_empty_ = empty;
+  constexpr int kH = static_cast<int>(Direction::kHorizontal);
+  constexpr int kV = static_cast<int>(Direction::kVertical);
+  bool dirty[2][kBoardDim][kBoardDim];
+  std::fill(&dirty[0][0][0], &dirty[0][0][0] + 2 * kBoardDim * kBoardDim, all);
+  auto occupied = [&](int r, int c) {
+    return !board.IsEmpty(r, c) || !prepared_board_.IsEmpty(r, c);
+  };
+  for (int r = 0; r < kBoardDim && !all; ++r) {
+    for (int c = 0; c < kBoardDim; ++c) {
+      if (board.At(r, c) == prepared_board_.At(r, c)) continue;
+      // Horizontal lines are rows: a square's cross word runs down its column,
+      // so the squares joined to (r, c) in its column (on either board) and
+      // the empty squares ending that run change, and likewise across its row.
+      dirty[kH][r][c] = dirty[kV][c][r] = true;
+      for (int d = -1; d <= 1; d += 2) {
+        for (int k = r + d; k >= 0 && k < kBoardDim; k += d) {
+          dirty[kH][k][c] = dirty[kV][c][k] = true;
+          if (!occupied(k, c)) break;
+        }
+        for (int k = c + d; k >= 0 && k < kBoardDim; k += d) {
+          dirty[kH][r][k] = dirty[kV][k][r] = true;
+          if (!occupied(r, k)) break;
+        }
       }
     }
-    key.cross = s.cross;
-    cached = key;
   }
+  for (Direction dir : {Direction::kHorizontal, Direction::kVertical})
+    for (int line = 0; line < kBoardDim; ++line)
+      for (int i = 0; i < kBoardDim; ++i)
+        if (dirty[static_cast<int>(dir)][line][i])
+          squares_[static_cast<int>(dir)][line][i] = ComputeSquare(board, dir, line, i);
+  prepared_board_ = board;
+  prepared_ = true;
+}
+
+MoveGenerator::Square MoveGenerator::ComputeSquare(const Board& board, Direction dir, int line,
+                                                   int i) {
+  const Direction perp =
+      dir == Direction::kHorizontal ? Direction::kVertical : Direction::kHorizontal;
+  Square s;
+  s.letter = CellAt(board, dir, line, i);
+  s.cross = kAllLetters;
+  s.has_cross = false;
+  s.cross_score = 0;
+  s.anchor = false;
+  if (s.letter != Board::kEmpty) return s;
+
+  // Perpendicular neighbours: tiles before (lower index) and after this square.
+  int lo = line, hi = line;
+  while (lo > 0 && CellAt(board, perp, i, lo - 1) != Board::kEmpty) --lo;
+  while (hi < kBoardDim - 1 && CellAt(board, perp, i, hi + 1) != Board::kEmpty) ++hi;
+  bool side = (line > 0 && CellAt(board, dir, line - 1, i) != Board::kEmpty) ||
+              (line < kBoardDim - 1 && CellAt(board, dir, line + 1, i) != Board::kEmpty);
+  bool along = (i > 0 && CellAt(board, dir, line, i - 1) != Board::kEmpty) ||
+               (i < kBoardDim - 1 && CellAt(board, dir, line, i + 1) != Board::kEmpty);
+  const bool opening_anchor = board_empty_ && line == kCenter && i == kCenter &&
+                              (dir == Direction::kHorizontal || vertical_openings_);
+  s.anchor = side || along || opening_anchor;
+  if (lo == line && hi == line) return s;
+
+  s.has_cross = true;
+  for (int k = lo; k <= hi; ++k)
+    if (k != line) s.cross_score += CellValue(CellAt(board, perp, i, k));
+  // The cross set only depends on the perpendicular word around the square,
+  // which rarely changes between calls (endgame search): cache it.
+  CrossEntry key;
+  key.valid = true;
+  key.word[0] = static_cast<std::uint8_t>(line - lo);
+  key.word[1] = static_cast<std::uint8_t>(hi - lo);
+  for (int k = lo, j = 2; k <= hi; ++k)
+    if (k != line) key.word[j++] = LetterOf(CellAt(board, perp, i, k));
+  CrossEntry& cached = cross_cache_[static_cast<int>(dir)][line][i];
+  if (cached.valid && cached.word == key.word) {
+    s.cross = cached.cross;
+    return s;
+  }
+  // Lookup reverse(before + L + after) = reverse(after) + L + reverse(before).
+  s.cross = 0;
+  Gaddag::Node n = gaddag_.Root();
+  for (int k = hi; k > line && n != Gaddag::kNone; --k)
+    n = gaddag_.Next(n, LetterOf(CellAt(board, perp, i, k)));
+  if (n != Gaddag::kNone) {
+    for (std::uint32_t bits = gaddag_.LetterMask(n) & kAllLetters; bits; bits &= bits - 1) {
+      const auto L = static_cast<std::uint8_t>(std::countr_zero(bits));
+      Gaddag::Node m = gaddag_.Next(n, L);
+      for (int k = line - 1; k >= lo && m != Gaddag::kNone; --k)
+        m = gaddag_.Next(m, LetterOf(CellAt(board, perp, i, k)));
+      if (m != Gaddag::kNone && gaddag_.IsTerminal(m)) s.cross |= 1u << L;
+    }
+  }
+  key.cross = s.cross;
+  cached = key;
+  return s;
 }
 
 void MoveGenerator::GenLine(Direction, int) {
