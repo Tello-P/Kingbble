@@ -11,7 +11,7 @@
 #   scripts/issues/issue_47_inference_eval.sh [--dry-run] [--games N] [--max-turns N]
 source "$(dirname "$0")/lib.sh"
 
-GAMES=100 MAX_TURNS=20000 RARE=0.3
+GAMES=100 MAX_TURNS=2000 RARE=0.3
 args=("$@")
 for ((i = 0; i < ${#args[@]}; i++)); do
   case ${args[i]} in
@@ -52,7 +52,7 @@ for (game, turn), (rating, split) in sorted(ratings().items()):
 fi
 step "$FILES" "" "$EVAL" "${LEX[@]}" --human-params "$MODEL" --games "$RAW" \
   --turns "$OUT/test_turns.tsv" --models none,rangefinder,human --max-turns "$MAX_TURNS" \
-  --samples 2000 --records "$OUT/human_games.jsonl" --progress
+  --samples 500 --records "$OUT/human_games.jsonl" --progress
 step 0 "" "$PY" -m ml.eval.metrics "$OUT/human_games.jsonl"
 
 for seed in 1 2; do
