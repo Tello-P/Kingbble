@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 
+#include <atomic>
 #include <string>
 
 #include "scrabble/equity.hpp"
@@ -132,6 +133,65 @@ TEST(GameFromPosition, KeepsTheGivenState) {
   g.Apply(Move{});
   EXPECT_EQ(g.scoreless_turns(), 3);
   EXPECT_EQ(g.to_move(), 0);
+}
+
+}  // namespace scrabble
+
+namespace scrabble {
+
+namespace {
+
+// Offers the opponent's real rack and counts how often it is asked.
+class CountingSampler : public RackSampler {
+ public:
+  explicit CountingSampler(Rack rack) : rack_(rack) {}
+  std::optional<Rack> SampleRack(std::mt19937_64&) const override {
+    ++calls;
+    return rack_;
+  }
+  mutable std::atomic<int> calls{0};
+
+ private:
+  Rack rack_;
+};
+
+}  // namespace
+
+TEST_F(SimBotTest, DealsPosteriorRacksAtTheConfiguredShare) {
+  Game g = MidGame();
+  auto calls = [&](double share) {
+    SimParams p = Params(2);
+    p.max_iterations = 200;
+    p.prune_z = 1e9;  // simulate every iteration
+    p.posterior_share = share;
+    SimBot bot(gaddag_, leaves_, p);
+    CountingSampler sampler(g.rack(1 - g.to_move()));
+    bot.set_rack_sampler(&sampler);
+    bot.Choose(g);
+    EXPECT_EQ(bot.last_results().front().iterations, 200);
+    return sampler.calls.load();
+  };
+  EXPECT_EQ(calls(0), 0);
+  EXPECT_EQ(calls(1), 200);
+  const int c = calls(0.8);
+  EXPECT_GT(c, 130);
+  EXPECT_LT(c, 190);
+}
+
+TEST_F(SimBotTest, IgnoresRacksThatDoNotFit) {
+  Game g = MidGame();
+  SimParams p = Params(1);
+  p.posterior_share = 1;
+  SimBot plain(gaddag_, leaves_, Params(1));
+  SimBot bot(gaddag_, leaves_, p);
+  CountingSampler sampler(*Rack::FromString("ZZZZZZZ"));
+  bot.set_rack_sampler(&sampler);
+  // Every sampled rack is rejected, so the simulation is the uniform one.
+  EXPECT_EQ(bot.Choose(g), plain.Choose(g));
+  EXPECT_GT(sampler.calls.load(), 0);
+  ASSERT_EQ(bot.last_results().size(), plain.last_results().size());
+  for (std::size_t i = 0; i < bot.last_results().size(); ++i)
+    EXPECT_DOUBLE_EQ(bot.last_results()[i].mean, plain.last_results()[i].mean);
 }
 
 }  // namespace scrabble
