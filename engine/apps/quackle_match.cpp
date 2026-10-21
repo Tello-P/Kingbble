@@ -3,10 +3,10 @@
 // --words output). Kingbble's Game keeps the bag; Quackle is sent the game so
 // far as GCG and its rack. Seats swap every game; every game is saved as GCG.
 //
-//   kingbble_quackle_match --lexicon build/NWL23.txt --leaves lexica/NWL23.klv2
+//   kingbble_quackle_match --lexicon lexica/CSW24.txt --leaves lexica/CSW24.klv2
 //       --helper build/quackle_helper/quackle_helper --bot equity+peg+eg
 //       --games 100 --seed 1 [--quackle-player "Championship Player"]
-//       [--quackle-lexicon nwl23] [--quackle-threads N] [--gcg-dir DIR]
+//       [--quackle-lexicon csw24] [--quackle-threads N] [--gcg-dir DIR]
 // Bot options as kingbble_selfplay: --threads, --endgame-time, --peg-bag,
 // --peg-candidates, --peg-time, --apeg-*, --sim-*.
 
@@ -126,7 +126,7 @@ GcgEvent Event(const Game& before, const Move& m, std::array<int, 2>& cumulative
 
 int main(int argc, char** argv) {
   std::string lexicon, leaves_path, helper_path, bot_kind = "equity+peg+eg";
-  std::string quackle_player = "Championship Player", quackle_lexicon = "nwl23", gcg_dir;
+  std::string quackle_player = "Championship Player", quackle_lexicon = "csw24", gcg_dir;
   int games = 10, quackle_threads = 0;
   std::uint64_t seed = 1;
   SimParams sim;

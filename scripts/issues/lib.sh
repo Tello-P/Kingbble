@@ -120,6 +120,16 @@ need() {
   fi
 }
 
+# need_csw24: the CSW24 word list and leaves the strength runs play with. Both are
+# licensed, so they live in lexica/ (ignored by git):
+#   build/quackle_helper/quackle_helper --lexicon csw24 --words > lexica/CSW24.txt
+#   curl -o lexica/CSW24.klv2 \
+#     https://raw.githubusercontent.com/woogles-io/liwords/master/liwords-ui/public/wasm/2024/CSW24.klv2
+need_csw24() {
+  need lexica/CSW24.txt "export it with: quackle_helper --lexicon csw24 --words > lexica/CSW24.txt"
+  need lexica/CSW24.klv2 "download CSW24.klv2 from woogles-io/liwords (see scripts/issues/lib.sh)"
+}
+
 # build_engine: configures and builds the engine (quick when up to date).
 build_engine() {
   if ((DRY_RUN)); then

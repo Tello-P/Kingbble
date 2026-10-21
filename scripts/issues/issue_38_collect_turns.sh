@@ -6,7 +6,7 @@
 #     [--dry-run]
 source "$(dirname "$0")/lib.sh"
 
-PLAYERS=${KINGBBLE_PLAYERS:-} MAX_GAMES=5000 TARGET=100000 LEXICON=NWL23
+PLAYERS=${KINGBBLE_PLAYERS:-} MAX_GAMES=5000 TARGET=100000 LEXICON=CSW24
 args=("$@")
 for ((i = 0; i < ${#args[@]}; i++)); do
   case ${args[i]} in

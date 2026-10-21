@@ -4,7 +4,7 @@ For each split, the human turns with a known rack go to <out>/<split>/ as raw
 little-endian arrays that np.memmap opens directly; <out>/meta.json gives every
 array's dtype and shape, and the tile encoding.
 
-  python -m ml.data.export [--store data/turns] [--out data/memmap] [--lexicon NWL23]
+  python -m ml.data.export [--store data/turns] [--out data/memmap] [--lexicon CSW24]
 
 Tiles: 0 none, 1-26 A-Z, 27 blank on a rack, 33-58 a blank played as a-z,
 63 a tile already on the board (played through).
