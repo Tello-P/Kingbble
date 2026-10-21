@@ -265,3 +265,59 @@ TEST_F(InferenceTest, FilterHandlesABlindExchange) {
 }
 
 }  // namespace scrabble
+
+namespace scrabble {
+
+namespace {
+
+// Racks with an X explain each move `with_x` times as well as the others.
+class XModel : public MoveModel {
+ public:
+  double with_x = 1;
+  double Likelihood(const Observation&, const Rack& rack) override {
+    return rack.Count(*TileFromChar('X')) > 0 ? with_x : 1;
+  }
+};
+
+double XAfterRareMoves(double surprise_bits) {
+  XModel model;
+  Leaves leaves;
+  FilterParams params;
+  params.surprise_bits = surprise_bits;
+  RackFilter filter(model, leaves, params);
+  Observation pass;
+  pass.move.kind = Move::Kind::kPass;
+  pass.unseen = R("AEXIOU");
+  pass.bag_size = 4;
+  filter.Reset(pass.unseen, pass.RackSize());
+  model.with_x = 0.01;
+  for (int i = 0; i < 3; ++i) filter.ObserveOpponent(pass);
+  model.with_x = 100;
+  filter.ObserveOpponent(pass);
+  EXPECT_EQ(filter.surprised(), surprise_bits < INFINITY);
+  return filter.posterior().TileProbability(*TileFromChar('X'));
+}
+
+}  // namespace
+
+TEST(RackFilter, OrdinaryMovesAreNotSurprising) {
+  XModel model;
+  Leaves leaves;
+  RackFilter filter(model, leaves, {});
+  Observation pass;
+  pass.move.kind = Move::Kind::kPass;
+  pass.unseen = R("AEXIOU");
+  pass.bag_size = 4;
+  filter.ObserveOpponent(pass);
+  EXPECT_NEAR(filter.last_surprise(), 0, 0.5);
+  EXPECT_FALSE(filter.surprised());
+  EXPECT_NEAR(filter.posterior().TileProbability(*TileFromChar('X')), 1.0 / 3, 1e-12);
+}
+
+TEST(RackFilter, SurpriseWidensThePosteriorInsteadOfCollapsing) {
+  const double widened = XAfterRareMoves(4);
+  const double collapsed = XAfterRareMoves(INFINITY);
+  EXPECT_GT(widened, collapsed + 0.2);
+}
+
+}  // namespace scrabble
