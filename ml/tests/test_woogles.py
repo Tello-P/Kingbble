@@ -1,6 +1,6 @@
 import json
 
-from ml.data.woogles import crawl, game_metadata, wanted
+from ml.data.woogles import count_saved, crawl, game_metadata, wanted
 
 GCG = "#player1 ann Ann\n#player2 bea Bea\n>ann: AERTXYZ 8E RATE +8 8\n"
 
@@ -74,3 +74,10 @@ def test_crawl_skips_other_lexicons(tmp_path):
     kw = dict(post=FakeApi(), delay=0, sleep=lambda s: None)
     assert crawl(["ann"], 10, tmp_path / "a", lexicon="CSW21", **kw) == 0
     assert crawl(["ann"], 10, tmp_path / "b", lexicon="NWL23", **kw) == 3
+
+
+def test_count_saved_counts_the_index_per_lexicon(tmp_path):
+    assert count_saved(tmp_path) == 0
+    crawl(["ann"], 10, tmp_path, post=FakeApi(), delay=0, sleep=lambda s: None)
+    assert count_saved(tmp_path) == 3 == count_saved(tmp_path, "NWL23")
+    assert count_saved(tmp_path, "CSW24") == 0

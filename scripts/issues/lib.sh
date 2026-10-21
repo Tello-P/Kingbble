@@ -86,12 +86,15 @@ step() {
   local base=$DONE
   echo "\$ $*" | tee -a "$LOG"
   "$@" 2>&1 | {
-    local n=0 shown=-1 shown_at=$SECONDS line pct
+    local n=0 shown=-1 shown_at=$SECONDS line pct first=1
     while IFS= read -r line; do
       echo "$line" >>"$LOG"
       [[ -n ${STEP_LOG:-} ]] && echo "$line" >>"$STEP_LOG"
       if [[ $line =~ ^progress:\ ([0-9]+)/[0-9]+ ]]; then
         n=${BASH_REMATCH[1]}
+        # A resumed tool reports its starting point first; keep it out of the ETA.
+        ((first && n > 1)) && START_DONE=$((base + n))
+        first=0
       elif [[ -n $regex && $line =~ $regex ]]; then
         n=$((n + 1))
       else
