@@ -15,6 +15,7 @@ PLAN=(
   "30 360 issue_30_preendgame_macondo.sh"
   "34 1200 issue_34_quackle_and_smp.sh"
   "38 200 issue_38_collect_turns.sh"
+  "47 600 issue_47_inference_eval.sh"
 )
 
 dry=() players=${KINGBBLE_PLAYERS:-} only=()
