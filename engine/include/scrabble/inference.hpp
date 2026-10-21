@@ -181,6 +181,12 @@ struct FilterParams {
   long long exact_limit = 3000;  // track every rack exactly when there are at most this many
   double prior_mix = 0.1;        // prior share of each rack when switching to exact tracking
   double resample_below = 0.5;   // resample when the effective particles drop below this share
+  // Surprise: how many bits likelier the move is under the prior than under the
+  // tracked posterior. Above `surprise_bits` the posterior is widened first,
+  // mixing in `surprise_mix` of the prior, so one rare move does not collapse it.
+  double surprise_bits = 4;
+  double surprise_mix = 0.5;
+  int surprise_samples = 64;  // prior racks sampled to estimate the prior predictive
   std::uint64_t seed = 1;
 };
 
@@ -204,6 +210,9 @@ class RackFilter : public RackSampler {
 
   RackPosterior posterior() const { return RackPosterior(hypotheses_); }
   bool exact() const { return exact_; }
+  // Surprise of the last opponent move, in bits (0 if the prior cannot explain it either).
+  double last_surprise() const { return surprise_; }
+  bool surprised() const { return surprise_ > params_.surprise_bits; }
   const Rack& unseen() const { return unseen_; }
   std::optional<Rack> SampleRack(std::mt19937_64& rng) const override;
 
@@ -219,11 +228,16 @@ class RackFilter : public RackSampler {
   Rack unseen_;
   int rack_size_ = 0;
   std::unordered_map<std::string, double> cache_;  // likelihoods for the current move
+  double surprise_ = 0;
 
   void SetExact(const Rack& unseen, int rack_size, double prior_mix);
   void Normalize();
   void MaybeResample();
   void Transition(const Observation& obs);
+  // P(move) under the prior over racks of the current view.
+  double PriorPredictive(const Observation& obs, const Rack& played);
+  // Mixes the prior back into the hypotheses.
+  void Widen(const Rack& played);
   // `rack` made to fit: `required` tiles, then its own tiles found in `pool`,
   // then random tiles from `pool`, `size` in all.
   Rack Rejuvenate(const Rack& rack, const Rack& required, const Rack& pool, int size);

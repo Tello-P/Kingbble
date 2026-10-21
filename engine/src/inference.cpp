@@ -426,23 +426,62 @@ void RackFilter::Resync(const Rack& unseen, int rack_size) {
     SetExact(unseen, rack_size, params_.prior_mix);
 }
 
+double RackFilter::PriorPredictive(const Observation& obs, const Rack& played) {
+  // Importance sampling: the played tiles plus a uniform leave from the rest.
+  if (!ContainsTiles(unseen_, played)) return 0;
+  const Rack pool = MinusTiles(unseen_, played);
+  const int leave_size = rack_size_ - played.Size();
+  double sum = 0;
+  for (int i = 0; i < params_.surprise_samples; ++i) {
+    const Rack leave = DrawTiles(pool, leave_size, rng_);
+    const Rack rack = PlusTiles(leave, played);
+    sum += DrawProbability(unseen_, rack) / DrawProbability(pool, leave) * Likelihood(obs, rack);
+  }
+  return params_.surprise_samples > 0 ? sum / params_.surprise_samples : 0;
+}
+
+void RackFilter::Widen(const Rack& played) {
+  if (exact_) {
+    SetExact(unseen_, rack_size_, params_.surprise_mix);
+    return;
+  }
+  std::bernoulli_distribution fresh(params_.surprise_mix);
+  for (Hypothesis& h : hypotheses_)
+    if (fresh(rng_)) h.rack = Rejuvenate(DrawTiles(unseen_, rack_size_, rng_), played, unseen_, rack_size_);
+}
+
 void RackFilter::ObserveOpponent(const Observation& obs) {
   if (hypotheses_.empty()) Reset(obs.unseen, obs.RackSize());
   if (!(obs.unseen == unseen_) || obs.RackSize() != rack_size_) Resync(obs.unseen, obs.RackSize());
   cache_.clear();
   const Rack played = MoveTiles(obs.move);
+  // Every hypothesis must hold the played tiles.
+  auto fit = [&] {
+    for (Hypothesis& h : hypotheses_)
+      if (!exact_ && !ContainsTiles(h.rack, played))
+        h.rack = Rejuvenate(h.rack, played, obs.unseen, rack_size_);
+  };
+  auto predictive = [&] {
+    double z = 0;
+    for (const Hypothesis& h : hypotheses_)
+      if (ContainsTiles(h.rack, played)) z += h.weight * Likelihood(obs, h.rack);
+    return z;
+  };
+  fit();
+  const double z_post = predictive();
+  const double z_prior = PriorPredictive(obs, played);
+  surprise_ = z_prior <= 0 ? 0 : z_post <= 0 ? INFINITY : std::log2(z_prior / z_post);
+  if (surprise_ > params_.surprise_bits) {
+    Widen(played);
+    fit();
+  }
+
   std::vector<double> prior;
   double total = 0;
   for (Hypothesis& h : hypotheses_) {
     prior.push_back(h.weight);
-    if (!ContainsTiles(h.rack, played)) {
-      if (exact_) {
-        h.weight = 0;
-        continue;
-      }
-      h.rack = Rejuvenate(h.rack, played, obs.unseen, rack_size_);
-    }
-    total += h.weight *= Likelihood(obs, h.rack);
+    h.weight = ContainsTiles(h.rack, played) ? h.weight * Likelihood(obs, h.rack) : 0;
+    total += h.weight;
   }
   // No hypothesis explains the move: keep the prior, as InferRack does.
   if (total <= 0)
