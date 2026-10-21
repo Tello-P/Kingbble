@@ -179,3 +179,89 @@ TEST_F(InferenceTest, HumanModelMakesRareRacksUnlikelyButPossible) {
 }
 
 }  // namespace scrabble
+
+namespace scrabble {
+
+TEST_F(InferenceTest, FilterConditionsOnTheObserversDraw) {
+  RangeFinderModel model(gaddag_, leaves_);
+  RackFilter filter(model, leaves_, {});
+  filter.Reset(R("AAB"), 1);
+  ASSERT_TRUE(filter.exact());
+  EXPECT_NEAR(filter.posterior().Probability(R("A")), 2.0 / 3, 1e-12);
+  // The observer draws an A: likelier when the opponent holds the B.
+  filter.Resync(R("AB"), 1);
+  EXPECT_NEAR(filter.posterior().Probability(R("A")), 0.5, 1e-12);
+}
+
+TEST_F(InferenceTest, FilterTracksTheRackThroughAMoveAndADraw) {
+  RangeFinderModel model(gaddag_, leaves_);
+  Observation obs = OpeningAt();
+  RackFilter exact(model, leaves_, {});
+  exact.Reset(obs.unseen, obs.RackSize());
+  ASSERT_TRUE(exact.exact());
+  exact.ObserveOpponent(obs);
+  EXPECT_EQ(exact.unseen(), R("CCEETX"));
+  RackPosterior post = exact.posterior();
+  double total = 0;
+  for (const Hypothesis& h : post.hypotheses()) {
+    total += h.weight;
+    EXPECT_EQ(h.rack.Size(), 4);
+    EXPECT_TRUE(ContainsTiles(exact.unseen(), h.rack));
+  }
+  EXPECT_NEAR(total, 1.0, 1e-12);
+  // The kept leave holds no C (CAT would have been better), only the two drawn tiles may.
+  const double c = post.TileProbability(*TileFromChar('C'));
+  EXPECT_GT(c, 0);
+  EXPECT_LT(c, 1 - 1.0 / 15);
+
+  FilterParams params;
+  params.exact_limit = 0;
+  params.particles = 4000;
+  RackFilter particles(model, leaves_, params);
+  particles.Reset(obs.unseen, obs.RackSize());
+  ASSERT_FALSE(particles.exact());
+  particles.ObserveOpponent(obs);
+  EXPECT_NEAR(particles.posterior().TileProbability(*TileFromChar('C')), c, 0.05);
+  std::mt19937_64 rng(5);
+  ASSERT_TRUE(particles.SampleRack(rng).has_value());
+}
+
+TEST_F(InferenceTest, FilterRejuvenatesRacksThatNoLongerFit) {
+  RangeFinderModel model(gaddag_, leaves_);
+  FilterParams params;
+  params.exact_limit = 0;
+  params.particles = 200;
+  RackFilter filter(model, leaves_, params);
+  filter.Reset(R("AAEEEIOTTRSN"), 4);
+  // A view that is not a draw from the old one (e.g. a corrected count).
+  filter.Resync(R("AAIOTTRSNX"), 4);
+  const RackPosterior post = filter.posterior();
+  for (const Hypothesis& h : post.hypotheses()) {
+    EXPECT_EQ(h.rack.Size(), 4);
+    EXPECT_TRUE(ContainsTiles(R("AAIOTTRSNX"), h.rack)) << h.rack.ToString();
+  }
+  // Few tiles left: the filter switches to exact tracking.
+  params.exact_limit = 100;
+  RackFilter small(model, leaves_, params);
+  small.Reset(R("AAEEEIOTTRSN"), 4);
+  ASSERT_FALSE(small.exact());
+  small.Resync(R("AEIOT"), 4);
+  EXPECT_TRUE(small.exact());
+  EXPECT_EQ(small.posterior().hypotheses().size(), 5u);
+}
+
+TEST_F(InferenceTest, FilterHandlesABlindExchange) {
+  HumanMoveModel model(gaddag_, leaves_, HumanModelParams{});
+  Observation obs;
+  obs.move.kind = Move::Kind::kExchange;
+  obs.exchanged = 2;
+  obs.unseen = R("ACCEETTXAEIO");
+  obs.bag_size = 8;
+  RackFilter filter(model, leaves_, {});
+  filter.ObserveOpponent(obs);
+  EXPECT_EQ(filter.unseen(), obs.unseen);
+  const RackPosterior post = filter.posterior();
+  for (const Hypothesis& h : post.hypotheses()) EXPECT_EQ(h.rack.Size(), 4);
+}
+
+}  // namespace scrabble

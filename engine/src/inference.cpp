@@ -310,4 +310,216 @@ RackPosterior InferRack(const Observation& obs, MoveModel& model, const InferPar
   return RackPosterior(std::move(post));
 }
 
+RackFilter::RackFilter(MoveModel& model, const Leaves& leaves, FilterParams params)
+    : model_(model), leaves_(leaves), params_(params), rng_(params.seed) {}
+
+void RackFilter::Reset(const Rack& unseen, int rack_size) {
+  hypotheses_.clear();
+  unseen_ = unseen;
+  rack_size_ = rack_size;
+  if (CountSubRacks(unseen, rack_size, params_.exact_limit + 1) <= params_.exact_limit) {
+    SetExact(unseen, rack_size, 1);
+    return;
+  }
+  exact_ = false;
+  for (int i = 0; i < params_.particles; ++i)
+    hypotheses_.push_back({DrawTiles(unseen, rack_size, rng_), 1.0 / params_.particles});
+}
+
+void RackFilter::SetExact(const Rack& unseen, int rack_size, double prior_mix) {
+  std::unordered_map<std::string, double> mass;
+  for (const Hypothesis& h : hypotheses_)
+    if (h.rack.Size() == rack_size && ContainsTiles(unseen, h.rack))
+      mass[h.rack.ToString()] += h.weight;
+  if (mass.empty()) prior_mix = 1;
+  std::vector<Hypothesis> out;
+  ForEachSubRack(unseen, rack_size, [&](const Rack& rack) {
+    auto it = mass.find(rack.ToString());
+    const double m = it == mass.end() ? 0 : it->second;
+    out.push_back({rack, (1 - prior_mix) * m + prior_mix * DrawProbability(unseen, rack)});
+  });
+  hypotheses_ = std::move(out);
+  exact_ = true;
+  unseen_ = unseen;
+  rack_size_ = rack_size;
+  Normalize();
+}
+
+void RackFilter::Normalize() {
+  double total = 0;
+  for (const Hypothesis& h : hypotheses_) total += h.weight;
+  for (Hypothesis& h : hypotheses_)
+    h.weight = total > 0 ? h.weight / total : 1.0 / hypotheses_.size();
+}
+
+void RackFilter::MaybeResample() {
+  if (exact_ || hypotheses_.empty()) return;
+  double sum_sq = 0;
+  for (const Hypothesis& h : hypotheses_) sum_sq += h.weight * h.weight;
+  const double ess = 1 / sum_sq;
+  if (ess >= params_.resample_below * hypotheses_.size()) return;
+  // Systematic resampling.
+  const int n = params_.particles;
+  std::vector<Hypothesis> out;
+  out.reserve(n);
+  const double step = 1.0 / n;
+  double u = std::uniform_real_distribution<double>(0, step)(rng_);
+  double cum = 0;
+  std::size_t i = 0;
+  for (int j = 0; j < n; ++j, u += step) {
+    while (i + 1 < hypotheses_.size() && cum + hypotheses_[i].weight < u) cum += hypotheses_[i++].weight;
+    out.push_back({hypotheses_[i].rack, step});
+  }
+  hypotheses_ = std::move(out);
+}
+
+Rack RackFilter::Rejuvenate(const Rack& rack, const Rack& required, const Rack& pool, int size) {
+  Rack out = CommonTiles(required, pool);
+  const Rack own = CommonTiles(MinusTiles(rack, CommonTiles(rack, out)), MinusTiles(pool, out));
+  const int room = size - out.Size();
+  out = PlusTiles(out, own.Size() <= room ? own : DrawTiles(own, room, rng_));
+  return PlusTiles(out, DrawTiles(MinusTiles(pool, out), size - out.Size(), rng_));
+}
+
+double RackFilter::Likelihood(const Observation& obs, const Rack& rack) {
+  auto [it, fresh] = cache_.emplace(rack.ToString(), 0.0);
+  if (fresh) it->second = model_.Likelihood(obs, rack);
+  return it->second;
+}
+
+void RackFilter::Resync(const Rack& unseen, int rack_size) {
+  if (hypotheses_.empty() || rack_size != rack_size_ || !ContainsTiles(unseen_, unseen)) {
+    // Not a draw from the bag we were tracking: keep what still fits.
+    if (exact_ || CountSubRacks(unseen, rack_size, params_.exact_limit + 1) <= params_.exact_limit) {
+      SetExact(unseen, rack_size, params_.prior_mix);
+      return;
+    }
+    for (Hypothesis& h : hypotheses_)
+      if (h.rack.Size() != rack_size || !ContainsTiles(unseen, h.rack))
+        h.rack = Rejuvenate(h.rack, {}, unseen, rack_size);
+    unseen_ = unseen;
+    rack_size_ = rack_size;
+    exact_ = false;
+    Normalize();
+    return;
+  }
+  // The observer drew `drawn` from the bag, which is unseen minus the opponent's rack.
+  const Rack drawn = MinusTiles(unseen_, unseen);
+  double total = 0;
+  for (Hypothesis& h : hypotheses_) {
+    double p = DrawProbability(MinusTiles(unseen_, h.rack), drawn);
+    if (p == 0 && !exact_) {
+      h.rack = Rejuvenate(h.rack, {}, unseen, rack_size);
+      p = DrawProbability(MinusTiles(unseen_, h.rack), drawn);
+    }
+    total += h.weight *= p;
+  }
+  if (exact_) std::erase_if(hypotheses_, [](const Hypothesis& h) { return h.weight == 0; });
+  unseen_ = unseen;
+  if (total <= 0) {
+    SetExact(unseen, rack_size, 1);
+    return;
+  }
+  Normalize();
+  MaybeResample();
+  if (!exact_ && CountSubRacks(unseen, rack_size, params_.exact_limit + 1) <= params_.exact_limit)
+    SetExact(unseen, rack_size, params_.prior_mix);
+}
+
+void RackFilter::ObserveOpponent(const Observation& obs) {
+  if (hypotheses_.empty()) Reset(obs.unseen, obs.RackSize());
+  if (!(obs.unseen == unseen_) || obs.RackSize() != rack_size_) Resync(obs.unseen, obs.RackSize());
+  cache_.clear();
+  const Rack played = MoveTiles(obs.move);
+  std::vector<double> prior;
+  double total = 0;
+  for (Hypothesis& h : hypotheses_) {
+    prior.push_back(h.weight);
+    if (!ContainsTiles(h.rack, played)) {
+      if (exact_) {
+        h.weight = 0;
+        continue;
+      }
+      h.rack = Rejuvenate(h.rack, played, obs.unseen, rack_size_);
+    }
+    total += h.weight *= Likelihood(obs, h.rack);
+  }
+  // No hypothesis explains the move: keep the prior, as InferRack does.
+  if (total <= 0)
+    for (std::size_t i = 0; i < hypotheses_.size(); ++i)
+      hypotheses_[i].weight = ContainsTiles(hypotheses_[i].rack, played) ? prior[i] : 0;
+  Normalize();
+  Transition(obs);
+}
+
+void RackFilter::Transition(const Observation& obs) {
+  const Rack played = MoveTiles(obs.move);
+  const bool exchange = obs.move.kind == Move::Kind::kExchange;
+  const int out_tiles = exchange && played.Empty() ? obs.exchanged : played.Size();
+  // Exchanged tiles go back to the bag, which the observer cannot see either.
+  const Rack unseen = exchange ? obs.unseen : MinusTiles(obs.unseen, played);
+  const int kept_size = rack_size_ - out_tiles;
+  const int new_size = kept_size + std::min(out_tiles, obs.bag_size);
+
+  std::unordered_map<std::string, std::size_t> index;
+  std::vector<Hypothesis> out;
+  auto add = [&](const Rack& rack, double w) {
+    if (!exact_) {
+      out.push_back({rack, w});
+      return;
+    }
+    auto [it, fresh] = index.emplace(rack.ToString(), out.size());
+    if (fresh) {
+      out.push_back({rack, w});
+    } else {
+      out[it->second].weight += w;
+    }
+  };
+  for (const Hypothesis& h : hypotheses_) {
+    if (h.weight == 0 || !ContainsTiles(h.rack, played)) continue;
+    Rack kept;
+    if (exchange && played.Empty()) {
+      // Unknown exchange: assume the opponent kept their best leave.
+      double best = -INFINITY;
+      ForEachSubRack(h.rack, kept_size, [&](const Rack& leave) {
+        const double v = leaves_.Value(leave);
+        if (v > best) best = v, kept = leave;
+      });
+    } else {
+      kept = MinusTiles(h.rack, played);
+    }
+    // The opponent draws from the bag before returning exchanged tiles.
+    const Rack bag = MinusTiles(obs.unseen, h.rack);
+    const int draw = new_size - kept_size;
+    if (exact_) {
+      ForEachSubRack(bag, draw, [&](const Rack& d) {
+        add(PlusTiles(kept, d), h.weight * DrawProbability(bag, d));
+      });
+    } else {
+      add(PlusTiles(kept, DrawTiles(bag, draw, rng_)), h.weight);
+    }
+  }
+  hypotheses_ = std::move(out);
+  unseen_ = unseen;
+  rack_size_ = new_size;
+  if (hypotheses_.empty()) {
+    Reset(unseen, new_size);
+    return;
+  }
+  Normalize();
+  MaybeResample();
+  if (!exact_ && CountSubRacks(unseen, new_size, params_.exact_limit + 1) <= params_.exact_limit)
+    SetExact(unseen, new_size, params_.prior_mix);
+}
+
+std::optional<Rack> RackFilter::SampleRack(std::mt19937_64& rng) const {
+  if (hypotheses_.empty()) return std::nullopt;
+  double u = std::uniform_real_distribution<double>(0, 1)(rng);
+  for (const Hypothesis& h : hypotheses_) {
+    if (u < h.weight) return h.rack;
+    u -= h.weight;
+  }
+  return hypotheses_.back().rack;
+}
+
 }  // namespace scrabble
