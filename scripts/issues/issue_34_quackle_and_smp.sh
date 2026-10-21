@@ -21,8 +21,8 @@ build_engine
 
 if ((match)); then
   QUACKLE=$HOME/src/quackle
-  if ((DRY_RUN)) || [[ ! -x build/quackle_helper/quackle_helper || ! -s build/NWL23.txt ]]; then
-    note "setup: Quackle helper and NWL23 word list"
+  if ((DRY_RUN)) || [[ ! -x build/quackle_helper/quackle_helper ]]; then
+    note "setup: Quackle helper"
     if ((DRY_RUN)); then
       echo "[ -d $QUACKLE ] || git clone https://github.com/quackle/quackle $QUACKLE"
     elif [[ ! -d $QUACKLE ]]; then
@@ -30,12 +30,8 @@ if ((match)); then
     fi
     step 0 "" cmake -S scripts/quackle_match -B build/quackle_helper -DQUACKLE_DIR="$QUACKLE"
     step 0 "" cmake --build build/quackle_helper -j8
-    if ((DRY_RUN)); then
-      echo "build/quackle_helper/quackle_helper --lexicon nwl23 --words > build/NWL23.txt"
-    else
-      build/quackle_helper/quackle_helper --lexicon nwl23 --words >build/NWL23.txt
-    fi
   fi
+  need_csw24
   for seed in $(seq 1 $SEEDS); do
     seed_log=$LOG_DIR/issue_34_match_s$seed.log
     if ((!DRY_RUN)) && grep -q "kingbble win %" "$seed_log" 2>/dev/null; then
@@ -45,7 +41,7 @@ if ((match)); then
     fi
     ((DRY_RUN)) || : >"$seed_log"
     STEP_LOG=$seed_log step $MATCH_GAMES "^game [0-9]+:" build/engine/kingbble_quackle_match \
-      --lexicon build/NWL23.txt --leaves lexica/NWL23.klv2 \
+      --lexicon lexica/CSW24.txt --leaves lexica/CSW24.klv2 \
       --helper build/quackle_helper/quackle_helper --bot sim+peg+eg --threads 8 \
       --games $MATCH_GAMES --seed "$seed" --gcg-dir "build/quackle_games/s$seed"
   done
@@ -69,10 +65,11 @@ else
 fi
 
 if ((smp)); then
+  need_csw24
   for threads in 8 1; do
     note "Lazy SMP: $threads endgame thread(s)"
     step $SMP_GAMES "" build/engine/kingbble_selfplay \
-      --lexicon lexica/ENABLE.txt --leaves lexica/NWL23.klv2 --a equity+eg --b equity \
+      --lexicon lexica/CSW24.txt --leaves lexica/CSW24.klv2 --a equity+eg --b equity \
       --threads $threads --endgame-time 1 --games $SMP_GAMES --seed 1 --progress
   done
   ((DRY_RUN)) || grep -E "^\[#34\] Lazy SMP|a win %" "$LOG" | tail -4

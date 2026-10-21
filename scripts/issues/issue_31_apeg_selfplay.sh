@@ -6,11 +6,12 @@ source "$(dirname "$0")/lib.sh"
 
 GAMES=20
 issue_init 31 $((2 * GAMES)) "$@"
+need_csw24
 build_engine
 
 for seed in 1 2; do
   step $GAMES "" build/engine/kingbble_selfplay \
-    --lexicon lexica/ENABLE.txt --leaves lexica/NWL23.klv2 --a equity+apeg+peg+eg --b equity+eg \
+    --lexicon lexica/CSW24.txt --leaves lexica/CSW24.klv2 --a equity+apeg+peg+eg --b equity+eg \
     --games $GAMES --seed $seed --threads 8 \
     --peg-bag 1 --peg-time 5 --endgame-time 2 --apeg-samples 30 --apeg-plies 2 --apeg-time 5 \
     --progress

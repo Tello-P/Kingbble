@@ -141,7 +141,7 @@ def main() -> int:
     ap.add_argument("--max-games", type=int, default=1000)
     ap.add_argument("--delay", type=float, default=1.0, help="seconds between requests")
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
-    ap.add_argument("--lexicon", default="NWL23", help='only this lexicon; "" for all')
+    ap.add_argument("--lexicon", default="CSW24", help='only this lexicon; "" for all')
     ap.add_argument("--progress", action="store_true", help='"progress: N/max" on stderr')
     args = ap.parse_args()
 

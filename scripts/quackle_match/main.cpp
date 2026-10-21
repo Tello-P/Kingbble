@@ -5,8 +5,8 @@
 // played-through letters spelled out), "-ABC" for an exchange or "-" for a
 // pass.
 //
-//   quackle_helper [--lexicon nwl23] [--player "Championship Player"] [--threads N]
-//   quackle_helper --lexicon nwl23 --words   (prints the lexicon, one word per line)
+//   quackle_helper [--lexicon csw24] [--player "Championship Player"] [--threads N]
+//   quackle_helper --lexicon csw24 --words   (prints the lexicon, one word per line)
 
 #include <QString>
 #include <QTextStream>
@@ -48,7 +48,7 @@ std::string MoveText(const Quackle::Move& m) {
 }  // namespace
 
 int main(int argc, char** argv) {
-  std::string lexicon = "nwl23", player_name = "Championship Player";
+  std::string lexicon = "csw24", player_name = "Championship Player";
   int threads = 0;
   bool words = false;
   for (int i = 1; i < argc; ++i) {
