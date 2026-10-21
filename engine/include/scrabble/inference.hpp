@@ -3,8 +3,10 @@
 #include <array>
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <random>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "scrabble/board.hpp"
@@ -165,5 +167,66 @@ struct InferParams {
 // plus a leave drawn from the unseen tiles, weighted by `model`. With no rack
 // explaining the move (e.g. a phony for the baseline) the prior is kept.
 RackPosterior InferRack(const Observation& obs, MoveModel& model, const InferParams& params);
+
+// A source of opponent racks for simulations.
+class RackSampler {
+ public:
+  virtual ~RackSampler() = default;
+  // A rack the opponent may hold now, or nullopt if there is none to offer.
+  virtual std::optional<Rack> SampleRack(std::mt19937_64& rng) const = 0;
+};
+
+struct FilterParams {
+  int particles = 500;
+  long long exact_limit = 3000;  // track every rack exactly when there are at most this many
+  double prior_mix = 0.1;        // prior share of each rack when switching to exact tracking
+  double resample_below = 0.5;   // resample when the effective particles drop below this share
+  std::uint64_t seed = 1;
+};
+
+// Tracks the opponent's current rack across turns. Each hypothesis is a full
+// rack: an opponent move reweights it by the move model, then its kept tiles
+// stay and the rest is drawn from the bag. Hypotheses that no longer fit what
+// the observer sees are rejuvenated (their tiles that still fit are kept and
+// the rest redrawn). With few possible racks the filter enumerates them all
+// and updates exactly.
+class RackFilter : public RackSampler {
+ public:
+  RackFilter(MoveModel& model, const Leaves& leaves, FilterParams params);
+
+  // Prior: racks of `rack_size` tiles drawn from `unseen`.
+  void Reset(const Rack& unseen, int rack_size);
+  // The opponent played obs.move (obs.unseen is the observer's view before it).
+  void ObserveOpponent(const Observation& obs);
+  // The observer's view changed (their own move and draw): `unseen` is what they
+  // cannot see now and `rack_size` the opponent's rack size.
+  void Resync(const Rack& unseen, int rack_size);
+
+  RackPosterior posterior() const { return RackPosterior(hypotheses_); }
+  bool exact() const { return exact_; }
+  const Rack& unseen() const { return unseen_; }
+  std::optional<Rack> SampleRack(std::mt19937_64& rng) const override;
+
+ private:
+  double Likelihood(const Observation& obs, const Rack& rack);
+
+  MoveModel& model_;
+  const Leaves& leaves_;
+  FilterParams params_;
+  std::mt19937_64 rng_;
+  std::vector<Hypothesis> hypotheses_;  // weights sum to 1
+  bool exact_ = false;
+  Rack unseen_;
+  int rack_size_ = 0;
+  std::unordered_map<std::string, double> cache_;  // likelihoods for the current move
+
+  void SetExact(const Rack& unseen, int rack_size, double prior_mix);
+  void Normalize();
+  void MaybeResample();
+  void Transition(const Observation& obs);
+  // `rack` made to fit: `required` tiles, then its own tiles found in `pool`,
+  // then random tiles from `pool`, `size` in all.
+  Rack Rejuvenate(const Rack& rack, const Rack& required, const Rack& pool, int size);
+};
 
 }  // namespace scrabble
