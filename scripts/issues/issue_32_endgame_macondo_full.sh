@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # #32 part 1 (and #23, #26): 50 full-size endgames (up to 14 tiles) against
-# Macondo on 8 jobs. Check: "mismatched values: 0"; write down both run times.
+# Macondo on MAX_THREADS jobs. Check: "mismatched values: 0"; write down both run times.
 # Part 2 of #32 is the #30 run: issue_30_preendgame_macondo.sh.
 # --quick: 50 other positions (seed 2) of up to 8 tiles, each capped at 10 s per
 # side (slower ones are skipped and listed).
@@ -15,5 +15,5 @@ need "$HOME/src/macondo" "clone https://github.com/domino14/macondo to ~/src/mac
 build_engine
 
 step $((2 * COUNT)) "" "$PY" -u scripts/compare_endgame.py --macondo "$HOME/src/macondo" \
-  --count $COUNT --max-tiles $TILES --seed $SEED --jobs 8 --time-limit $LIMIT \
+  --count $COUNT --max-tiles $TILES --seed $SEED --jobs $MAX_THREADS --time-limit $LIMIT \
   --build "$ROOT/build" --work "$ROOT/build/macondo_compare"

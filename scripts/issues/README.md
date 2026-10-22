@@ -1,7 +1,9 @@
 # Per-issue run scripts
 
 Run from the repo root. Logs go to `build/issue_runs/issue_<N>.log`; every script takes `--dry-run`.
-`run_all.sh [--dry-run] [--players LIST] [ISSUE...]` runs them in the order below with an overall %.
+`run_all.sh [--dry-run] [--quick] [--players LIST] [ISSUE...]` runs them in the order below with an overall %.
+`--quick` runs a bounded smoke check of each (not the final validation). Every run uses at most
+`KINGBBLE_MAX_THREADS` cores (default 3) and `KINGBBLE_MAX_MEM` memory (default 6G, no swap), at the lowest priority.
 
 The strength runs (#31, #34) and the data run (#38) use CSW24. Its word list and leaves are
 licensed and stay out of git, in `lexica/`; `lib.sh` (`need_csw24`) says how to get them. The

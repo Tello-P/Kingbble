@@ -1,7 +1,8 @@
 // Quackle side of the Quackle match. Loads a Quackle lexicon and computer
 // player, then answers requests on stdin: the game so far as GCG text, then a
 // line "RACK <tiles>" with the rack of the player to move. Each answer is one
-// line with that player's move in GCG notation: "8D WORD" (blanks lowercase,
+// line "MOVE <move>" with that player's move in GCG notation (Quackle may print
+// other lines, which are ignored): "8D WORD" (blanks lowercase,
 // played-through letters spelled out), "-ABC" for an exchange or "-" for a
 // pass.
 //
@@ -124,7 +125,7 @@ int main(int argc, char** argv) {
     Quackle::GamePosition position = game->currentPosition();
     position.setCurrentPlayerRack(Quackle::Rack(Encode(line.substr(5))));
     player->setPosition(position);
-    std::cout << MoveText(player->move()) << std::endl;
+    std::cout << "MOVE " << MoveText(player->move()) << std::endl;
     delete game;
   }
   delete player;

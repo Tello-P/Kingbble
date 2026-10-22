@@ -2,14 +2,14 @@
 # #30 (also #32 part 2, #20, #26-#28): pre-endgames against Macondo with passing,
 # 1-tile and 2-tile bags. Check: 0 mismatched positions in both runs; the wall
 # times are printed at the end of each run.
-# --quick: 8 positions with 1 tile in the bag only, each capped at 30 s per side
+# --quick: 2 positions per job with 1 tile in the bag only, each capped at 30 s per side
 # (slower ones are skipped and listed).
 #   scripts/issues/issue_30_preendgame_macondo.sh [--dry-run] [--quick]
 source "$(dirname "$0")/lib.sh"
 
 quick_args "$@"
-COUNT=4 JOBS=8 BAGS="1 2" LIMIT=0
-((QUICK)) && COUNT=1 BAGS=1 LIMIT=30
+COUNT=4 JOBS=$MAX_THREADS BAGS="1 2" LIMIT=0
+((QUICK)) && COUNT=2 BAGS=1 LIMIT=30
 RUN_UNITS=$((2 * COUNT * JOBS))  # each position is solved by us and by Macondo
 issue_init 30 $((RUN_UNITS * $(wc -w <<<"$BAGS"))) "$@"
 need "$HOME/src/macondo" "clone https://github.com/domino14/macondo to ~/src/macondo"

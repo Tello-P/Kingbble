@@ -12,6 +12,16 @@ cd "$ROOT"
 LOG_DIR=$ROOT/build/issue_runs
 # The repo's virtualenv has the data dependencies (duckdb, pyarrow).
 PY=${PYTHON:-$([[ -x .venv/bin/python ]] && echo .venv/bin/python || echo python3)}
+# Load limits for every run, so the PC stays usable: at most MAX_THREADS busy
+# cores (jobs x threads, helper processes included) and MAX_MEM of memory with no
+# swap, at the lowest CPU and I/O priority.
+MAX_THREADS=${KINGBBLE_MAX_THREADS:-3}
+MAX_MEM=${KINGBBLE_MAX_MEM:-6G}
+LIMITS=(nice -n 19 ionice -c3)
+if command -v systemd-run >/dev/null && systemd-run --user --scope --quiet true 2>/dev/null; then
+  LIMITS=(systemd-run --user --scope --quiet -p MemoryMax="$MAX_MEM" -p MemorySwapMax=0
+    -p CPUQuota=$((100 * MAX_THREADS))% "${LIMITS[@]}")
+fi
 DRY_RUN=0
 QUICK=0  # --quick: a bounded smoke check, not the final validation
 ARGS=()  # arguments left after the common ones
@@ -48,6 +58,7 @@ issue_init() {
     mkdir -p "$LOG_DIR"
     echo "=== $(date '+%F %T') $(git rev-parse --short HEAD 2>/dev/null || echo '?')" >>"$LOG"
   fi
+  note "limits: $MAX_THREADS cores, $MAX_MEM memory (KINGBBLE_MAX_THREADS, KINGBBLE_MAX_MEM)"
   if ((QUICK)); then
     note "QUICK SMOKE CHECK: bounded, slow positions skipped. Not the final validation."
   fi
@@ -99,7 +110,7 @@ step() {
   fi
   local base=$DONE
   echo "\$ $*" | tee -a "$LOG"
-  "$@" 2>&1 | {
+  "${LIMITS[@]}" "$@" 2>&1 | {
     local n=0 shown=-1 shown_at=$SECONDS line pct first=1
     while IFS= read -r line; do
       echo "$line" >>"$LOG"
@@ -150,9 +161,9 @@ need_csw24() {
 # build_engine: configures and builds the engine (quick when up to date).
 build_engine() {
   if ((DRY_RUN)); then
-    echo "cmake -S . -B build && cmake --build build -j8"
+    echo "cmake -S . -B build && cmake --build build -j$MAX_THREADS"
     return
   fi
-  cmake -S . -B build >>"$LOG" 2>&1
-  cmake --build build -j8 >>"$LOG" 2>&1
+  "${LIMITS[@]}" cmake -S . -B build >>"$LOG" 2>&1
+  "${LIMITS[@]}" cmake --build build -j"$MAX_THREADS" >>"$LOG" 2>&1
 }

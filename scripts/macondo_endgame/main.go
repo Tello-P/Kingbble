@@ -26,11 +26,13 @@ func main() {
 	lexicon := flag.String("lex", "ENABLE", "lexicon name")
 	plies := flag.Int("plies", 25, "maximum search depth")
 	threads := flag.Int("threads", 1, "solver threads")
+	ttFrac := flag.Float64("ttable-frac", 0.02, "fraction of RAM for the transposition table of each process")
 	timeout := flag.Float64("timeout", 0, "seconds per position (0 = none); slower positions print skip")
 	flag.Parse()
 
 	cfg := config.DefaultConfig()
 	cfg.Set(config.ConfigDataPath, *dataPath)
+	cfg.Set(config.ConfigTtableMemFraction, *ttFrac)
 	gd, err := kwg.GetKWG(cfg.WGLConfig(), *lexicon)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "loading KWG:", err)
