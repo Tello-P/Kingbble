@@ -73,14 +73,16 @@ skip_units() {
 
 # step UNITS REGEX CMD...: runs CMD. Its "progress: D/T" lines (D of this step)
 # or, with a non-empty REGEX, its lines matching REGEX advance the count; those
-# lines only go to the log. Set STEP_LOG to also copy the output to that file.
+# lines only go to the log. Set STEP_LOG to also copy the output to that file,
+# and STEP_SCALE to weigh each of the step's units as that many script units
+# (so the percentage and ETA follow time when steps have units of unequal cost).
 step() {
-  local units=$1 regex=$2
+  local units=$1 regex=$2 scale=${STEP_SCALE:-1}
   shift 2
   if ((DRY_RUN)); then
     printf '%q ' "$@"
     echo
-    DONE=$((DONE + units))
+    DONE=$((DONE + units * scale))
     return
   fi
   local base=$DONE
@@ -99,16 +101,16 @@ step() {
         continue
       fi
       ((n > units)) && n=$units
-      pct=$((100 * (base + n) / TOTAL))
+      pct=$((100 * (base + n * scale) / TOTAL))
       # Print when the percentage moves or once a minute.
       if ((pct != shown || SECONDS - shown_at >= 60)); then
-        status $((base + n))
+        status $((base + n * scale))
         shown=$pct
         shown_at=$SECONDS
       fi
     done
   }
-  DONE=$((base + units))
+  DONE=$((base + units * scale))
   status "$DONE" | tee -a "$LOG"
 }
 
