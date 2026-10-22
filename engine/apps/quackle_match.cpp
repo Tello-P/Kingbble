@@ -72,11 +72,14 @@ class Helper {
     const std::string request = gcg + "RACK " + rack.ToString() + "\n";
     fputs(request.c_str(), in_);
     fflush(in_);
-    char buf[256];
-    if (!fgets(buf, sizeof buf, out_)) throw std::runtime_error("the Quackle helper stopped");
-    std::string line = buf;
-    while (!line.empty() && (line.back() == '\n' || line.back() == '\r')) line.pop_back();
-    return line;
+    // Quackle prints some diagnostics of its own; the answer is the "MOVE " line.
+    char buf[4096];
+    for (;;) {
+      if (!fgets(buf, sizeof buf, out_)) throw std::runtime_error("the Quackle helper stopped");
+      std::string line = buf;
+      while (!line.empty() && (line.back() == '\n' || line.back() == '\r')) line.pop_back();
+      if (line.rfind("MOVE ", 0) == 0) return line.substr(5);
+    }
   }
 
  private:

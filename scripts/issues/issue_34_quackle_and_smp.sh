@@ -2,8 +2,8 @@
 # #34 (and #21, #24):
 #  1. Quackle match, sim+peg+eg, 10 seeds x 200 games. Check: combined Kingbble
 #     win % >= 45 (v0.2 exit criterion). Finished seeds are skipped on a rerun.
-#  2. Lazy SMP endgame: equity+eg vs equity, 200 games with 8 and with 1 endgame
-#     thread. Check: 8 threads no worse in a win % and a avg spread.
+#  2. Lazy SMP endgame: equity+eg vs equity, 200 games with MAX_THREADS and with
+#     1 endgame thread. Check: more threads no worse in a win % and a avg spread.
 # --quick: 1 x 50 match games and 2 x 20 Lazy SMP games, in separate logs.
 #   scripts/issues/issue_34_quackle_and_smp.sh [--dry-run] [--quick] [--match-only | --smp-only]
 source "$(dirname "$0")/lib.sh"
@@ -32,7 +32,7 @@ if ((match)); then
       git clone https://github.com/quackle/quackle "$QUACKLE" >>"$LOG" 2>&1
     fi
     step 0 "" cmake -S scripts/quackle_match -B build/quackle_helper -DQUACKLE_DIR="$QUACKLE"
-    step 0 "" cmake --build build/quackle_helper -j8
+    step 0 "" cmake --build build/quackle_helper -j"$MAX_THREADS"
   fi
   need_csw24
   for seed in $(seq 1 $SEEDS); do
@@ -45,7 +45,8 @@ if ((match)); then
     ((DRY_RUN)) || : >"$seed_log"
     STEP_LOG=$seed_log step $MATCH_GAMES "^game [0-9]+:" build/engine/kingbble_quackle_match \
       --lexicon lexica/CSW24.txt --leaves lexica/CSW24.klv2 \
-      --helper build/quackle_helper/quackle_helper --bot sim+peg+eg --threads 8 \
+      --helper build/quackle_helper/quackle_helper --bot sim+peg+eg --threads $MAX_THREADS \
+      --quackle-threads $MAX_THREADS \
       --games $MATCH_GAMES --seed "$seed" --gcg-dir "build/quackle_games/${MATCH}_s$seed"
   done
   if ((!DRY_RUN)); then
@@ -69,7 +70,7 @@ fi
 
 if ((smp)); then
   need_csw24
-  for threads in 8 1; do
+  for threads in "$MAX_THREADS" 1; do
     note "Lazy SMP: $threads endgame thread(s)"
     step $SMP_GAMES "" build/engine/kingbble_selfplay \
       --lexicon lexica/CSW24.txt --leaves lexica/CSW24.klv2 --a equity+eg --b equity \

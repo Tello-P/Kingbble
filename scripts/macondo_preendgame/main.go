@@ -52,12 +52,14 @@ func main() {
 	threads := flag.Int("threads", 1, "solver threads")
 	skipDeepPass := flag.Bool("skip-deep-pass", false, "only pass after a scoreless turn in nested pre-endgames")
 	noCutoff := flag.Bool("no-cutoff", false, "analyse every play fully (no early cutoff)")
+	ttFrac := flag.Float64("ttable-frac", 0.02, "fraction of RAM for the transposition table of each process")
 	timeout := flag.Float64("timeout", 0, "seconds per position (0 = none); slower positions print skip")
 	flag.Parse()
 	zerolog.SetGlobalLevel(zerolog.WarnLevel)
 
 	cfg := config.DefaultConfig()
 	cfg.Set(config.ConfigDataPath, *dataPath)
+	cfg.Set(config.ConfigTtableMemFraction, *ttFrac)
 	gd, err := kwg.GetKWG(cfg.WGLConfig(), *lexicon)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "loading KWG:", err)

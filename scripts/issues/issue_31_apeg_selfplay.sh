@@ -15,7 +15,7 @@ build_engine
 for seed in 1 2; do
   step $GAMES "" build/engine/kingbble_selfplay \
     --lexicon lexica/CSW24.txt --leaves lexica/CSW24.klv2 --a equity+apeg+peg+eg --b equity+eg \
-    --games $GAMES --seed $seed --threads 8 \
+    --games $GAMES --seed $seed --threads $MAX_THREADS \
     --peg-bag 1 --peg-time $PEG_TIME --endgame-time $EG_TIME --apeg-samples $APEG_SAMPLES \
     --apeg-plies 2 --apeg-time $APEG_TIME \
     --progress
