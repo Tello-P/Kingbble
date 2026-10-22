@@ -40,17 +40,30 @@ def fit(groups, l2: float = 1e-3, iters: int = 50, tol: float = 1e-8):
     starts = np.cumsum([0] + [len(g[0]) for g in groups[:-1]])
     chosen = x[starts + np.array([g[1] for g in groups])]
     ids = np.repeat(np.arange(len(groups)), [len(g[0]) for g in groups])
-    w = np.zeros(x.shape[1])
-    for _ in range(iters):
+    def penalized(w):
+        """Penalized log-likelihood and the per-option probabilities."""
         u = x @ w
         u -= np.maximum.reduceat(u, starts)[ids]
         e = np.exp(u)
-        p = e / np.add.reduceat(e, starts)[ids]
+        z = np.add.reduceat(e, starts)
+        p = e / z[ids]
+        ll = chosen.sum(0) @ w - (np.log(z) + np.maximum.reduceat(x @ w, starts)).sum()
+        return ll - 0.5 * l2 * w @ w, p
+
+    w = np.zeros(x.shape[1])
+    ll, p = penalized(w)
+    for _ in range(iters):
         mean = np.add.reduceat(p[:, None] * x, starts)  # expected features per turn
         grad = chosen.sum(0) - mean.sum(0) - l2 * w
         hess = (p[:, None] * x).T @ x - mean.T @ mean + l2 * np.eye(len(w))
         step = np.linalg.solve(hess, grad)
-        w += step
+        # Backtracking: a full Newton step can overshoot far from the optimum.
+        for _ in range(40):
+            new_ll, new_p = penalized(w + step)
+            if new_ll >= ll - 1e-12:
+                break
+            step /= 2
+        w, ll, p = w + step, new_ll, new_p
         if np.abs(step).max() < tol:
             break
     return w

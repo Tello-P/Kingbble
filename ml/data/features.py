@@ -77,7 +77,7 @@ def ratings(path: Path = DEFAULT_OUT, store: Path = DEFAULT_STORE) -> dict:
 
     con = duckdb.connect()
     con.read_parquet(str(store / "**" / "*.parquet"), hive_partitioning=True).create_view("turns")
-    con.read_csv(str(path / "turns.tsv"), delim="\t", header=True).create_view("features")
+    con.read_csv(str(path / "turns.tsv"), delimiter="\t", header=True).create_view("features")
     rows = con.execute(
         """SELECT f.game_id, f.turn, t.rating, t.split
            FROM features f JOIN turns t ON t.game_id = f.game_id AND t.turn = f.turn"""
