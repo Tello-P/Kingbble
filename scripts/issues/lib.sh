@@ -20,6 +20,7 @@ TOTAL=1        # work units over the whole script
 DONE=0         # units finished by earlier steps
 START_DONE=0   # units already done when this run started (resume), excluded from the ETA
 START_TIME=$SECONDS
+BUILD_PREFIX=()
 
 # issue_init N TOTAL_UNITS "$@": parses --dry-run and opens the log.
 issue_init() {
@@ -132,12 +133,14 @@ need_csw24() {
   need lexica/CSW24.klv2 "download CSW24.klv2 from woogles-io/liwords (see scripts/issues/lib.sh)"
 }
 
-# build_engine: configures and builds the engine (quick when up to date).
+# build_engine: configures and builds the engine (quick when up to date), with
+# BUILD_JOBS jobs (default 8) under the BUILD_PREFIX command array (e.g. nice).
 build_engine() {
+  local jobs=${BUILD_JOBS:-8}
   if ((DRY_RUN)); then
-    echo "cmake -S . -B build && cmake --build build -j8"
+    echo "cmake -S . -B build && cmake --build build -j$jobs"
     return
   fi
   cmake -S . -B build >>"$LOG" 2>&1
-  cmake --build build -j8 >>"$LOG" 2>&1
+  "${BUILD_PREFIX[@]}" cmake --build build -j"$jobs" >>"$LOG" 2>&1
 }

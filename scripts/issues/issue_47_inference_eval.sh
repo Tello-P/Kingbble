@@ -9,30 +9,81 @@
 # Check: human beats rangefinder in log-loss and in combined win % (>= 50), and
 # its win % against the rare-move rival is not below the baseline's.
 #
-# Full mode: 100 games per run, 10 candidates x 100 iterations (about 2.5 h on 8
-# threads). --quick: 30 games per run, 8 candidates x 50 iterations (about 1 h).
-# Both share steps 1-2. Every step resumes: finished steps leave a .done marker,
-# the evaluation app skips the game files and games listed in <records>.done,
-# so an interrupted run continues where it stopped.
+# Full mode: 100 games per run, 10 candidates x 100 iterations (about 3 h 25 on
+# 3 threads). --quick: 30 games per run, 8 candidates x 50 iterations (about
+# 1 h 10). Both share steps 1-2. Every step resumes: finished steps leave a
+# .done marker, the evaluation app skips the game files and games listed in
+# <records>.done, so an interrupted run continues where it stopped.
+#
+# Resources: --threads N (or KINGBBLE_THREADS, default 3) threads, also for
+# BLAS/OpenMP; heavy steps run under nice -n 19 and a memory cap, --mem SIZE (or
+# KINGBBLE_MEM_MAX, default 6G, "none" to disable): a systemd user scope with
+# MemoryMax and no swap, else ulimit -v. Measured peaks: about 170 MB per game
+# process, about 1.1 GB for the model fit. It refuses to start while another
+# issue script or engine binary runs, unless --force.
 #   scripts/issues/issue_47_inference_eval.sh [--quick] [--dry-run] [--games N] [--max-turns N]
+#     [--threads N] [--mem SIZE] [--force]
 source "$(dirname "$0")/lib.sh"
 
 MODE=full GAMES=100 MAX_TURNS=2000 RARE=0.3
-SIM=(--sim-candidates 10 --sim-iterations 100 --threads 8)
-GAME_UNITS=160  # measured seconds per game x 10 (the script's unit is 0.1 s)
+THREADS=${KINGBBLE_THREADS:-3} MEM=${KINGBBLE_MEM_MAX:-6G} FORCE=0
+SIM=(--sim-candidates 10 --sim-iterations 100)
+GAME_UNITS=250  # measured seconds per game at 3 threads x 10 (the script's unit is 0.1 s)
 args=("$@")
 for a in "${args[@]}"; do
-  if [[ $a == --quick ]]; then
-    MODE=quick GAMES=30 GAME_UNITS=115
-    SIM=(--sim-candidates 8 --sim-iterations 50 --threads 8)
-  fi
+  case $a in
+    --quick)
+      MODE=quick GAMES=30 GAME_UNITS=160
+      SIM=(--sim-candidates 8 --sim-iterations 50)
+      ;;
+    --force) FORCE=1 ;;
+  esac
 done
 for ((i = 0; i < ${#args[@]}; i++)); do
   case ${args[i]} in
     --games) GAMES=${args[i + 1]:-} ;;
     --max-turns) MAX_TURNS=${args[i + 1]:-} ;;
+    --threads) THREADS=${args[i + 1]:-} ;;
+    --mem) MEM=${args[i + 1]:-} ;;
   esac
 done
+SIM+=(--threads "$THREADS")
+export OMP_NUM_THREADS=$THREADS OPENBLAS_NUM_THREADS=$THREADS MKL_NUM_THREADS=$THREADS \
+  NUMEXPR_NUM_THREADS=$THREADS
+BUILD_JOBS=$THREADS
+
+# Command prefix for heavy steps: lowest priority, capped memory, no swap.
+HEAVY=(nice -n 19)
+if [[ $MEM != none ]]; then
+  if systemd-run --user --scope --quiet -p MemoryMax="$MEM" -p MemorySwapMax=0 true 2>/dev/null; then
+    HEAVY=(systemd-run --user --scope --quiet -p MemoryMax="$MEM" -p MemorySwapMax=0 nice -n 19)
+  else
+    kb=$(numfmt --from=iec "$MEM")
+    HEAVY=(bash -c "ulimit -v $((kb / 1024)); exec nice -n 19 \"\$@\"" heavy)
+  fi
+fi
+BUILD_PREFIX=("${HEAVY[@]}")
+
+# Another issue script or engine binary running at the same time (the machine
+# runs out of memory with several heavy jobs). No subshells here: they would
+# show up with this script's command line.
+busy_check() {
+  local pat='^([^ ]*/)?(ba)?sh [^ ]*issue_[0-9]+_[^ ]*\.sh|^[^ ]*(kingbble_[a-z_]+|engine_tests|macondo)( |$)'
+  local list pid cmd others=""
+  list=$(mktemp)
+  pgrep -af -- "$pat" >"$list" || true
+  while read -r pid cmd; do
+    [[ $pid == "$$" || $pid == "$PPID" ]] && continue
+    others+="  $pid $cmd"$'\n'
+  done <"$list"
+  rm -f "$list"
+  if [[ -n $others ]] && ((!FORCE)); then
+    echo "[#47] another heavy run is active; wait for it or pass --force:" >&2
+    printf '%s' "$others" >&2
+    exit 1
+  fi
+}
+busy_check
 
 RAW=data/raw/woogles
 OUT=build/issue_runs/issue_47
@@ -42,7 +93,7 @@ MODEL=models/human_model.txt
 EVAL=build/engine/kingbble_inference_eval
 FILES=$( (find "$RAW" -maxdepth 1 -name '*.gcg' 2>/dev/null || true) | wc -l)
 ((FILES > 0)) || FILES=1
-FIT_UNITS=900    # about 90 s
+FIT_UNITS=600    # about 60 s
 TURN_UNITS=10    # about 1 s per test turn (three models)
 # Self-play runs: name, then the app's arguments.
 PLAY=(
@@ -93,11 +144,11 @@ skip_units "$DONE_UNITS"
 ((DONE_UNITS)) && note "resuming in $MODE mode: $((100 * DONE_UNITS / TOTAL_UNITS))% already done"
 
 if ! is_done features; then
-  step "$FILES" "" "$PY" -m ml.data.features "${LEX[@]}" --raw "$RAW" --progress
+  step "$FILES" "" "${HEAVY[@]}" "$PY" -m ml.data.features "${LEX[@]}" --raw "$RAW" --progress
   mark_done features
 fi
 if ! is_done fit; then
-  STEP_SCALE=$FIT_UNITS step 1 "" "$PY" -m ml.human_model.logit --split train --out "$MODEL"
+  STEP_SCALE=$FIT_UNITS step 1 "" "${HEAVY[@]}" "$PY" -m ml.human_model.logit --split train --out "$MODEL"
   mark_done fit
 fi
 if [[ ! -e $OUT/test_turns.tsv ]]; then
@@ -115,7 +166,7 @@ for (game, turn), (rating, split) in sorted(ratings().items()):
   fi
 fi
 if ! is_done human_games; then
-  STEP_SCALE=$TURN_UNITS step $((MAX_TURNS - SCORED)) "" "$EVAL" "${LEX[@]}" \
+  STEP_SCALE=$TURN_UNITS step $((MAX_TURNS - SCORED)) "" "${HEAVY[@]}" "$EVAL" "${LEX[@]}" \
     --human-params "$MODEL" --games "$RAW" --turns "$OUT/test_turns.tsv" \
     --models none,rangefinder,human --max-turns "$MAX_TURNS" --samples 500 \
     --records "$OUT/human_games.jsonl" --progress
@@ -128,7 +179,7 @@ for run in "${PLAY[@]}"; do
   read -ra run_args <<<"$rest"
   left=$((GAMES - $(finished "$RUNS/$name.jsonl")))
   ((left > 0)) || continue
-  STEP_SCALE=$GAME_UNITS step "$left" "" "$EVAL" "${LEX[@]}" --human-params "$MODEL" \
+  STEP_SCALE=$GAME_UNITS step "$left" "" "${HEAVY[@]}" "$EVAL" "${LEX[@]}" --human-params "$MODEL" \
     "${run_args[@]}" --games-played "$GAMES" "${SIM[@]}" --records "$RUNS/$name.jsonl" --progress
 done
 step 0 "" "$PY" -m ml.eval.metrics "$RUNS"/selfplay_*.jsonl "$RUNS"/stress_*.jsonl
