@@ -13,6 +13,7 @@ LOG_DIR=$ROOT/build/issue_runs
 # The repo's virtualenv has the data dependencies (duckdb, pyarrow).
 PY=${PYTHON:-$([[ -x .venv/bin/python ]] && echo .venv/bin/python || echo python3)}
 DRY_RUN=0
+QUICK=0  # --quick: a bounded smoke check, not the final validation
 ARGS=()  # arguments left after the common ones
 ISSUE=""
 LOG=""
@@ -21,7 +22,16 @@ DONE=0         # units finished by earlier steps
 START_DONE=0   # units already done when this run started (resume), excluded from the ETA
 START_TIME=$SECONDS
 
-# issue_init N TOTAL_UNITS "$@": parses --dry-run and opens the log.
+# quick_args "$@": sets QUICK when --quick is among the arguments, so a script
+# can size its work before issue_init.
+quick_args() {
+  local a
+  for a in "$@"; do [[ $a == --quick ]] && QUICK=1; done
+  return 0
+}
+
+# issue_init N TOTAL_UNITS "$@": parses --dry-run and --quick and opens the log.
+# Quick runs log to issue_<N>_quick.log and say so at the top.
 issue_init() {
   ISSUE=$1
   TOTAL=$2
@@ -29,13 +39,17 @@ issue_init() {
   for a in "$@"; do
     case $a in
       --dry-run) DRY_RUN=1 ;;
+      --quick) QUICK=1 ;;
       *) ARGS+=("$a") ;;
     esac
   done
-  LOG=$LOG_DIR/issue_$ISSUE.log
+  LOG=$LOG_DIR/issue_$ISSUE$( ((QUICK)) && echo _quick).log
   if ((!DRY_RUN)); then
     mkdir -p "$LOG_DIR"
     echo "=== $(date '+%F %T') $(git rev-parse --short HEAD 2>/dev/null || echo '?')" >>"$LOG"
+  fi
+  if ((QUICK)); then
+    note "QUICK SMOKE CHECK: bounded, slow positions skipped. Not the final validation."
   fi
 }
 
