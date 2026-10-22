@@ -37,8 +37,12 @@ def read_pairs(lines: list[str]) -> list[tuple[str, dict]]:
 
 
 def compare(ours: list[tuple[str, dict]], theirs: list[dict]) -> dict:
-    stats = {"positions": 0, "plays": 0, "mismatched": 0, "examples": []}
-    for (cgp, a), b in zip(ours, theirs, strict=True):
+    stats = {"positions": 0, "plays": 0, "mismatched": 0, "examples": [], "skipped": []}
+    for i, ((cgp, a), b) in enumerate(zip(ours, theirs, strict=True)):
+        # {"skip": true}: not solved within the time limit on that side.
+        if a.get("skip") or b.get("skip"):
+            stats["skipped"].append(i)
+            continue
         stats["positions"] += 1
         mine = {p["move"]: p for p in a["plays"]}
         mac = {p["move"]: p for p in b["plays"]}
@@ -113,6 +117,12 @@ def main() -> int:
     ap.add_argument("--pass", dest="with_pass", action="store_true", help="also analyse passing")
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--jobs", type=int, default=1, help="parallel processes on each side")
+    ap.add_argument(
+        "--time-limit",
+        type=float,
+        default=0,
+        help="seconds per position on each side; slower positions are skipped (0 = none)",
+    )
     ap.add_argument("--macondo-threads", type=int, default=1, help="threads per Macondo process")
     ap.add_argument("--go", default=shutil.which("go") or str(Path.home() / ".local/go/bin/go"))
     args = ap.parse_args()
@@ -147,14 +157,19 @@ def main() -> int:
             "--preendgame", str(args.max_bag),
             "--solve", "--exhaustive",
             "--candidates", str(args.candidates),
+            "--time-limit", str(args.time_limit),
         ]  # fmt: skip
         if args.with_pass:
             cmd.append("--pass")
         return read_pairs(stream(cmd, 2, progress).splitlines())
 
     def macondo_job(chunk: list[tuple[str, dict]]) -> list[dict]:
+        # Positions we skipped are not sent to Macondo.
+        sent = [(cgp, sol) for cgp, sol in chunk if not sol.get("skip")]
+        if not sent:
+            return [{"skip": True} for _ in chunk]
         lines = "".join(
-            cgp + "\t" + ";".join(p["move"] for p in sol["plays"]) + "\n" for cgp, sol in chunk
+            cgp + "\t" + ";".join(p["move"] for p in sol["plays"]) + "\n" for cgp, sol in sent
         )
         out = stream(
             [
@@ -166,12 +181,15 @@ def main() -> int:
                 "-no-cutoff",
                 "-threads",
                 str(args.macondo_threads),
+                "-timeout",
+                str(args.time_limit),
             ],  # fmt: skip
             1,
             progress,
             input=lines,
         )
-        return [json.loads(line) for line in out.splitlines()]
+        answers = iter(json.loads(line) for line in out.splitlines())
+        return [{"skip": True} if sol.get("skip") else next(answers) for _, sol in chunk]
 
     with ThreadPoolExecutor(args.jobs) as pool:
         start = time.monotonic()
@@ -188,6 +206,11 @@ def main() -> int:
         f" mismatched positions: {stats['mismatched']}"
     )
     print(f"wall time with {args.jobs} jobs: ours {ours_time:.0f} s, macondo {macondo_time:.0f} s")
+    if stats["skipped"]:
+        print(
+            f"skipped at the {args.time_limit:g} s limit: {len(stats['skipped'])} positions"
+            f" (#{', #'.join(map(str, stats['skipped']))})"
+        )
     for cgp, diffs in stats["examples"]:
         print(f"  {cgp}")
         for d in diffs[:5]:

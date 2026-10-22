@@ -25,3 +25,11 @@ def test_interleave_undoes_a_round_robin_split():
     items = list(range(7))
     assert ce.interleave([items[j::3] for j in range(3)]) == items
     assert ce.interleave([items]) == items
+
+
+def test_skipped_positions_are_listed_not_compared():
+    assert ce.read_pairs([CGP_A, "skip", CGP_B, "4"]) == [(CGP_A, None), (CGP_B, 4)]
+    stats = ce.compare([(CGP_A, None), (CGP_B, 4)], [None, 5])
+    assert stats["skipped"] == [0]
+    assert stats["positions"] == 1 and stats["mismatched"] == 1
+    assert ce.compare([(CGP_A, 3)], [None])["skipped"] == [0]

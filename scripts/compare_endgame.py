@@ -28,9 +28,14 @@ HELPER = ROOT / "scripts" / "macondo_endgame" / "main.go"
 LEX_NAME = "NWL_ENABLE"
 
 
-def read_pairs(lines: list[str]) -> list[tuple[str, int]]:
+def value(text: str) -> int | None:
+    """A solved value, or None for a position skipped at the time limit."""
+    return None if text == "skip" else int(text)
+
+
+def read_pairs(lines: list[str]) -> list[tuple[str, int | None]]:
     """'<cgp>\\n<value>' pairs."""
-    return [(lines[i], int(lines[i + 1])) for i in range(0, len(lines), 2)]
+    return [(lines[i], value(lines[i + 1])) for i in range(0, len(lines), 2)]
 
 
 def interleave(parts: list[list]) -> list:
@@ -39,9 +44,12 @@ def interleave(parts: list[list]) -> list:
     return [parts[i % n][i // n] for i in range(sum(map(len, parts)))]
 
 
-def compare(ours: list[tuple[str, int]], theirs: list[int]) -> dict:
-    stats = {"positions": 0, "mismatched": 0, "examples": []}
-    for (cgp, a), b in zip(ours, theirs, strict=True):
+def compare(ours: list[tuple[str, int | None]], theirs: list[int | None]) -> dict:
+    stats = {"positions": 0, "mismatched": 0, "examples": [], "skipped": []}
+    for i, ((cgp, a), b) in enumerate(zip(ours, theirs, strict=True)):
+        if a is None or b is None:
+            stats["skipped"].append(i)
+            continue
         stats["positions"] += 1
         if a != b:
             stats["mismatched"] += 1
@@ -100,6 +108,12 @@ def main() -> int:
     ap.add_argument("--max-tiles", type=int, default=10)
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--jobs", type=int, default=1, help="parallel processes on each side")
+    ap.add_argument(
+        "--time-limit",
+        type=float,
+        default=0,
+        help="seconds per position on each side; slower positions are skipped (0 = none)",
+    )
     ap.add_argument("--go", default=shutil.which("go") or str(Path.home() / ".local/go/bin/go"))
     args = ap.parse_args()
 
@@ -133,19 +147,23 @@ def main() -> int:
             "--max-tiles", str(args.max_tiles),
             "--solve",
             "--shard", f"{j}/{args.jobs}",
+            "--time-limit", str(args.time_limit),
         ]  # fmt: skip
         return read_pairs(stream(cmd, 2, progress).splitlines())
 
-    def macondo_job(cgps: list[str]) -> list[int]:
+    def macondo_job(cgps: list[str]) -> list[int | None]:
         if not cgps:
             return []
         out = stream(
-            [str(helper), "-data", str(work / "data"), "-lex", LEX_NAME],
+            [
+                str(helper), "-data", str(work / "data"), "-lex", LEX_NAME,
+                "-timeout", str(args.time_limit),
+            ],  # fmt: skip
             1,
             progress,
             input="\n".join(cgps) + "\n",
         )
-        return [int(v) for v in out.split()]
+        return [value(v) for v in out.split()]
 
     with ThreadPoolExecutor(args.jobs) as pool:
         start = time.monotonic()
@@ -154,15 +172,24 @@ def main() -> int:
         # Shard j holds positions j, j + jobs, j + 2 * jobs...
         ours = interleave(shards)
         start = time.monotonic()
-        cgps = [cgp for cgp, _ in ours]
+        # Positions we skipped are not sent to Macondo.
+        solved = [i for i, (_, v) in enumerate(ours) if v is not None]
+        cgps = [ours[i][0] for i in solved]
         chunks = [cgps[j :: args.jobs] for j in range(args.jobs)]
-        answers = list(pool.map(macondo_job, chunks))
-        theirs = interleave(answers)
+        answers = interleave(list(pool.map(macondo_job, chunks)))
+        theirs = [None] * len(ours)
+        for i, v in zip(solved, answers, strict=True):
+            theirs[i] = v
         macondo_time = time.monotonic() - start
     print(f"ours: {ours_time:.1f} s, macondo: {macondo_time:.1f} s")
 
     stats = compare(ours, theirs)
     print(f"positions: {stats['positions']}, mismatched values: {stats['mismatched']}")
+    if stats["skipped"]:
+        print(
+            f"skipped at the {args.time_limit:g} s limit: {len(stats['skipped'])} positions"
+            f" (#{', #'.join(map(str, stats['skipped']))})"
+        )
     for cgp, a, b in stats["examples"]:
         print(f"  {cgp}\n    ours: {a:+d}, macondo: {b:+d}")
     return 1 if stats["mismatched"] else 0
