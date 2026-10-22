@@ -170,6 +170,7 @@ int EvalHumanGames(const Options& o, const Setup& setup, Journal& journal) {
   std::size_t todo = 0, finished = 0;
   for (const auto& [key, values] : journal.done()) scored += static_cast<long long>(values.at(0));
   for (const fs::path& f : files) todo += !journal.IsDone(f.stem().string());
+  const long long scored_start = scored;
   std::ostream& records = journal.unit();
   for (std::size_t g = 0; g < files.size(); ++g) {
     if (o.max_turns && scored >= o.max_turns) break;
@@ -219,7 +220,13 @@ int EvalHumanGames(const Options& o, const Setup& setup, Journal& journal) {
       ++scored;
     }
     journal.Finish(id, {static_cast<double>(scored - scored_before)});
-    if (o.progress) std::cerr << "progress: " << ++finished << "/" << todo << std::endl;
+    ++finished;
+    // With --max-turns progress counts this run's turns, else its game files.
+    if (o.progress && o.max_turns)
+      std::cerr << "progress: " << scored - scored_start << "/" << o.max_turns - scored_start
+                << std::endl;
+    else if (o.progress)
+      std::cerr << "progress: " << finished << "/" << todo << std::endl;
   }
   std::cout << "scored turns: " << scored << "\n";
   return 0;
