@@ -17,6 +17,9 @@
 // --a-rare / --b-rare P make that side play, with probability P, a uniformly
 // random legal option ranked --rare-from or lower by static equity (the
 // stress test). Records score each tracked rack before the tracker moves.
+//
+// Both modes resume: finished game files or games are listed in <records>.done
+// and skipped on a rerun with the same arguments; summaries cover all of them.
 
 #include <algorithm>
 #include <cmath>
@@ -32,6 +35,7 @@
 #include <string>
 #include <vector>
 
+#include "journal.hpp"
 #include "scrabble/equity.hpp"
 #include "scrabble/features.hpp"
 #include "scrabble/gaddag.hpp"
@@ -139,7 +143,7 @@ struct Options {
   SimParams sim;
 };
 
-int EvalHumanGames(const Options& o, const Setup& setup, std::ostream& records) {
+int EvalHumanGames(const Options& o, const Setup& setup, Journal& journal) {
   // (game id, turn) -> rating; empty means every turn.
   std::map<std::pair<std::string, int>, int> wanted;
   if (!o.turns_path.empty()) {
@@ -163,8 +167,14 @@ int EvalHumanGames(const Options& o, const Setup& setup, std::ostream& records) 
   std::vector<std::unique_ptr<MoveModel>> models;
   for (const std::string& name : o.models) models.push_back(MakeModel(name, setup));
   long long scored = 0;
+  std::size_t todo = 0, finished = 0;
+  for (const auto& [key, values] : journal.done()) scored += static_cast<long long>(values.at(0));
+  for (const fs::path& f : files) todo += !journal.IsDone(f.stem().string());
+  std::ostream& records = journal.unit();
   for (std::size_t g = 0; g < files.size(); ++g) {
     if (o.max_turns && scored >= o.max_turns) break;
+    if (journal.IsDone(files[g].stem().string())) continue;
+    const long long scored_before = scored;
     std::string error;
     auto game = ReadGcgFile(files[g].string(), &error);
     std::vector<ReplayedTurn> turns;
@@ -208,7 +218,8 @@ int EvalHumanGames(const Options& o, const Setup& setup, std::ostream& records) 
       }
       ++scored;
     }
-    if (o.progress) std::cerr << "progress: " << g + 1 << "/" << files.size() << std::endl;
+    journal.Finish(id, {static_cast<double>(scored - scored_before)});
+    if (o.progress) std::cerr << "progress: " << ++finished << "/" << todo << std::endl;
   }
   std::cout << "scored turns: " << scored << "\n";
   return 0;
@@ -222,7 +233,7 @@ struct Side {
   double rare = 0;
 };
 
-int SelfPlay(const Options& o, const Setup& setup, std::ostream& records) {
+int SelfPlay(const Options& o, const Setup& setup, Journal& journal) {
   MoveGenerator gen(*setup.gaddag);
   std::mt19937_64 rare_rng(MixSeed(o.seed ^ 0x5eed));
   Side sides[2];
@@ -241,9 +252,13 @@ int SelfPlay(const Options& o, const Setup& setup, std::ostream& records) {
     sides[s].bot->set_rack_sampler(sides[s].filter.get());
   }
 
-  int wins[3] = {0, 0, 0};  // a, b, ties
-  long long spread_a = 0, rare_moves = 0, surprises = 0;
+  int todo = 0, finished = 0;
+  for (int g = 0; g < o.games_played; ++g) todo += !journal.IsDone("game" + std::to_string(g));
+  std::ostream& records = journal.unit();
   for (int g = 0; g < o.games_played; ++g) {
+    const std::string key = "game" + std::to_string(g);
+    if (journal.IsDone(key)) continue;
+    long long rare_moves = 0, surprises = 0;
     Game game(MixSeed(MixSeed(o.seed) + static_cast<std::uint64_t>(g)));
     const int seat_a = g % 2;
     auto side_of = [&](int seat) -> Side& { return sides[seat == seat_a ? 0 : 1]; };
@@ -293,12 +308,23 @@ int SelfPlay(const Options& o, const Setup& setup, std::ostream& records) {
       if (mover.filter)
         mover.filter->Resync(UnseenTiles(game.board(), game.rack(me)), game.rack(opp).Size());
     }
-    const int sa = game.score(seat_a), sb = game.score(1 - seat_a);
-    spread_a += sa - sb;
-    ++wins[sa > sb ? 0 : sb > sa ? 1 : 2];
-    if (o.progress) std::cerr << "progress: " << g + 1 << "/" << o.games_played << std::endl;
+    journal.Finish(key, {double(game.score(seat_a)), double(game.score(1 - seat_a)),
+                         double(rare_moves), double(surprises)});
+    if (o.progress) std::cerr << "progress: " << ++finished << "/" << todo << std::endl;
   }
-  const int n = o.games_played;
+  // Over every finished game, including those of earlier runs.
+  int wins[3] = {0, 0, 0};  // a, b, ties
+  long long spread_a = 0, rare_moves = 0, surprises = 0;
+  int n = 0;
+  for (const auto& [key, v] : journal.done()) {
+    if (v.size() < 4) continue;
+    const double sa = v[0], sb = v[1];
+    spread_a += static_cast<long long>(sa - sb);
+    ++wins[sa > sb ? 0 : sb > sa ? 1 : 2];
+    rare_moves += static_cast<long long>(v[2]);
+    surprises += static_cast<long long>(v[3]);
+    ++n;
+  }
   std::cout << "a=" << o.model_a << " vs b=" << o.model_b << " (rare a/b: " << o.rare[0] << "/"
             << o.rare[1] << "): wins a/b/ties: " << wins[0] << "/" << wins[1] << "/" << wins[2]
             << ", a win %: " << (n ? 100.0 * (wins[0] + 0.5 * wins[2]) / n : 0)
@@ -393,10 +419,11 @@ int main(int argc, char** argv) {
   setup.gaddag = &gaddag;
   setup.leaves = &leaves;
   if (!human_path.empty()) setup.human = HumanModelParams::FromFile(human_path);
-  std::ofstream records(o.records_path);
-  if (!records) {
+  // Resumes: units already in <records>.done are skipped.
+  Journal journal(o.records_path);
+  if (!journal.ok()) {
     std::cerr << "cannot write " << o.records_path << "\n";
     return 1;
   }
-  return o.games_dir.empty() ? SelfPlay(o, setup, records) : EvalHumanGames(o, setup, records);
+  return o.games_dir.empty() ? SelfPlay(o, setup, journal) : EvalHumanGames(o, setup, journal);
 }
