@@ -125,7 +125,9 @@ int main(int argc, char** argv) {
     Quackle::GamePosition position = game->currentPosition();
     position.setCurrentPlayerRack(Quackle::Rack(Encode(line.substr(5))));
     player->setPosition(position);
-    std::cout << "MOVE " << MoveText(player->move()) << std::endl;
+    // Quackle may print to stdout while it thinks: finish before writing the answer.
+    const std::string move = MoveText(player->move());
+    std::cout << "MOVE " << move << std::endl;
     delete game;
   }
   delete player;
