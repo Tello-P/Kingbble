@@ -12,6 +12,8 @@
 // "+apeg" plays the approximate pre-endgame with peg-bag + 1..6 tiles in the bag
 // (--apeg-candidates plays, --apeg-samples deals, --apeg-plies endgame depth,
 // within --apeg-time seconds, on --threads threads).
+// With --results FILE every finished game is appended to FILE and a rerun skips
+// the games already there; --status prints the totals of FILE and exits.
 // Suffixes stack: "sim+peg+eg", "equity+apeg+peg+eg".
 
 #include <chrono>
@@ -21,6 +23,7 @@
 #include <string>
 
 #include "bot_factory.hpp"
+#include "results_file.hpp"
 #include "scrabble/gaddag.hpp"
 #include "scrabble/game.hpp"
 
@@ -36,6 +39,34 @@ std::uint64_t MixSeed(std::uint64_t x) {
   return x ^ (x >> 31);
 }
 
+// Totals over every finished game ("game N: S1 - S2, a in seat K" lines).
+void PrintSummary(const ResultsFile& results, int games, const std::string& kind_a,
+                  const std::string& kind_b) {
+  long long total_score = 0, spread_a = 0;
+  int wins[3] = {0, 0, 0};     // by seat: p1, p2, ties
+  int wins_ab[3] = {0, 0, 0};  // by bot: a, b, ties
+  int n = 0;
+  for (const std::string& line : results.lines()) {
+    int g = 0, s0 = 0, s1 = 0, seat = 0;
+    if (std::sscanf(line.c_str(), "game %d: %d - %d, a in seat %d", &g, &s0, &s1, &seat) != 4 ||
+        g > games)
+      continue;
+    ++n;
+    total_score += s0 + s1;
+    ++wins[s0 > s1 ? 0 : s1 > s0 ? 1 : 2];
+    const int sa = seat == 1 ? s0 : s1, sb = seat == 1 ? s1 : s0;
+    spread_a += sa - sb;
+    ++wins_ab[sa > sb ? 0 : sb > sa ? 1 : 2];
+  }
+  std::cout << "games: " << n << " of " << games << ", wins p1/p2/ties: " << wins[0] << "/"
+            << wins[1] << "/" << wins[2]
+            << ", avg score per player: " << (n ? total_score / (2.0 * n) : 0) << "\n";
+  std::cout << "a=" << kind_a << " vs b=" << kind_b << ": wins a/b/ties: " << wins_ab[0] << "/"
+            << wins_ab[1] << "/" << wins_ab[2]
+            << ", a win %: " << (n ? 100.0 * (wins_ab[0] + 0.5 * wins_ab[2]) / n : 0)
+            << ", a avg spread: " << (n ? double(spread_a) / n : 0) << "\n";
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -44,6 +75,8 @@ int main(int argc, char** argv) {
   std::uint64_t seed = 1;
   bool verbose = false;
   bool progress = false;  // "progress: G/N" on stderr after each game
+  std::string results_path;
+  bool status_only = false;
   SimParams sim;
   double endgame_time = 5;
   PegOptions peg;
@@ -97,15 +130,23 @@ int main(int argc, char** argv) {
       verbose = true;
     } else if (a == "--progress") {
       progress = true;
+    } else if (a == "--results") {
+      results_path = value();
+    } else if (a == "--status") {
+      status_only = true;
     } else {
       std::cerr << "usage: " << argv[0]
                 << " --lexicon FILE [--leaves KLV] [--a BOT] [--b BOT] [--games N] [--seed S]"
                    " [--sim-candidates N] [--sim-iterations N] [--threads N] [--endgame-time S]"
                    " [--peg-bag N] [--peg-candidates N] [--peg-time S] [--apeg-candidates N]"
                    " [--apeg-samples N] [--apeg-plies N] [--apeg-time S] [--verbose]"
-                   " [--progress]\n";
+                   " [--progress] [--results FILE [--status]]\n";
       return 2;
     }
+  }
+  if (status_only) {
+    PrintSummary(ResultsFile(results_path, true), games, kind_a, kind_b);
+    return 0;
   }
   if (lexicon.empty()) {
     std::cerr << "--lexicon is required\n";
@@ -128,11 +169,17 @@ int main(int argc, char** argv) {
   std::unique_ptr<Bot> bots[2] = {MakeBot(kind_a, gaddag, leaves.get(), sim, endgame_time, peg),
                                   MakeBot(kind_b, gaddag, leaves.get(), sim, endgame_time, peg)};
 
-  long long turns = 0, generated = 0, total_score = 0, spread_a = 0;
-  int wins[3] = {0, 0, 0};     // by seat: p1, p2, ties
-  int wins_ab[3] = {0, 0, 0};  // by bot: a, b, ties
+  long long turns = 0, generated = 0;
   double gen_s = 0;
+  ResultsFile results(results_path);
+  auto report = [&] {
+    int done = 0;
+    for (int g = 1; g <= games; ++g) done += results.Done(g);
+    if (progress) std::cerr << "progress: " << done << "/" << games << std::endl;
+  };
+  report();
   for (int g = 0; g < games; ++g) {
+    if (results.Done(g + 1)) continue;
     Game game(MixSeed(MixSeed(seed) + static_cast<std::uint64_t>(g)));
     const int seat_a = g % 2;  // seat of bot a in this game
     while (!game.over()) {
@@ -148,22 +195,13 @@ int main(int argc, char** argv) {
       }
       game.Apply(m);
     }
-    int s0 = game.score(0), s1 = game.score(1);
-    total_score += s0 + s1;
-    ++wins[s0 > s1 ? 0 : s1 > s0 ? 1 : 2];
-    int sa = game.score(seat_a), sb = game.score(1 - seat_a);
-    spread_a += sa - sb;
-    ++wins_ab[sa > sb ? 0 : sb > sa ? 1 : 2];
+    const int s0 = game.score(0), s1 = game.score(1);
+    results.Append(g + 1, "game " + std::to_string(g + 1) + ": " + std::to_string(s0) + " - " +
+                              std::to_string(s1) + ", a in seat " + std::to_string(seat_a + 1));
     if (verbose) std::cout << "game " << g + 1 << ": " << s0 << " - " << s1 << "\n";
-    if (progress) std::cerr << "progress: " << g + 1 << "/" << games << std::endl;
+    report();
   }
-  std::cout << "games: " << games << ", wins p1/p2/ties: " << wins[0] << "/" << wins[1] << "/"
-            << wins[2] << ", avg score per player: " << (games ? total_score / (2.0 * games) : 0)
-            << "\n";
-  std::cout << "a=" << kind_a << " vs b=" << kind_b << ": wins a/b/ties: " << wins_ab[0] << "/"
-            << wins_ab[1] << "/" << wins_ab[2]
-            << ", a win %: " << (games ? 100.0 * (wins_ab[0] + 0.5 * wins_ab[2]) / games : 0)
-            << ", a avg spread: " << (games ? double(spread_a) / games : 0) << "\n";
+  PrintSummary(results, games, kind_a, kind_b);
   std::cout << "turns: " << turns
             << ", avg moves per turn: " << (turns ? double(generated) / turns : 0)
             << ", positions/s: " << (gen_s > 0 ? turns / gen_s : 0)

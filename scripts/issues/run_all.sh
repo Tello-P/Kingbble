@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # Runs the per-issue scripts one after the other, shortest first, with an overall
 # percentage weighted by each script's estimated time.
-#   scripts/issues/run_all.sh [--dry-run] [--quick] [--players nick1,nick2] [ISSUE...]
+#   scripts/issues/run_all.sh [--dry-run] [--quick] [--fresh] [--status] [--players LIST] [ISSUE...]
+# Every finished game or position is kept, so stopping run_all.sh (Ctrl-C, or
+# killing it) and starting it again goes on where it was; --fresh starts over and
+# --status only reports how far each run is.
 # --quick runs every script's bounded smoke check (see each script); it is not the
 # final validation. #38 (data collection) has no quick mode and is left out.
 # With ISSUE numbers only those run. #38 needs --players (or KINGBBLE_PLAYERS)
@@ -19,11 +22,13 @@ PLAN=(
   "38 200 issue_38_collect_turns.sh"
 )
 
-dry=() quick=() players=${KINGBBLE_PLAYERS:-} only=()
+dry=() quick=() more=() status=0 players=${KINGBBLE_PLAYERS:-} only=()
 while (($#)); do
   case $1 in
     --dry-run) dry=(--dry-run) ;;
     --quick) quick=(--quick) ;;
+    --fresh) more+=(--fresh) ;;
+    --status) more+=(--status) status=1 ;;
     --players) players=${2:?--players needs a value}; shift ;;
     [0-9]*) only+=("$1") ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
@@ -62,7 +67,11 @@ for entry in "${selected[@]}"; do
   extra=()
   [[ $issue == 38 ]] && extra=(--players "${players:-<seed list>}")
   # A failing script (mismatches, missing setup) does not stop the others.
-  if ! "$DIR/$script" "${dry[@]}" "${quick[@]}" "${extra[@]}" | while IFS= read -r line; do
+  if ((status)); then
+    "$DIR/$script" "${quick[@]}" "${more[@]}" "${extra[@]}" || true
+    continue
+  fi
+  if ! "$DIR/$script" "${dry[@]}" "${quick[@]}" "${more[@]}" "${extra[@]}" | while IFS= read -r line; do
     echo "$line"
     if [[ $line =~ ^\[#$issue\]\ ([0-9]+)% ]]; then
       echo "[all] $(((100 * done_minutes + minutes * BASH_REMATCH[1]) / total))%"
