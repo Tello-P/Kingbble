@@ -24,6 +24,22 @@ def test_fit_recovers_the_weights():
     assert np.abs(est - w).max() < 0.15
 
 
+def test_fit_converges_when_the_best_option_is_almost_always_played():
+    # A few turns like real ones (gap in points, log rank); a full Newton step diverged here.
+    rng = np.random.default_rng(1)
+    groups = []
+    for _ in range(50):
+        x = np.zeros((64, len(FEATURES)))
+        x[:, 0] = np.sort(rng.exponential(10.0, 64))
+        x[0, 0] = 0
+        x[:, 1] = rng.integers(0, 60, 64)
+        x[:, 3] = np.log1p(np.arange(64))
+        groups.append((x, 0 if rng.random() < 0.9 else int(rng.integers(1, 5))))
+    est = fit(groups)
+    assert np.isfinite(est).all()
+    assert np.abs(est).max() < 100
+
+
 def test_band_of():
     assert band_of(None, (0, 1500)) == 0
     assert band_of(1499, (0, 1500)) == 0
