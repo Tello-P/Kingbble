@@ -7,7 +7,10 @@
 //       --helper build/quackle_helper/quackle_helper --bot equity+peg+eg
 //       --games 100 --seed 1 [--quackle-player "Championship Player"]
 //       [--quackle-lexicon csw24] [--quackle-threads N] [--gcg-dir DIR]
-// Bot options as kingbble_selfplay: --threads, --endgame-time, --peg-bag,
+// With --results FILE every finished game is appended to FILE and a rerun skips
+// the games already there (stop it any time and run the same command again);
+// --status prints the summary of FILE and exits. Bot options as kingbble_selfplay: --threads,
+// --endgame-time, --peg-bag,
 // --peg-candidates, --peg-time, --apeg-*, --sim-*.
 
 #include <sys/wait.h>
@@ -24,6 +27,7 @@
 #include <vector>
 
 #include "bot_factory.hpp"
+#include "results_file.hpp"
 #include "scrabble/gcg.hpp"
 #include "scrabble/movegen.hpp"
 
@@ -125,12 +129,38 @@ GcgEvent Event(const Game& before, const Move& m, std::array<int, 2>& cumulative
   return ev;
 }
 
+// Win % with its 95 % CI and the mean spread over every finished game.
+std::string Summary(const ResultsFile& results, int games) {
+  double points = 0, spread_sum = 0, spread_sq = 0;
+  int n = 0;
+  for (const std::string& line : results.lines()) {
+    int g = 0, k = 0, q = 0;
+    if (std::sscanf(line.c_str(), "game %d: kingbble %d - quackle %d", &g, &k, &q) != 3) continue;
+    if (g > games) continue;
+    ++n;
+    points += k > q ? 1 : k == q ? 0.5 : 0;
+    spread_sum += k - q;
+    spread_sq += double(k - q) * (k - q);
+  }
+  const double p = n ? points / n : 0, mean = n ? spread_sum / n : 0;
+  const double sd = n > 1 ? std::sqrt((spread_sq - n * mean * mean) / (n - 1)) : 0;
+  char buf[256];
+  std::snprintf(buf, sizeof buf,
+                "games: %d of %d, kingbble win %%: %.1f +- %.1f (95 %% CI), mean spread: %.1f "
+                "+- %.1f",
+                n, games, 100 * p, n ? 100 * 1.96 * std::sqrt(p * (1 - p) / n) : 0.0, mean,
+                n ? 1.96 * sd / std::sqrt(n) : 0.0);
+  return buf;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
   std::string lexicon, leaves_path, helper_path, bot_kind = "equity+peg+eg";
   std::string quackle_player = "Championship Player", quackle_lexicon = "csw24", gcg_dir;
   int games = 10, quackle_threads = 0;
+  std::string results_path;
+  bool status_only = false;
   std::uint64_t seed = 1;
   SimParams sim;
   double endgame_time = 5;
@@ -161,6 +191,10 @@ int main(int argc, char** argv) {
       quackle_lexicon = value();
     } else if (a == "--quackle-threads") {
       quackle_threads = std::stoi(value());
+    } else if (a == "--results") {
+      results_path = value();
+    } else if (a == "--status") {
+      status_only = true;
     } else if (a == "--gcg-dir") {
       gcg_dir = value();
     } else if (a == "--games") {
@@ -193,9 +227,14 @@ int main(int argc, char** argv) {
       std::cerr << "usage: " << argv[0]
                 << " --lexicon FILE --leaves KLV --helper PATH [--bot KIND] [--games N]"
                    " [--seed S] [--quackle-player NAME] [--quackle-lexicon NAME]"
-                   " [--quackle-threads N] [--gcg-dir DIR] [bot options of kingbble_selfplay]\n";
+                   " [--quackle-threads N] [--gcg-dir DIR] [--results FILE [--status]]"
+                   " [bot options of kingbble_selfplay]\n";
       return 2;
     }
+  }
+  if (status_only) {
+    std::cout << Summary(ResultsFile(results_path, true), games) << "\n";
+    return 0;
   }
   if (lexicon.empty() || helper_path.empty()) {
     std::cerr << "--lexicon and --helper are required\n";
@@ -216,8 +255,15 @@ int main(int argc, char** argv) {
   Helper quackle(helper_args);
   if (!gcg_dir.empty()) std::filesystem::create_directories(gcg_dir);
 
-  double points = 0, spread_sum = 0, spread_sq = 0;
+  ResultsFile results(results_path);
+  auto progress = [&] {
+    int done = 0;
+    for (int g = 1; g <= games; ++g) done += results.Done(g);
+    std::cerr << "progress: " << done << "/" << games << std::endl;
+  };
+  progress();
   for (int g = 0; g < games; ++g) {
+    if (results.Done(g + 1)) continue;
     Game game(MixSeed(MixSeed(seed) + static_cast<std::uint64_t>(g)));
     const int seat = g % 2;  // Kingbble's seat
     GcgGame record;
@@ -248,21 +294,16 @@ int main(int argc, char** argv) {
       ev.cumulative = cumulative[p] += rest;
       record.events.push_back(ev);
     }
-    const int spread = game.score(seat) - game.score(1 - seat);
-    points += spread > 0 ? 1 : spread == 0 ? 0.5 : 0;
-    spread_sum += spread;
-    spread_sq += double(spread) * spread;
-    std::cout << "game " << g + 1 << ": kingbble " << game.score(seat) << " - quackle "
-              << game.score(1 - seat) << (seat == 0 ? " (kingbble first)" : "") << std::endl;
     if (!gcg_dir.empty())
       std::ofstream(gcg_dir + "/game" + std::to_string(g + 1) + ".gcg") << WriteGcg(record);
+    const std::string line = "game " + std::to_string(g + 1) + ": kingbble " +
+                             std::to_string(game.score(seat)) + " - quackle " +
+                             std::to_string(game.score(1 - seat)) +
+                             (seat == 0 ? " (kingbble first)" : "");
+    results.Append(g + 1, line);
+    std::cout << line << std::endl;
+    progress();
   }
-  const double n = games, p = games ? points / n : 0;
-  const double mean = games ? spread_sum / n : 0;
-  const double sd = games > 1 ? std::sqrt((spread_sq - n * mean * mean) / (n - 1)) : 0;
-  std::cout << "games: " << games << ", kingbble win %: " << 100 * p << " +- "
-            << (games ? 100 * 1.96 * std::sqrt(p * (1 - p) / n) : 0)
-            << " (95 % CI), mean spread: " << mean << " +- "
-            << (games ? 1.96 * sd / std::sqrt(n) : 0) << "\n";
+  std::cout << Summary(results, games) << "\n";
   return 0;
 }

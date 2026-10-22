@@ -1,36 +1,44 @@
 #!/usr/bin/env bash
 # #34 (and #21, #24):
-#  1. Quackle match, sim+peg+eg, 10 seeds x 200 games. Check: combined Kingbble
-#     win % >= 45 (v0.2 exit criterion). Finished seeds are skipped on a rerun.
+#  1. Quackle match, sim+peg+eg against Championship Player, 2,000 games (--games N
+#     for fewer). Check: Kingbble win % >= 45 (v0.2 exit criterion). About 4 min a
+#     game on 3 cores.
 #  2. Lazy SMP endgame: equity+eg vs equity, 200 games with MAX_THREADS and with
 #     1 endgame thread. Check: more threads no worse in a win % and a avg spread.
+# Every finished game is kept: stop the script any time and run it again to go on
+# (--fresh starts over, --status reports).
 # --quick: 10 match games against Quackle's Speedy Player with a lighter Kingbble
-# (40 simulations, 2 s pre-endgame and endgame), and 2 x 20 Lazy SMP games, in
-# separate logs. A full-strength game takes about 4 min on 3 cores.
-#   scripts/issues/issue_34_quackle_and_smp.sh [--dry-run] [--quick] [--match-only | --smp-only]
+# (40 simulations, 2 s pre-endgame and endgame), and 2 x 20 Lazy SMP games.
+#   scripts/issues/issue_34_quackle_and_smp.sh [--dry-run] [--quick] [--fresh] [--status]
+#       [--games N] [--match-only | --smp-only]
 source "$(dirname "$0")/lib.sh"
 
 quick_args "$@"
-SEEDS=10 MATCH_GAMES=200 SMP_GAMES=200 MATCH=match
+MATCH_GAMES=2000 SMP_GAMES=200
 MATCH_ARGS=()
 if ((QUICK)); then
-  SEEDS=1 MATCH_GAMES=10 SMP_GAMES=20 MATCH=quick_match
+  MATCH_GAMES=10 SMP_GAMES=20
   MATCH_ARGS=(--quackle-player "Speedy Player" --sim-iterations 40 --peg-time 2 --endgame-time 2)
 fi
-issue_init 34 $((SEEDS * MATCH_GAMES + 2 * SMP_GAMES)) "$@"
+args=("$@")
+for ((i = 0; i < ${#args[@]}; ++i)); do
+  [[ ${args[i]} == --games ]] && MATCH_GAMES=${args[i + 1]:?--games needs a value}
+done
+issue_init 34 $((MATCH_GAMES + 2 * SMP_GAMES)) "$@"
 match=1 smp=1
-for a in "${ARGS[@]}"; do
-  case $a in
+for ((i = 0; i < ${#ARGS[@]}; ++i)); do
+  case ${ARGS[i]} in
     --match-only) smp=0 ;;
     --smp-only) match=0 ;;
-    *) echo "unknown argument: $a" >&2; exit 2 ;;
+    --games) i=$((i + 1)) ;;
+    *) echo "unknown argument: ${ARGS[i]}" >&2; exit 2 ;;
   esac
 done
 build_engine
 
 if ((match)); then
   QUACKLE=$HOME/src/quackle
-  if ((DRY_RUN)) || [[ ! -x build/quackle_helper/quackle_helper ]]; then
+  if ((!STATUS)) && { ((DRY_RUN)) || [[ ! -x build/quackle_helper/quackle_helper ]]; }; then
     note "setup: Quackle helper"
     if ((DRY_RUN)); then
       echo "[ -d $QUACKLE ] || git clone https://github.com/quackle/quackle $QUACKLE"
@@ -41,38 +49,15 @@ if ((match)); then
     step 0 "" cmake --build build/quackle_helper -j"$MAX_THREADS"
   fi
   need_csw24
-  for seed in $(seq 1 $SEEDS); do
-    seed_log=$LOG_DIR/issue_34_${MATCH}_s$seed.log
-    if ((!DRY_RUN)) && grep -q "kingbble win %" "$seed_log" 2>/dev/null; then
-      note "seed $seed already finished, skipping"
-      skip_units $MATCH_GAMES
-      continue
-    fi
-    ((DRY_RUN)) || : >"$seed_log"
-    STEP_LOG=$seed_log step $MATCH_GAMES "^game [0-9]+:" build/engine/kingbble_quackle_match \
-      --lexicon lexica/CSW24.txt --leaves lexica/CSW24.klv2 \
-      --helper build/quackle_helper/quackle_helper --bot sim+peg+eg --threads $MAX_THREADS \
-      --quackle-threads $MAX_THREADS \
-      --games $MATCH_GAMES --seed "$seed" --gcg-dir "build/quackle_games/${MATCH}_s$seed" \
-      "${MATCH_ARGS[@]}"
-  done
-  if ((!DRY_RUN)); then
-    # Combined over every finished game of every seed: win % with 95 % CI and mean spread.
-    cat "$LOG_DIR"/issue_34_${MATCH}_s*.log | awk '
-      /^game [0-9]+: kingbble/ {
-        k = $4; q = $7; n++; spread += k - q
-        win += (k > q) ? 1 : (k == q) ? 0.5 : 0
-      }
-      END {
-        if (!n) exit
-        p = win / n
-        printf "[#34] match: %d games, kingbble win %% %.1f +- %.1f (95 %% CI),", n, 100 * p,
-          196 * sqrt(p * (1 - p) / n)
-        printf " mean spread %+.1f\n", spread / n
-      }' | tee -a "$LOG"
-  fi
+  note "Quackle match, $MATCH_GAMES games"
+  step $MATCH_GAMES "" build/engine/kingbble_quackle_match \
+    --lexicon lexica/CSW24.txt --leaves lexica/CSW24.klv2 \
+    --helper build/quackle_helper/quackle_helper --bot sim+peg+eg --threads $MAX_THREADS \
+    --quackle-threads $MAX_THREADS --games $MATCH_GAMES --seed 1 \
+    --gcg-dir "build/quackle_games/match$(quick_suffix)" \
+    --results "$(results_file match)" "${MATCH_ARGS[@]}"
 else
-  skip_units $((SEEDS * MATCH_GAMES))
+  skip_units $MATCH_GAMES
 fi
 
 if ((smp)); then
@@ -81,7 +66,8 @@ if ((smp)); then
     note "Lazy SMP: $threads endgame thread(s)"
     step $SMP_GAMES "" build/engine/kingbble_selfplay \
       --lexicon lexica/CSW24.txt --leaves lexica/CSW24.klv2 --a equity+eg --b equity \
-      --threads $threads --endgame-time 1 --games $SMP_GAMES --seed 1 --progress
+      --threads $threads --endgame-time 1 --games $SMP_GAMES --seed 1 --progress \
+      --results "$(results_file smp_t$threads)"
   done
-  ((DRY_RUN)) || grep -E "^\[#34\] Lazy SMP|a win %" "$LOG" | tail -4
+  finish || grep -E "^\[#34\] Lazy SMP|a win %" "$LOG" | tail -4
 fi
