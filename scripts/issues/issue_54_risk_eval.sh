@@ -53,32 +53,9 @@ for mode in "${MODES[@]}"; do
     --progress --results "$(results_file "$(run_name "$mode")")"
 done
 ((DRY_RUN)) && exit 0
-# Win % with a 95 % CI over the finished pairs ("game N: S1 - S2, a in seat K").
 for mode in "${MODES[@]}"; do
   f=$(results_file "$(run_name "$mode")")
   [[ -e $f ]] || continue
-  awk -v mode="$(run_name "$mode")" -v games="$GAMES" '
-    match($0, /^game ([0-9]+): (-?[0-9]+) - (-?[0-9]+), a in seat ([12])/, m) {
-      g = m[1]
-      if (g > games) next
-      a = m[4] == 1 ? m[2] : m[3]
-      b = m[4] == 1 ? m[3] : m[2]
-      score[g] = a > b ? 1 : a < b ? 0 : 0.5
-      spread[g] = a - b
-    }
-    END {
-      for (g in score) {
-        if (g % 2 == 0 || !((g + 1) in score)) continue
-        p = (score[g] + score[g + 1]) / 2
-        n++; sum += p; sq += p * p
-        sp += spread[g] + spread[g + 1]
-      }
-      if (n < 2) { printf "[#54] %s vs sim: %d pairs, too few\n", mode, n; exit }
-      mean = sum / n
-      v = (sq - n * mean * mean) / (n - 1) / n
-      se = v > 0 ? sqrt(v) : 0
-      lo = 100 * (mean - 1.96 * se); hi = 100 * (mean + 1.96 * se)
-      printf "[#54] %s vs sim: %d games, a win %% %.1f (95%% CI %.1f-%.1f), a avg spread %+.1f, %s\n",
-        mode, 2 * n, 100 * mean, lo, hi, sp / (2 * n), (lo > 50 ? "significant gain" : "no significant gain")
-    }' "$f" | if ((STATUS)); then cat; else tee -a "$LOG"; fi
+  awk -v mode="$(run_name "$mode")" -v games="$GAMES" -f "$(dirname "$0")/paired_ci.awk" "$f" |
+    if ((STATUS)); then cat; else tee -a "$LOG"; fi
 done
