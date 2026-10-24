@@ -30,6 +30,7 @@ struct SimResult {
   double std_error = 0;  // standard error of the mean
   int iterations = 0;
   bool pruned = false;
+  std::vector<double> values;  // simulated value of each iteration
 };
 
 // Monte Carlo 2-ply simulation (as Quackle and Macondo do): for each of the top

@@ -134,7 +134,8 @@ Move SimBot::Choose(const Game& game) {
   for (std::size_t c = 0; c < n; ++c) {
     const auto [mean, se] = stats(c);
     results_.push_back({ranked[c].move, ranked[c].equity, iterations[c] ? mean : ranked[c].equity,
-                        se, iterations[c], !active[c]});
+                        se, iterations[c], !active[c],
+                        std::vector<double>(values[c].begin(), values[c].begin() + iterations[c])});
   }
   // Survivors first, then by simulated value; stable keeps static order on ties.
   std::stable_sort(results_.begin(), results_.end(), [](const SimResult& a, const SimResult& b) {
