@@ -5,6 +5,7 @@
 # the tool's own lines plus "[#N] P% (done/total) ETA ..." status lines, counted
 # from "progress: D/T" lines printed by the tool or from lines matching a regex.
 
+source "$(dirname "${BASH_SOURCE[0]}")/inhibit.sh"
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
@@ -113,6 +114,56 @@ step() {
   }
   DONE=$((base + units * scale))
   status "$DONE" | tee -a "$LOG"
+}
+
+# limits_init "$@": resources of heavy steps from --threads N (or KINGBBLE_THREADS,
+# default 3), --mem SIZE (or KINGBBLE_MEM_MAX, default 6G, "none" to disable) and
+# --force. Sets THREADS (also for BLAS/OpenMP), FORCE, HEAVY (the command prefix
+# for heavy steps: lowest priority and, with a memory cap, a systemd user scope
+# with MemoryMax and no swap, else ulimit -v), BUILD_JOBS and BUILD_PREFIX.
+limits_init() {
+  local args=("$@") i kb
+  THREADS=${KINGBBLE_THREADS:-3} MEM=${KINGBBLE_MEM_MAX:-6G} FORCE=0
+  for ((i = 0; i < ${#args[@]}; i++)); do
+    case ${args[i]} in
+      --threads) THREADS=${args[i + 1]:-} ;;
+      --mem) MEM=${args[i + 1]:-} ;;
+      --force) FORCE=1 ;;
+    esac
+  done
+  export OMP_NUM_THREADS=$THREADS OPENBLAS_NUM_THREADS=$THREADS MKL_NUM_THREADS=$THREADS \
+    NUMEXPR_NUM_THREADS=$THREADS
+  BUILD_JOBS=$THREADS
+  HEAVY=(nice -n 19)
+  if [[ $MEM != none ]]; then
+    if systemd-run --user --scope --quiet -p MemoryMax="$MEM" -p MemorySwapMax=0 true 2>/dev/null; then
+      HEAVY=(systemd-run --user --scope --quiet -p MemoryMax="$MEM" -p MemorySwapMax=0 nice -n 19)
+    else
+      kb=$(numfmt --from=iec "$MEM")
+      HEAVY=(bash -c "ulimit -v $((kb / 1024)); exec nice -n 19 \"\$@\"" heavy)
+    fi
+  fi
+  BUILD_PREFIX=("${HEAVY[@]}")
+}
+
+# busy_check N: exits unless --force (limits_init) when another issue script or
+# engine binary runs (the machine runs out of memory with several heavy jobs).
+# No subshells here: they would show up with this script's command line.
+busy_check() {
+  local pat='^([^ ]*/)?(ba)?sh [^ ]*issue_[0-9]+_[^ ]*\.sh|^[^ ]*(kingbble_[a-z_]+|engine_tests|macondo)( |$)'
+  local list pid cmd others=""
+  list=$(mktemp)
+  pgrep -af -- "$pat" >"$list" || true
+  while read -r pid cmd; do
+    [[ $pid == "$$" || $pid == "$PPID" ]] && continue
+    others+="  $pid $cmd"$'\n'
+  done <"$list"
+  rm -f "$list"
+  if [[ -n $others ]] && ((!FORCE)); then
+    echo "[#$1] another heavy run is active; wait for it or pass --force:" >&2
+    printf '%s' "$others" >&2
+    exit 1
+  fi
 }
 
 # need FILE HINT: fails unless FILE exists (not checked on a dry run).
