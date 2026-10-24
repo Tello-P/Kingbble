@@ -8,10 +8,12 @@
 namespace scrabble {
 
 struct WinParams {
-  // Spread standard deviation of the rest of the game per tile left in the
-  // bag: the playouts stop after three moves, so the final margin is the
-  // simulated spread plus this noise.
-  double spread_sd_per_tile = 10.0;
+  // Standard deviation of the spread still to come after the playouts (which
+  // stop after three moves): rest_sd0 + rest_sd_per_sqrt_tile * sqrt(bag), 0
+  // with an empty bag. Fitted by ml.rl.rest_spread on CSW24 games between
+  // players rated 1800 or more.
+  double rest_sd0 = 2.15;
+  double rest_sd_per_sqrt_tile = 11.29;
 };
 
 struct WinEstimate {

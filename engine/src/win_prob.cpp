@@ -32,7 +32,8 @@ WinEstimate EstimateWin(const std::vector<double>& values, double lead, double r
 }
 
 double RestSpreadSd(int bag_size, const WinParams& params) {
-  return params.spread_sd_per_tile * std::sqrt(static_cast<double>(std::max(0, bag_size)));
+  if (bag_size <= 0) return 0;
+  return params.rest_sd0 + params.rest_sd_per_sqrt_tile * std::sqrt(static_cast<double>(bag_size));
 }
 
 std::vector<WinEstimate> WinProbabilities(const Game& game, const std::vector<SimResult>& results,
