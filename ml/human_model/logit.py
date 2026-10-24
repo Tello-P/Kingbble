@@ -183,7 +183,7 @@ def main() -> int:
     ap.add_argument("--bands", default=",".join(map(str, DEFAULT_BANDS)))
     ap.add_argument("--split", default="train")
     ap.add_argument("--val-split", default="val")
-    ap.add_argument("--top-k", default="64,96,128", help="top_k values to try on val")
+    ap.add_argument("--top-k", default="128,192,256", help="top_k values to try on val")
     ap.add_argument("--l2", default="1e-3,1e-2,1e-1", help="L2 strengths to try")
     ap.add_argument("--l1", default="0,1e-3,1e-2", help="L1 strengths to try")
     ap.add_argument("--movers", default="human", choices=("human", "bot", "all"),
@@ -194,6 +194,9 @@ def main() -> int:
     ap.add_argument("--search-train", type=int, default=20000,
                     help="train turns used to choose the penalties (0: all)")
     ap.add_argument("--mlp-max-train", type=int, default=150000)
+    ap.add_argument("--mlp-hidden", type=int, default=32)
+    ap.add_argument("--mlp-lr", type=float, default=5e-4)
+    ap.add_argument("--mlp-decay", type=float, default=1e-3)
     ap.add_argument("--mlp", action="store_true", help="also fit a network, keep it if better")
     ap.add_argument("--test", action="store_true", help="also report the test split")
     ap.add_argument("--report", type=Path)
@@ -280,7 +283,8 @@ def main() -> int:
 
         net_train = select(turns, options, info, args.split, top_k, bands, args.movers,
                            max_turns=args.mlp_max_train).with_cols(cols)
-        net = mlp.fit(net_train, val.with_top(top_k), scaler, skip=common)
+        net = mlp.fit(net_train, val.with_top(top_k), scaler, hidden=args.mlp_hidden,
+                      lr=args.mlp_lr, decay=args.mlp_decay, skip=common)
         tick()
         v = val.with_top(top_k)
         net_lp = mlp.log_p(net, v, scaler)
