@@ -21,7 +21,7 @@
 source "$(dirname "$0")/lib.sh"
 
 quick_args "$@"
-GAMES=800 LAMBDA=0.01 GAME_UNITS=15 MODES=(risk riskwin)
+GAMES=800 LAMBDA=1 GAME_UNITS=15 MODES=(risk riskwin)
 SIM=(--sim-candidates 10 --sim-iterations 100)
 if ((QUICK)); then
   GAMES=40 GAME_UNITS=7

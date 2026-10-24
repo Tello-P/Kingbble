@@ -4,39 +4,98 @@
 
 namespace scrabble {
 
-double RiskLambda(double lead, int bag_size, const RiskParams& params) {
-  const double score = std::clamp(lead / params.lead_scale, -1.0, 1.0);
-  const double phase = 1.0 - std::clamp(static_cast<double>(bag_size) / params.full_bag, 0.0, 1.0);
-  return params.max_lambda * score * phase;
+namespace {
+
+// Sample variance of a[i] - b[i] over the first n iterations (b may be null).
+double Variance(const std::vector<double>& a, const std::vector<double>* b, std::size_t n) {
+  if (n < 2) return 0;
+  double sum = 0, sq = 0;
+  for (std::size_t i = 0; i < n; ++i) sum += a[i] - (b ? (*b)[i] : 0);
+  const double mean = sum / n;
+  for (std::size_t i = 0; i < n; ++i) {
+    const double d = a[i] - (b ? (*b)[i] : 0) - mean;
+    sq += d * d;
+  }
+  return sq / (n - 1);
+}
+
+}  // namespace
+
+double RiskLambda(double lead_plus_mean, int bag_size, const RiskParams& params) {
+  const double sd = RestSpreadSd(bag_size, params.win);
+  if (sd <= 0) return 0;
+  return params.lambda_scale * lead_plus_mean / (2 * sd * sd);
+}
+
+bool InRiskWindow(const Game& game, const RiskParams& params) {
+  return game.bag_size() >= params.min_bag && game.bag_size() <= params.max_bag;
+}
+
+std::vector<RiskResult> ScoreRisk(const Game& game, const std::vector<SimResult>& sims,
+                                  const RiskParams& params, bool* active) {
+  std::vector<RiskResult> out;
+  if (active) *active = false;
+  if (sims.empty()) return out;
+  const int me = game.to_move();
+  const double lead = game.score(me) - game.score(1 - me);
+  const std::vector<WinEstimate> wins = WinProbabilities(game, sims, params.win);
+  const std::vector<double>& best = sims.front().values;
+
+  std::vector<double> raw(sims.size());
+  double pool = 0;
+  int pooled = 0;
+  for (std::size_t c = 0; c < sims.size(); ++c) {
+    const std::vector<double>& v = sims[c].values;
+    raw[c] = params.relative_variance ? Variance(v, &best, std::min(v.size(), best.size()))
+                                      : Variance(v, nullptr, v.size());
+    if (v.size() > 1) pool += raw[c], ++pooled;
+  }
+  if (pooled) pool /= pooled;
+
+  const bool on = InRiskWindow(game, params) && wins.front().win >= params.decided &&
+                  wins.front().win <= 1 - params.decided;
+  if (active) *active = on;
+  for (std::size_t c = 0; c < sims.size(); ++c) {
+    const SimResult& s = sims[c];
+    const double k = static_cast<double>(s.values.size());
+    RiskResult r;
+    r.sim = s;
+    r.variance =
+        k + params.shrink > 0 ? (k * raw[c] + params.shrink * pool) / (k + params.shrink) : raw[c];
+    r.win = wins[c];
+    r.utility = s.mean;
+    if (on && params.mode == RiskMode::kWinProb) {
+      r.utility = r.win.win;
+    } else if (on) {
+      r.lambda = RiskLambda(lead + s.mean, game.bag_size(), params);
+      r.utility = s.mean - r.lambda * r.variance;
+    }
+    out.push_back(std::move(r));
+  }
+  // Survivors first, as in SimBot; stable keeps SimBot's order on ties.
+  std::stable_sort(out.begin(), out.end(), [](const RiskResult& a, const RiskResult& b) {
+    return a.sim.pruned != b.sim.pruned ? !a.sim.pruned : a.utility > b.utility;
+  });
+  return out;
+}
+
+SimParams RiskBot::RiskSimParams(SimParams sim, const RiskParams& risk) {
+  sim.prune_z = 1e9;
+  sim.max_iterations *= std::max(1, risk.iterations_factor);
+  return sim;
 }
 
 RiskBot::RiskBot(const Gaddag& gaddag, const Leaves& leaves, SimParams sim, RiskParams risk)
-    : sim_(gaddag, leaves, sim), params_(risk) {}
+    : sim_(gaddag, leaves, sim),
+      risk_sim_(gaddag, leaves, RiskSimParams(sim, risk)),
+      params_(risk) {}
 
 Move RiskBot::Choose(const Game& game) {
-  results_.clear();
-  Move best = sim_.Choose(game);
-  last_num_moves_ = sim_.last_num_moves();
-  const std::vector<SimResult>& sims = sim_.last_results();
-  const std::vector<WinEstimate> wins = WinProbabilities(game, sims, params_.win);
-  const int me = game.to_move();
-  const double lambda = RiskLambda(game.score(me) - game.score(1 - me), game.bag_size(), params_);
-
-  for (std::size_t c = 0; c < sims.size(); ++c) {
-    const SimResult& s = sims[c];
-    const std::size_t k = s.values.size();
-    double sq = 0;
-    for (double v : s.values) sq += (v - s.mean) * (v - s.mean);
-    RiskResult r{s, k > 1 ? sq / (k - 1) : 0, wins[c], 0};
-    r.utility = params_.mode == RiskMode::kWinProb ? r.win.win : s.mean - lambda * r.variance;
-    results_.push_back(std::move(r));
-  }
-  if (results_.empty()) return best;
-  // Survivors first, as in SimBot; stable keeps SimBot's order on ties.
-  std::stable_sort(results_.begin(), results_.end(), [](const RiskResult& a, const RiskResult& b) {
-    return a.sim.pruned != b.sim.pruned ? !a.sim.pruned : a.utility > b.utility;
-  });
-  return results_.front().sim.move;
+  SimBot& bot = InRiskWindow(game, params_) ? risk_sim_ : sim_;
+  Move best = bot.Choose(game);
+  last_num_moves_ = bot.last_num_moves();
+  results_ = ScoreRisk(game, bot.last_results(), params_, &active_);
+  return results_.empty() ? best : results_.front().sim.move;
 }
 
 }  // namespace scrabble
