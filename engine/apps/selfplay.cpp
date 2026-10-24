@@ -15,7 +15,7 @@
 // With --results FILE every finished game is appended to FILE and a rerun skips
 // the games already there; --status prints the totals of FILE and exits.
 // Suffixes stack: "sim+peg+eg", "equity+apeg+peg+eg".
-//   kingbble_selfplay ... --a risk --b sim --paired --risk-lambda 0.01 --risk-sd-per-tile 10
+//   kingbble_selfplay ... --a risk --b sim --paired --risk-lambda 0.01 --risk-rest-sd 11.29
 // "risk" and "riskwin" pick among the simulated candidates by mean - lambda *
 // variance or by win %. --paired plays each deal twice, games 2k-1 and 2k, with
 // the bots swapping seats, so luck of the draw cancels out in each pair.
@@ -144,8 +144,8 @@ int main(int argc, char** argv) {
       paired = true;
     } else if (a == "--risk-lambda") {
       risk.max_lambda = std::stod(value());
-    } else if (a == "--risk-sd-per-tile") {
-      risk.win.spread_sd_per_tile = std::stod(value());
+    } else if (a == "--risk-rest-sd") {
+      risk.win.rest_sd_per_sqrt_tile = std::stod(value());
     } else {
       std::cerr << "usage: " << argv[0]
                 << " --lexicon FILE [--leaves KLV] [--a BOT] [--b BOT] [--games N] [--seed S]"
@@ -153,7 +153,7 @@ int main(int argc, char** argv) {
                    " [--peg-bag N] [--peg-candidates N] [--peg-time S] [--apeg-candidates N]"
                    " [--apeg-samples N] [--apeg-plies N] [--apeg-time S] [--verbose]"
                    " [--progress] [--results FILE [--status]] [--paired] [--risk-lambda L]"
-                   " [--risk-sd-per-tile S]\n";
+                   " [--risk-rest-sd S]\n";
       return 2;
     }
   }

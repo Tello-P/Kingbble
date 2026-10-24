@@ -40,11 +40,13 @@ TEST(WinProbTest, NormalNoiseFollowsTheMargin) {
 
 TEST(WinProbTest, RestSpreadGrowsWithTheBag) {
   WinParams params;
+  params.rest_sd0 = 2;
+  params.rest_sd_per_sqrt_tile = 10;
   EXPECT_DOUBLE_EQ(RestSpreadSd(0, params), 0.0);
   EXPECT_DOUBLE_EQ(RestSpreadSd(-3, params), 0.0);
-  EXPECT_DOUBLE_EQ(RestSpreadSd(16, params), 40.0);
-  params.spread_sd_per_tile = 5;
-  EXPECT_DOUBLE_EQ(RestSpreadSd(16, params), 20.0);
+  EXPECT_DOUBLE_EQ(RestSpreadSd(16, params), 42.0);
+  params.rest_sd_per_sqrt_tile = 5;
+  EXPECT_DOUBLE_EQ(RestSpreadSd(16, params), 22.0);
 }
 
 TEST(WinProbTest, EstimatesEverySimulatedCandidate) {
