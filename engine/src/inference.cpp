@@ -153,6 +153,25 @@ HumanModelParams HumanModelParams::FromFile(const std::string& path) {
   HumanModelParams p;
   p.band_ratings.clear();
   p.band_weights.clear();
+  // Engine index of each value in the file's feature order (version 1: the base ones).
+  std::vector<int> order;
+  for (int f = 0; f < kNumBaseFeatures; ++f) order.push_back(f);
+  auto read_features = [&](std::istringstream& ss, auto& out) {
+    for (int f : order) {
+      double x = 0;
+      if (!(ss >> x)) return false;
+      out[f] = x;
+    }
+    return true;
+  };
+  auto read_values = [](std::istringstream& ss, std::vector<double>& out, std::size_t n) {
+    out.assign(n, 0);
+    for (double& x : out)
+      if (!(ss >> x)) return false;
+    return true;
+  };
+  std::string kind = "logit";
+  std::vector<double> w1;
   std::string line;
   for (int number = 1; std::getline(in, line); ++number) {
     line = line.substr(0, line.find('#'));
@@ -160,7 +179,21 @@ HumanModelParams HumanModelParams::FromFile(const std::string& path) {
     std::string key;
     if (!(ss >> key)) continue;
     bool ok = true;
-    if (key == "top_k") {
+    if (key == "version") {
+      int v = 0;
+      ok = static_cast<bool>(ss >> v) && (v == 1 || v == 2);
+    } else if (key == "kind") {
+      ok = static_cast<bool>(ss >> kind) && (kind == "logit" || kind == "mlp");
+    } else if (key == "features") {
+      order.clear();
+      for (std::string name; ss >> name;) {
+        const int f = MoveFeatureIndex(name);
+        if (f < 0) throw std::runtime_error(path + ":" + std::to_string(number) +
+                                            ": unknown feature " + name);
+        order.push_back(f);
+      }
+      ok = !order.empty() && p.band_ratings.empty();
+    } else if (key == "top_k") {
       ok = static_cast<bool>(ss >> p.top_k) && p.top_k > 0;
     } else if (key == "epsilon") {
       ok = static_cast<bool>(ss >> p.epsilon) && p.epsilon >= 0 && p.epsilon <= 1;
@@ -169,21 +202,55 @@ HumanModelParams HumanModelParams::FromFile(const std::string& path) {
     } else if (key == "band") {
       int rating = 0;
       Weights w{};
-      ok = static_cast<bool>(ss >> rating);
-      for (double& x : w) ok = ok && static_cast<bool>(ss >> x);
+      ok = static_cast<bool>(ss >> rating) && read_features(ss, w);
       if (ok) {
         p.band_ratings.push_back(rating);
         p.band_weights.push_back(w);
       }
+    } else if (key == "mixture") {
+      int rating = 0;
+      double e = 0, r = 0;
+      ok = static_cast<bool>(ss >> rating >> e >> r) && e >= 0 && e <= 1 && r >= 0 && r < 1;
+      if (ok) p.mixtures.push_back({rating, e, r});
+    } else if (key == "mlp_hidden") {
+      ok = static_cast<bool>(ss >> p.mlp.hidden) && p.mlp.hidden > 0;
+    } else if (key == "mlp_temperature") {
+      ok = static_cast<bool>(ss >> p.mlp.temperature) && p.mlp.temperature > 0;
+    } else if (key == "mlp_mean") {
+      ok = read_features(ss, p.mlp.mean);
+    } else if (key == "mlp_scale") {
+      p.mlp.scale.fill(1);
+      ok = read_features(ss, p.mlp.scale);
+    } else if (key == "mlp_w1") {
+      ok = p.mlp.hidden > 0 && read_values(ss, w1, p.mlp.hidden * order.size());
+    } else if (key == "mlp_b1") {
+      ok = p.mlp.hidden > 0 && read_values(ss, p.mlp.b1, p.mlp.hidden);
+    } else if (key == "mlp_w2") {
+      ok = p.mlp.hidden > 0 && read_values(ss, p.mlp.w2, p.mlp.hidden);
     } else {
       ok = false;
     }
+    if (ok && !(ss >> std::ws).eof()) ok = false;  // trailing values
     if (!ok) throw std::runtime_error(path + ":" + std::to_string(number) + ": bad line");
   }
   if (p.band_ratings.empty()) throw std::runtime_error(path + ": no band");
   for (std::size_t i = 1; i < p.band_ratings.size(); ++i)
     if (p.band_ratings[i] <= p.band_ratings[i - 1])
       throw std::runtime_error(path + ": bands must be sorted by rating");
+  if (kind == "mlp") {
+    const std::size_t h = p.mlp.hidden;
+    if (h == 0 || w1.size() != h * order.size() || p.mlp.b1.size() != h || p.mlp.w2.size() != h)
+      throw std::runtime_error(path + ": incomplete mlp");
+    // Spread the file's rows over the engine's feature indices.
+    p.mlp.w1.assign(h * kNumMoveFeatures, 0);
+    for (std::size_t j = 0; j < h; ++j)
+      for (std::size_t i = 0; i < order.size(); ++i)
+        p.mlp.w1[j * kNumMoveFeatures + order[i]] = w1[j * order.size() + i];
+    for (double& s : p.mlp.scale)
+      if (s == 0) s = 1;
+    p.mlp.Prepare();
+    p.use_mlp = true;
+  }
   return p;
 }
 
@@ -191,6 +258,45 @@ const HumanModelParams::Weights& HumanModelParams::WeightsFor(int rating) const 
   std::size_t band = 0;
   while (band + 1 < band_ratings.size() && rating >= band_ratings[band + 1]) ++band;
   return band_weights[band];
+}
+
+std::pair<double, double> HumanModelParams::MixtureFor(int rating) const {
+  std::pair<double, double> out{epsilon, residual};
+  for (const BandMixture& m : mixtures)
+    if (rating >= m.rating) out = {m.epsilon, m.residual};
+  return out;
+}
+
+bool HumanModelParams::UsesExtendedFeatures() const {
+  if (use_mlp) return true;
+  for (const Weights& w : band_weights)
+    for (int f = kNumBaseFeatures; f < kNumMoveFeatures; ++f)
+      if (w[f] != 0) return true;
+  return false;
+}
+
+void HumanModelParams::Mlp::Prepare() {
+  folded_.assign(static_cast<std::size_t>(kNumMoveFeatures) * hidden, 0);
+  folded_b1_ = b1;
+  for (int j = 0; j < hidden; ++j)
+    for (int f = 0; f < kNumMoveFeatures; ++f) {
+      const double w = w1[static_cast<std::size_t>(j) * kNumMoveFeatures + f] / scale[f];
+      folded_[static_cast<std::size_t>(f) * hidden + j] = w;
+      folded_b1_[j] -= w * mean[f];
+    }
+}
+
+double HumanModelParams::Mlp::Utility(const std::array<float, kNumMoveFeatures>& x) const {
+  std::vector<double> a = folded_b1_;
+  for (int f = 0; f < kNumMoveFeatures; ++f) {
+    if (x[f] == 0) continue;
+    const double* col = &folded_[static_cast<std::size_t>(f) * hidden];
+    for (int j = 0; j < hidden; ++j) a[j] += col[j] * x[f];
+  }
+  double u = 0;
+  for (int j = 0; j < hidden; ++j)
+    if (a[j] > 0) u += w2[j] * a[j];
+  return u / temperature;
 }
 
 std::vector<double> HumanMoveModel::OptionProbabilities(const std::vector<Option>& options,
@@ -203,22 +309,28 @@ std::vector<double> HumanMoveModel::OptionProbabilities(const std::vector<Option
   double max_u = -INFINITY;
   for (int i = 0; i < k; ++i) {
     double u = 0;
-    for (int f = 0; f < kNumMoveFeatures; ++f) u += w[f] * options[i].features[f];
+    if (params.use_mlp) {
+      u = params.mlp.Utility(options[i].features);
+    } else {
+      for (int f = 0; f < kNumMoveFeatures; ++f) u += w[f] * options[i].features[f];
+    }
     p[i] = u;
     max_u = std::max(max_u, u);
   }
   double z = 0;
   for (int i = 0; i < k; ++i) z += p[i] = std::exp(p[i] - max_u);
   const double outside = n - k + 1;  // options below the top_k and the unmatched slot
-  const double uniform = params.epsilon / (n + 1);
-  for (int i = 0; i < k; ++i)
-    p[i] = (1 - params.epsilon) * (1 - params.residual) * p[i] / z + uniform;
-  for (int i = k; i <= n; ++i) p[i] = (1 - params.epsilon) * params.residual / outside + uniform;
+  const auto [epsilon, residual] = params.MixtureFor(rating);
+  const double uniform = epsilon / (n + 1);
+  for (int i = 0; i < k; ++i) p[i] = (1 - epsilon) * (1 - residual) * p[i] / z + uniform;
+  for (int i = k; i <= n; ++i) p[i] = (1 - epsilon) * residual / outside + uniform;
   return p;
 }
 
 double HumanMoveModel::Likelihood(const Observation& obs, const Rack& rack) {
   std::vector<Option> options = ranker_.Rank(obs, rack);
+  if (params_.UsesExtendedFeatures())
+    features_.Fill(obs.board, rack, obs.Context(), options, params_.top_k);
   std::vector<double> p = OptionProbabilities(options, params_, obs.rating);
   std::vector<int> matches = OptionRanker::Matches(obs, options);
   if (matches.empty()) return p.back();

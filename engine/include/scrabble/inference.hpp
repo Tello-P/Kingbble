@@ -7,6 +7,7 @@
 #include <random>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "scrabble/board.hpp"
@@ -44,6 +45,12 @@ struct Observation {
   Rack unseen;        // tiles the observer cannot see before the move (bag + opponent rack)
   int exchanged = 0;  // tiles exchanged, also when move.tiles does not list them
   int rating = 0;     // the opponent's rating, 0 if unknown
+  int score_diff = 0;  // the mover's score minus the observer's
+  int turn = 0;        // placements, exchanges and passes before the move
+  bool prev_exchange = false;  // the mover exchanged on their previous turn
+  bool mover_is_bot = false;   // the mover is a program (for AutoMoveModel)
+
+  TurnContext Context() const { return {bag_size, score_diff, turn, prev_exchange, rating}; }
 
   // Size of the opponent's rack before the move.
   int RackSize() const;
@@ -86,40 +93,84 @@ class RangeFinderModel : public MoveModel {
 };
 
 // Parameters of the human move model, as written by ml/human_model/logit.py:
-//   top_k 64
+//   version 2
+//   kind logit            (or mlp)
+//   features gap score ...  (names from MoveFeatureNames(), in the order of the
+//                            values below; without it the first eight, version 1)
+//   top_k 128
 //   epsilon 0.05
 //   residual 0.03
-//   band <min rating> <one weight per feature, in MoveFeatureNames() order>
+//   band <min rating> <one weight per listed feature>
+//   mixture <min rating> <epsilon> <residual>  (optional, per band; sorted)
+// and, for kind mlp, a network on the standardized features whose output
+// divided by the temperature replaces the logit's utility:
+//   mlp_hidden H
+//   mlp_temperature T
+//   mlp_mean / mlp_scale <one value per listed feature>
+//   mlp_w1 <H x features values, row by row>
+//   mlp_b1 / mlp_w2 <H values>
 // '#' starts a comment. A rating below every band (or 0, unknown) uses the first.
 struct HumanModelParams {
   using Weights = std::array<double, kNumMoveFeatures>;
+
+  // One hidden ReLU layer: u = w2 . relu(W1 (x - mean) / scale + b1) / temperature.
+  struct Mlp {
+    int hidden = 0;
+    double temperature = 1;
+    std::array<double, kNumMoveFeatures> mean{};
+    std::array<double, kNumMoveFeatures> scale{};
+    std::vector<double> w1;  // hidden x kNumMoveFeatures
+    std::vector<double> b1, w2;
+    // Folds the standardization into the first layer, feature by feature, so
+    // Utility skips zero features. Called by FromFile.
+    void Prepare();
+    double Utility(const std::array<float, kNumMoveFeatures>& x) const;
+
+   private:
+    std::vector<double> folded_;  // kNumMoveFeatures x hidden: w1 / scale
+    std::vector<double> folded_b1_;
+  };
 
   int top_k = 64;
   double epsilon = 0.05;   // weight of the uniform component
   double residual = 0.03;  // human mass shared by the options outside the top_k
   std::vector<int> band_ratings{0};
   std::vector<Weights> band_weights{DefaultWeights()};
+  bool use_mlp = false;
+  Mlp mlp;
+  // Per-band epsilon and residual, sorted by rating; empty: the global ones.
+  struct BandMixture {
+    int rating;
+    double epsilon, residual;
+  };
+  std::vector<BandMixture> mixtures;
+  std::pair<double, double> MixtureFor(int rating) const;
 
   // Hand-set weights: humans mostly play near the top by equity.
   static Weights DefaultWeights();
-  // Throws std::runtime_error on a malformed file.
+  // Throws std::runtime_error on a malformed file or an unknown feature.
   static HumanModelParams FromFile(const std::string& path);
   const Weights& WeightsFor(int rating) const;
+  // True if any feature beyond the base ones has a weight (FeatureComputer needed).
+  bool UsesExtendedFeatures() const;
 };
 
 // Hierarchical mixture: P(move | rack) = (1 - epsilon) * human + epsilon * uniform
 // over the n legal options. The human part is a conditional logit (softmax of
-// the weighted features) over the top_k options by static equity, scaled by
-// 1 - residual; the options outside the top_k share the residual, so a rare
-// move is never impossible. A move we do not generate (a phony) counts as one
-// more option outside the top_k.
+// the weighted features, or of the network's utilities) over the top_k options
+// by static equity, scaled by 1 - residual; the options outside the top_k share
+// the residual, so a rare move is never impossible. A move we do not generate
+// (a phony) counts as one more option outside the top_k.
 class HumanMoveModel : public MoveModel {
  public:
-  HumanMoveModel(const Gaddag& gaddag, const Leaves& leaves, HumanModelParams params)
-      : ranker_(gaddag, leaves), params_(std::move(params)) {}
+  // `lexicon` (may be null) feeds the word features.
+  HumanMoveModel(const Gaddag& gaddag, const Leaves& leaves, HumanModelParams params,
+                 const FeatureLexicon* lexicon = nullptr)
+      : ranker_(gaddag, leaves), params_(std::move(params)), features_(leaves, lexicon) {}
   double Likelihood(const Observation& obs, const Rack& rack) override;
 
-  // Probability of each of the n options, then of an option outside them (n + 1 values).
+  // Probability of each of the n options, then of an option outside them (n + 1
+  // values). The top_k options must have their features filled.
   static std::vector<double> OptionProbabilities(const std::vector<Option>& options,
                                                  const HumanModelParams& params, int rating);
   const HumanModelParams& params() const { return params_; }
@@ -127,6 +178,21 @@ class HumanMoveModel : public MoveModel {
  private:
   OptionRanker ranker_;
   HumanModelParams params_;
+  FeatureComputer features_;
+};
+
+// Opponent mode "auto": the bot model for a mover known to be a program, the
+// human one otherwise. Both models are borrowed.
+class AutoMoveModel : public MoveModel {
+ public:
+  AutoMoveModel(MoveModel& human, MoveModel& bot) : human_(human), bot_(bot) {}
+  double Likelihood(const Observation& obs, const Rack& rack) override {
+    return (obs.mover_is_bot ? bot_ : human_).Likelihood(obs, rack);
+  }
+
+ private:
+  MoveModel& human_;
+  MoveModel& bot_;
 };
 
 // A weighted set of full racks the opponent may have held before the move.
