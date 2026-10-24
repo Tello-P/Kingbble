@@ -13,6 +13,7 @@ add_library(scrabble_engine
   src/equity_bot.cpp
   src/sim_bot.cpp
   src/win_prob.cpp
+  src/risk_bot.cpp
   src/endgame.cpp
   src/endgame_bot.cpp
   src/preendgame.cpp
@@ -72,6 +73,7 @@ if(SCRABBLE_BUILD_TESTS)
     tests/equity_test.cpp
     tests/sim_bot_test.cpp
     tests/win_prob_test.cpp
+    tests/risk_bot_test.cpp
     tests/endgame_test.cpp
     tests/preendgame_test.cpp
     tests/approx_preendgame_test.cpp
