@@ -6,8 +6,14 @@
 //   kingbble_inference_eval --lexicon lexica/CSW24.txt --leaves lexica/CSW24.klv2
 //       --games data/raw/woogles --turns test_turns.tsv --models none,rangefinder,human
 //       --human-params models/human_model.txt --records out.jsonl [--max-turns N] [--progress]
+//       [--word-freq lexica/word_freq.tsv] [--alt-lexicon lexica/ENABLE.txt]
+// The word list, frequencies and second list feed the human model's word
+// features (as for kingbble_features); give the same ones it was fitted with.
 // --turns (optional) lists the turns to score as "game_id<TAB>turn<TAB>rating"
-// lines; without it every turn is scored with an unknown rating. Blind
+// lines, optionally then "<TAB>is_bot" (1 for a bot mover); without it every
+// turn is scored with an unknown rating. Models: none, rangefinder, human, bot
+// (--bot-params: the move model fitted on bot turns, ml.human_model.logit
+// --movers bot) and auto (bot for bot movers, human otherwise). Blind
 // exchanges and phonies are skipped.
 //
 // Self-play: two sim bots, each tracking the other's rack with a RackFilter
@@ -33,6 +39,7 @@
 #include <random>
 #include <sstream>
 #include <string>
+#include <tuple>
 #include <vector>
 
 #include "journal.hpp"
@@ -66,15 +73,28 @@ class UniformModel : public MoveModel {
 struct Setup {
   const Gaddag* gaddag;
   const Leaves* leaves;
+  const FeatureLexicon* lexicon = nullptr;
   HumanModelParams human;
+  HumanModelParams bot;  // the same kind of model fitted on Woogles' bot turns
+  // Models owned for "auto" (its two parts).
+  mutable std::vector<std::unique_ptr<MoveModel>> parts;
   double tau = 0;
 };
 
 std::unique_ptr<MoveModel> MakeModel(const std::string& name, const Setup& s) {
   if (name == "none") return std::make_unique<UniformModel>();
   if (name == "rangefinder") return std::make_unique<RangeFinderModel>(*s.gaddag, *s.leaves, s.tau);
-  if (name == "human") return std::make_unique<HumanMoveModel>(*s.gaddag, *s.leaves, s.human);
-  std::cerr << "unknown model: " << name << " (none, rangefinder, human)\n";
+  if (name == "human")
+    return std::make_unique<HumanMoveModel>(*s.gaddag, *s.leaves, s.human, s.lexicon);
+  if (name == "bot")
+    return std::make_unique<HumanMoveModel>(*s.gaddag, *s.leaves, s.bot, s.lexicon);
+  if (name == "auto") {
+    s.parts.push_back(MakeModel("human", s));
+    MoveModel& human = *s.parts.back();
+    s.parts.push_back(MakeModel("bot", s));
+    return std::make_unique<AutoMoveModel>(human, *s.parts.back());
+  }
+  std::cerr << "unknown model: " << name << " (none, rangefinder, human, bot, auto)\n";
   std::exit(2);
 }
 
@@ -144,8 +164,8 @@ struct Options {
 };
 
 int EvalHumanGames(const Options& o, const Setup& setup, Journal& journal) {
-  // (game id, turn) -> rating; empty means every turn.
-  std::map<std::pair<std::string, int>, int> wanted;
+  // (game id, turn) -> (rating, mover is a bot); empty means every turn.
+  std::map<std::pair<std::string, int>, std::pair<int, bool>> wanted;
   if (!o.turns_path.empty()) {
     std::ifstream in(o.turns_path);
     if (!in) {
@@ -153,10 +173,13 @@ int EvalHumanGames(const Options& o, const Setup& setup, Journal& journal) {
       return 1;
     }
     std::string id;
-    int turn = 0, rating = 0;
+    int turn = 0, rating = 0, bot = 0;
     for (std::string line; std::getline(in, line);) {
       std::istringstream ss(line);
-      if (ss >> id >> turn) wanted[{id, turn}] = (ss >> rating) ? rating : 0;
+      if (!(ss >> id >> turn)) continue;
+      rating = bot = 0;
+      if (ss >> rating) ss >> bot;
+      wanted[{id, turn}] = {rating, bot != 0};
     }
   }
   std::vector<fs::path> files;
@@ -186,10 +209,11 @@ int EvalHumanGames(const Options& o, const Setup& setup, Journal& journal) {
       if (!t.known_rack || t.phony || t.move.kind == Move::Kind::kPass) continue;
       if (o.max_turns && scored >= o.max_turns) break;
       int rating = 0;
+      bool bot = false;
       if (!wanted.empty()) {
         auto it = wanted.find({id, t.turn});
         if (it == wanted.end()) continue;
-        rating = it->second;
+        std::tie(rating, bot) = it->second;
       }
       // The observer's rack does not change during the opponent's turn: it is
       // the one they hold on their next turn.
@@ -207,6 +231,10 @@ int EvalHumanGames(const Options& o, const Setup& setup, Journal& journal) {
       obs.own = *own;
       obs.unseen = UnseenTiles(t.board, *own);
       obs.rating = rating;
+      obs.mover_is_bot = bot;
+      obs.score_diff = t.score_diff;
+      obs.turn = t.turn;
+      obs.prev_exchange = t.prev_exchange;
       if (t.move.kind == Move::Kind::kExchange) continue;  // the observer cannot see the tiles
       const Rack played = MoveTiles(t.move);
       if (obs.RackSize() != t.rack.Size() || !ContainsTiles(obs.unseen, t.rack)) continue;
@@ -266,6 +294,8 @@ int SelfPlay(const Options& o, const Setup& setup, Journal& journal) {
     const std::string key = "game" + std::to_string(g);
     if (journal.IsDone(key)) continue;
     long long rare_moves = 0, surprises = 0;
+    int turn = 0;
+    bool exchanged[2] = {false, false};
     Game game(MixSeed(MixSeed(o.seed) + static_cast<std::uint64_t>(g)));
     const int seat_a = g % 2;
     auto side_of = [&](int seat) -> Side& { return sides[seat == seat_a ? 0 : 1]; };
@@ -302,6 +332,11 @@ int SelfPlay(const Options& o, const Setup& setup, Journal& journal) {
       obs.bag_size = game.bag_size();
       obs.own = game.rack(opp);
       obs.unseen = UnseenTiles(game.board(), game.rack(opp));
+      obs.score_diff = game.score(me) - game.score(opp);
+      obs.mover_is_bot = true;  // sim bots on both sides
+      obs.turn = turn++;
+      obs.prev_exchange = exchanged[me];
+      exchanged[me] = m.kind == Move::Kind::kExchange;
       if (m.kind == Move::Kind::kExchange) {
         obs.exchanged = static_cast<int>(m.tiles.size());
         obs.move.tiles.clear();
@@ -343,7 +378,7 @@ int SelfPlay(const Options& o, const Setup& setup, Journal& journal) {
 }  // namespace
 
 int main(int argc, char** argv) {
-  std::string lexicon, leaves_path, human_path;
+  std::string lexicon, leaves_path, human_path, bot_path, freq_path, alt_path;
   Options o;
   Setup setup;
   for (int i = 1; i < argc; ++i) {
@@ -361,6 +396,12 @@ int main(int argc, char** argv) {
       leaves_path = value();
     } else if (a == "--human-params") {
       human_path = value();
+    } else if (a == "--bot-params") {
+      bot_path = value();
+    } else if (a == "--word-freq") {
+      freq_path = value();
+    } else if (a == "--alt-lexicon") {
+      alt_path = value();
     } else if (a == "--tau") {
       setup.tau = std::stod(value());
     } else if (a == "--games") {
@@ -407,7 +448,9 @@ int main(int argc, char** argv) {
       o.progress = true;
     } else {
       std::cerr << "usage: " << argv[0]
-                << " --lexicon FILE --leaves KLV --records JSONL [--human-params FILE] [--tau T]"
+                << " --lexicon FILE --leaves KLV --records JSONL [--human-params FILE]"
+                   " [--bot-params FILE]"
+                   " [--word-freq TSV] [--alt-lexicon FILE] [--tau T]"
                    " (--games DIR [--turns TSV] [--models LIST] [--max-turns N] [--samples N]"
                    " | --games-played N [--a MODEL] [--b MODEL] [--a-rare P] [--b-rare P]"
                    " [--rare-from K] [--sim-candidates N] [--sim-iterations N]"
@@ -426,6 +469,13 @@ int main(int argc, char** argv) {
   setup.gaddag = &gaddag;
   setup.leaves = &leaves;
   if (!human_path.empty()) setup.human = HumanModelParams::FromFile(human_path);
+  if (!bot_path.empty()) setup.bot = HumanModelParams::FromFile(bot_path);
+  // The word features of the human model (only loaded when the model uses them).
+  std::optional<FeatureLexicon> words;
+  if (setup.human.UsesExtendedFeatures() || setup.bot.UsesExtendedFeatures()) {
+    words = FeatureLexicon::Load(lexicon, freq_path, alt_path);
+    setup.lexicon = &*words;
+  }
   // Resumes: units already in <records>.done are skipped.
   Journal journal(o.records_path);
   if (!journal.ok()) {

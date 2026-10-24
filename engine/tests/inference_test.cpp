@@ -167,6 +167,73 @@ TEST(HumanMoveModel, ReadsBandsFromAFile) {
   EXPECT_THROW(HumanModelParams::FromFile(path), std::runtime_error);
 }
 
+TEST(HumanMoveModel, UsesTheMixtureOfTheRatingBand) {
+  const std::string path = ::testing::TempDir() + "/human_model_mix.txt";
+  {
+    std::ofstream out(path);
+    out << "top_k 4\nepsilon 0.1\nresidual 0.2\nband 0 -1 0 0 0 0 0 0 0\n"
+        << "mixture 0 0.3 0.1\nmixture 1800 0.01 0.05\n";
+  }
+  HumanModelParams p = HumanModelParams::FromFile(path);
+  EXPECT_EQ(p.MixtureFor(0), std::make_pair(0.3, 0.1));
+  EXPECT_EQ(p.MixtureFor(1799), std::make_pair(0.3, 0.1));
+  EXPECT_EQ(p.MixtureFor(2100), std::make_pair(0.01, 0.05));
+  std::vector<double> q = HumanMoveModel::OptionProbabilities(FakeOptions(10), p, 2100);
+  for (int i = 4; i <= 10; ++i) EXPECT_NEAR(q[i], 0.99 * 0.05 / 7 + 0.01 / 11, 1e-12);
+  HumanModelParams plain;
+  EXPECT_EQ(plain.MixtureFor(1500), std::make_pair(plain.epsilon, plain.residual));
+}
+
+TEST(AutoMoveModel, PicksTheBotModelForBotMovers) {
+  struct Fixed : MoveModel {
+    double value;
+    explicit Fixed(double v) : value(v) {}
+    double Likelihood(const Observation&, const Rack&) override { return value; }
+  };
+  Fixed human(0.25), bot(0.75);
+  AutoMoveModel model(human, bot);
+  Observation obs;
+  EXPECT_EQ(model.Likelihood(obs, Rack{}), 0.25);
+  obs.mover_is_bot = true;
+  EXPECT_EQ(model.Likelihood(obs, Rack{}), 0.75);
+}
+
+TEST(HumanMoveModel, ReadsNamedFeaturesAndANetwork) {
+  const std::string path = ::testing::TempDir() + "/human_model_v2.txt";
+  {
+    std::ofstream out(path);
+    out << "version 2\nkind mlp\nfeatures gap opens_tw\ntop_k 8\nepsilon 0\nresidual 0\n"
+        << "band 0 -1 0.5\nmlp_hidden 2\nmlp_temperature 2\nmlp_mean 1 0\nmlp_scale 2 1\n"
+        << "mlp_w1 1 0 0 1\nmlp_b1 0 -1\nmlp_w2 3 1\n";
+  }
+  HumanModelParams p = HumanModelParams::FromFile(path);
+  EXPECT_EQ(p.WeightsFor(0)[kFeatGap], -1);
+  EXPECT_EQ(p.WeightsFor(0)[kFeatOpensTW], 0.5);
+  EXPECT_EQ(p.WeightsFor(0)[kFeatScore], 0);
+  ASSERT_TRUE(p.use_mlp);
+  EXPECT_TRUE(p.UsesExtendedFeatures());
+  std::array<float, kNumMoveFeatures> x{};
+  x[kFeatGap] = 5;      // (5 - 1) / 2 = 2 -> relu 2, times 3
+  x[kFeatOpensTW] = 3;  // 3 - 1 = 2, times 1
+  EXPECT_DOUBLE_EQ(p.mlp.Utility(x), (3 * 2 + 1 * 2) / 2.0);
+  {
+    std::ofstream out(path);
+    out << "features gap no_such_feature\nband 0 1 2\n";
+  }
+  EXPECT_THROW(HumanModelParams::FromFile(path), std::runtime_error);
+  {
+    std::ofstream out(path);
+    out << "kind mlp\nfeatures gap\nband 0 1\nmlp_hidden 2\nmlp_w1 1\n";
+  }
+  EXPECT_THROW(HumanModelParams::FromFile(path), std::runtime_error);
+  // Version 1 files (the base features) still load and need no extended features.
+  {
+    std::ofstream out(path);
+    out << "band 0 -1 0 0 0 0 0 0 0\n";
+  }
+  EXPECT_FALSE(HumanModelParams::FromFile(path).UsesExtendedFeatures());
+}
+
 TEST_F(InferenceTest, HumanModelMakesRareRacksUnlikelyButPossible) {
   HumanMoveModel model(gaddag_, leaves_, HumanModelParams{});
   Observation obs = OpeningAt();
