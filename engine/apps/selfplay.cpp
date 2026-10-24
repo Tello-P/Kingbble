@@ -15,9 +15,13 @@
 // With --results FILE every finished game is appended to FILE and a rerun skips
 // the games already there; --status prints the totals of FILE and exits.
 // Suffixes stack: "sim+peg+eg", "equity+apeg+peg+eg".
-//   kingbble_selfplay ... --a risk --b sim --paired --risk-lambda 0.01 --risk-rest-sd 11.29
+//   kingbble_selfplay ... --a risk --b sim --paired --risk-lambda 1 --risk-shrink 25
 // "risk" and "riskwin" pick among the simulated candidates by mean - lambda *
-// variance or by win %. --paired plays each deal twice, games 2k-1 and 2k, with
+// variance or by win % with 7-25 tiles in the bag (RiskParams): --risk-lambda
+// scales the theoretical lambda, --risk-rest-sd sets the spread to come per
+// root of a tile, --risk-shrink the variance shrinkage, --risk-relative uses
+// the variance relative to the best candidate and --risk-iterations multiplies
+// the iterations inside the window. --paired plays each deal twice, games 2k-1 and 2k, with
 // the bots swapping seats, so luck of the draw cancels out in each pair.
 
 #include <chrono>
@@ -143,7 +147,13 @@ int main(int argc, char** argv) {
     } else if (a == "--paired") {
       paired = true;
     } else if (a == "--risk-lambda") {
-      risk.max_lambda = std::stod(value());
+      risk.lambda_scale = std::stod(value());
+    } else if (a == "--risk-shrink") {
+      risk.shrink = std::stod(value());
+    } else if (a == "--risk-relative") {
+      risk.relative_variance = true;
+    } else if (a == "--risk-iterations") {
+      risk.iterations_factor = std::stoi(value());
     } else if (a == "--risk-rest-sd") {
       risk.win.rest_sd_per_sqrt_tile = std::stod(value());
     } else {
@@ -153,7 +163,8 @@ int main(int argc, char** argv) {
                    " [--peg-bag N] [--peg-candidates N] [--peg-time S] [--apeg-candidates N]"
                    " [--apeg-samples N] [--apeg-plies N] [--apeg-time S] [--verbose]"
                    " [--progress] [--results FILE [--status]] [--paired] [--risk-lambda L]"
-                   " [--risk-rest-sd S]\n";
+                   " [--risk-rest-sd S] [--risk-shrink K] [--risk-relative]"
+                   " [--risk-iterations F]\n";
       return 2;
     }
   }

@@ -2,8 +2,7 @@
 
 // Bots by name, shared by the self-play and match apps: "greedy", "equity",
 // "sim", "risk" (mean-variance) or "riskwin" (max win %), with optional
-// "+apeg", "+peg" and "+eg" suffixes. The risk bots keep every simulated
-// candidate (no pruning by the mean).
+// "+apeg", "+peg" and "+eg" suffixes.
 
 #include <cstdlib>
 #include <iostream>
@@ -59,11 +58,9 @@ inline std::unique_ptr<Bot> MakeBot(const std::string& kind, const Gaddag& gadda
   if (kind == "equity") return std::make_unique<EquityBot>(gaddag, *leaves);
   if (kind == "sim") return std::make_unique<SimBot>(gaddag, *leaves, sim);
   if (kind == "risk" || kind == "riskwin") {
-    SimParams all = sim;
-    all.prune_z = 1e9;
     RiskParams params = risk;
     params.mode = kind == "risk" ? RiskMode::kMeanVariance : RiskMode::kWinProb;
-    return std::make_unique<RiskBot>(gaddag, *leaves, all, params);
+    return std::make_unique<RiskBot>(gaddag, *leaves, sim, params);
   }
   std::cerr << "unknown bot: " << kind
             << " (greedy, equity, sim, risk, riskwin, optionally with +apeg, +peg and/or +eg)\n";
