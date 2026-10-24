@@ -4,6 +4,7 @@
 #   scripts/issues/run_all.sh [--dry-run] [--players nick1,nick2] [ISSUE...]
 # With ISSUE numbers only those run. #38 needs --players (or KINGBBLE_PLAYERS)
 # and is skipped without it.
+source "$(dirname "${BASH_SOURCE[0]}")/inhibit.sh"
 set -euo pipefail
 DIR=$(cd "$(dirname "$0")" && pwd)
 
