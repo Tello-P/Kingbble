@@ -15,6 +15,10 @@
 // With --results FILE every finished game is appended to FILE and a rerun skips
 // the games already there; --status prints the totals of FILE and exits.
 // Suffixes stack: "sim+peg+eg", "equity+apeg+peg+eg".
+//   kingbble_selfplay ... --a risk --b sim --paired --risk-lambda 0.01 --risk-sd-per-tile 10
+// "risk" and "riskwin" pick among the simulated candidates by mean - lambda *
+// variance or by win %. --paired plays each deal twice, games 2k-1 and 2k, with
+// the bots swapping seats, so luck of the draw cancels out in each pair.
 
 #include <chrono>
 #include <cstdlib>
@@ -77,7 +81,9 @@ int main(int argc, char** argv) {
   bool progress = false;  // "progress: G/N" on stderr after each game
   std::string results_path;
   bool status_only = false;
+  bool paired = false;
   SimParams sim;
+  RiskParams risk;
   double endgame_time = 5;
   PegOptions peg;
   peg.params.candidates = 10;
@@ -134,13 +140,20 @@ int main(int argc, char** argv) {
       results_path = value();
     } else if (a == "--status") {
       status_only = true;
+    } else if (a == "--paired") {
+      paired = true;
+    } else if (a == "--risk-lambda") {
+      risk.max_lambda = std::stod(value());
+    } else if (a == "--risk-sd-per-tile") {
+      risk.win.spread_sd_per_tile = std::stod(value());
     } else {
       std::cerr << "usage: " << argv[0]
                 << " --lexicon FILE [--leaves KLV] [--a BOT] [--b BOT] [--games N] [--seed S]"
                    " [--sim-candidates N] [--sim-iterations N] [--threads N] [--endgame-time S]"
                    " [--peg-bag N] [--peg-candidates N] [--peg-time S] [--apeg-candidates N]"
                    " [--apeg-samples N] [--apeg-plies N] [--apeg-time S] [--verbose]"
-                   " [--progress] [--results FILE [--status]]\n";
+                   " [--progress] [--results FILE [--status]] [--paired] [--risk-lambda L]"
+                   " [--risk-sd-per-tile S]\n";
       return 2;
     }
   }
@@ -166,8 +179,9 @@ int main(int argc, char** argv) {
     std::cout << "leaves: " << leaves->Size() << "\n";
   }
   sim.seed = seed;
-  std::unique_ptr<Bot> bots[2] = {MakeBot(kind_a, gaddag, leaves.get(), sim, endgame_time, peg),
-                                  MakeBot(kind_b, gaddag, leaves.get(), sim, endgame_time, peg)};
+  std::unique_ptr<Bot> bots[2] = {
+      MakeBot(kind_a, gaddag, leaves.get(), sim, endgame_time, peg, risk),
+      MakeBot(kind_b, gaddag, leaves.get(), sim, endgame_time, peg, risk)};
 
   long long turns = 0, generated = 0;
   double gen_s = 0;
@@ -180,7 +194,8 @@ int main(int argc, char** argv) {
   report();
   for (int g = 0; g < games; ++g) {
     if (results.Done(g + 1)) continue;
-    Game game(MixSeed(MixSeed(seed) + static_cast<std::uint64_t>(g)));
+    const int deal = paired ? g / 2 : g;
+    Game game(MixSeed(MixSeed(seed) + static_cast<std::uint64_t>(deal)));
     const int seat_a = g % 2;  // seat of bot a in this game
     while (!game.over()) {
       Bot& bot = *bots[game.to_move() == seat_a ? 0 : 1];
