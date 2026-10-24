@@ -24,7 +24,7 @@ for a in "$@"; do
   case $a in
     --quick)
       MODE=quick FIT_UNITS=900
-      FIT=(--max-train 20000 --max-val 10000 --l2 1e-3 --l1 0)
+      FIT=(--max-train 20000 --max-val 10000 --search-train 0 --l2 0.1 --l1 0 --top-k 256)
       ;;
     --mlp) MLP=1 ;;
   esac
@@ -102,8 +102,10 @@ fi
 "$PY" -c '
 import json, sys
 r = json.load(open(sys.argv[1]))
-line = f"test NLL {r[\"test_nll_logit\"]:.4f} (logit) on {r[\"test_turns\"]} turns, coverage {r[\"test_coverage\"]:.3f}"
+nll, n, cov = r["test_nll_logit"], r["test_turns"], r["test_coverage"]
+line = f"test NLL {nll:.4f} (logit) on {n} turns, coverage {cov:.3f}"
 if "test_nll_mlp" in r:
-    line += f", {r[\"test_nll_mlp\"]:.4f} (mlp)"
+    mlp = r["test_nll_mlp"]
+    line += f", {mlp:.4f} (mlp)"
 print(line)
 ' "$OUT/test.json" | while IFS= read -r line; do note "$MODE: $line"; done
