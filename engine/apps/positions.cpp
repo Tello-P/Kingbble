@@ -12,7 +12,8 @@
 // with --max-tiles N, the first one with at most N tiles on both racks); --solve
 // follows it with "<value>", our endgame solver's value for the player to move.
 // --shard J/N keeps only the positions whose index is J modulo N, so that N
-// processes split the same positions.
+// processes split the same positions; --only I,J,... (also with --preendgame)
+// keeps only the positions with those indices (from 0).
 //
 //   kingbble_positions --lexicon lexica/ENABLE.txt --leaves lexica/NWL23.klv2 --count 100
 //                      --preendgame 2 [--solve]
@@ -26,10 +27,15 @@
 // (no early cutoff, whatever it leaves in the bag, passing considered in nested
 // pre-endgames too); --endgame-plies sets the endgame depth; --threads the
 // number of solver threads.
+//
+// --time-limit S caps each solve at S seconds; a position not solved exactly
+// within it prints "skip" (endgame) or {"skip": true} (pre-endgame).
 
 #include <chrono>
 #include <cstdlib>
 #include <iostream>
+#include <set>
+#include <sstream>
 #include <string>
 
 #include "scrabble/cgp.hpp"
@@ -71,6 +77,8 @@ int main(int argc, char** argv) {
   PreEndgameParams peg_params;
   std::uint64_t seed = 1;
   int shard = 0, shards = 1;
+  std::set<int> only;  // with --only, the indices of the positions to write
+  double time_limit = 0;
   bool with_moves = false, endgame = false, solve = false;
   for (int i = 1; i < argc; ++i) {
     std::string a = argv[i];
@@ -95,6 +103,10 @@ int main(int argc, char** argv) {
       peg_params.early_cutoff = false;
       peg_params.max_tiles_left = -1;
       peg_params.skip_deep_pass = false;
+    } else if (a == "--only") {
+      std::stringstream list(value());
+      for (std::string item; std::getline(list, item, ',');)
+        if (!item.empty()) only.insert(std::stoi(item));
     } else if (a == "--shard") {
       const std::string v = value();
       const auto slash = v.find('/');
@@ -104,6 +116,8 @@ int main(int argc, char** argv) {
       }
       shard = std::stoi(v.substr(0, slash));
       shards = std::stoi(v.substr(slash + 1));
+    } else if (a == "--time-limit") {
+      time_limit = std::stod(value());
     } else if (a == "--threads") {
       peg_params.threads = std::stoi(value());
     } else if (a == "--endgame-plies") {
@@ -125,9 +139,9 @@ int main(int argc, char** argv) {
     } else {
       std::cerr << "usage: " << argv[0]
                 << " --lexicon FILE [--name LEX] [--count N] [--seed S] [--moves]"
-                   " [--endgame [--max-tiles N] [--solve] [--shard J/N]]"
+                   " [--endgame [--max-tiles N] [--solve] [--shard J/N]] [--only I,J,...]"
                    " [--leaves FILE --preendgame N [--solve] [--candidates N] [--pass]"
-                   " [--exhaustive] [--endgame-plies N] [--threads N]]\n";
+                   " [--exhaustive] [--endgame-plies N] [--threads N]] [--time-limit S]\n";
       return 2;
     }
   }
@@ -148,13 +162,22 @@ int main(int argc, char** argv) {
     if (preendgame > 0) {
       while (!game.over() && game.bag_size() > preendgame) game.Apply(bot.Choose(game));
       if (game.over() || game.bag_size() == 0) continue;
+      if (!only.empty() && !only.count(written)) {
+        ++written;
+        continue;
+      }
       std::cout << GameToCgp(game, lexicon_name) << "\n";
       if (solve) {
         const auto start = std::chrono::steady_clock::now();
-        PreEndgameResult r = peg.Solve(game, peg_params);
+        PreEndgameParams params = peg_params;
+        params.time_limit_s = time_limit;
+        PreEndgameResult r = peg.Solve(game, params);
         const double secs =
             std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
-        std::cout << PreEndgameJson(r, secs) << std::endl;
+        if (r.complete)
+          std::cout << PreEndgameJson(r, secs) << std::endl;
+        else
+          std::cout << "{\"skip\": true}" << std::endl;
       }
       ++written;
       continue;
@@ -164,9 +187,16 @@ int main(int argc, char** argv) {
              (game.bag_size() > 0 || game.rack(0).Size() + game.rack(1).Size() > max_tiles))
         game.Apply(bot.Choose(game));
       if (game.over()) continue;
-      if (written++ % shards != shard) continue;
+      const int index = written++;
+      if (index % shards != shard || (!only.empty() && !only.count(index))) continue;
       std::cout << GameToCgp(game, lexicon_name) << "\n";
-      if (solve) std::cout << solver.Solve(game).value << std::endl;
+      if (solve) {
+        const EndgameResult r = solver.Solve(game, 25, time_limit);
+        if (r.exact)
+          std::cout << r.value << std::endl;
+        else
+          std::cout << "skip" << std::endl;
+      }
       continue;
     }
     while (!game.over() && written < count) {

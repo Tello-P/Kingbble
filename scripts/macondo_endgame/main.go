@@ -10,6 +10,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/domino14/word-golib/kwg"
 
@@ -25,10 +26,13 @@ func main() {
 	lexicon := flag.String("lex", "ENABLE", "lexicon name")
 	plies := flag.Int("plies", 25, "maximum search depth")
 	threads := flag.Int("threads", 1, "solver threads")
+	ttFrac := flag.Float64("ttable-frac", 0.02, "fraction of RAM for the transposition table of each process")
+	timeout := flag.Float64("timeout", 0, "seconds per position (0 = none); slower positions print skip")
 	flag.Parse()
 
 	cfg := config.DefaultConfig()
 	cfg.Set(config.ConfigDataPath, *dataPath)
+	cfg.Set(config.ConfigTtableMemFraction, *ttFrac)
 	gd, err := kwg.GetKWG(cfg.WGLConfig(), *lexicon)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "loading KWG:", err)
@@ -59,7 +63,18 @@ func main() {
 			os.Exit(1)
 		}
 		s.SetThreads(*threads)
-		val, _, err := s.Solve(context.Background(), *plies)
+		ctx, cancel := context.WithCancel(context.Background())
+		if *timeout > 0 {
+			ctx, cancel = context.WithTimeout(context.Background(), time.Duration(*timeout*float64(time.Second)))
+		}
+		val, _, err := s.Solve(ctx, *plies)
+		timedOut := ctx.Err() != nil
+		cancel()
+		if timedOut {
+			fmt.Fprintln(out, "skip")
+			out.Flush()
+			continue
+		}
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "solve:", err, line)
 			os.Exit(1)

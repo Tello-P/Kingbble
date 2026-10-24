@@ -61,7 +61,7 @@ fit() {
   local stages=11
   [[ $MODE == quick ]] && stages=3
   [[ " $* " == *" --mlp "* ]] && stages=$((stages + 2))
-  STEP_SCALE=$((FIT_UNITS / stages)) step "$stages" "" "${HEAVY[@]}" "$PY" -m ml.human_model.logit \
+  STEP_SCALE=$((FIT_UNITS / stages)) step "$stages" "" "$PY" -m ml.human_model.logit \
     --features "$FEATURES" "${FIT[@]}" --out "$OUT/$name.txt" --report "$OUT/$name.json.tmp" \
     --progress "$@"
   ((DRY_RUN)) || mv "$OUT/$name.json.tmp" "$OUT/$name.json"
