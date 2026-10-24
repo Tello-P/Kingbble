@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # #38: download Woogles games and build the turn store until it holds >= 100,000
 # human turns with a rack (M3 exit criterion, tag v0.3). Already downloaded games
-# are skipped, so a rerun resumes; --max-games counts new games only.
+# are skipped and --max-games is the total wanted on disk, so a rerun resumes.
 #   scripts/issues/issue_38_collect_turns.sh --players nick1,nick2 [--max-games N] [--lexicon L]
 #     [--dry-run]
 source "$(dirname "$0")/lib.sh"

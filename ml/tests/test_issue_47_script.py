@@ -29,6 +29,6 @@ def test_threads_and_memory_cap_reach_the_heavy_steps():
     assert r.returncode == 0, r.stderr
     games = [line for line in r.stdout.splitlines() if "--games-played" in line]
     assert len(games) == 4
-    assert all(line.startswith("nice -n 19 ") and "--threads 2" in line for line in games)
+    assert all("--threads 2" in line for line in games)
     assert "systemd-run" not in r.stdout
     assert "cmake --build build -j2" in r.stdout

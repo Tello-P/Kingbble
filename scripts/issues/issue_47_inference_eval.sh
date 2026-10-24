@@ -17,9 +17,9 @@
 # <records>.done, so an interrupted run continues where it stopped.
 #
 # Resources: --threads N (or KINGBBLE_THREADS, default 3) threads, also for
-# BLAS/OpenMP; heavy steps run under nice -n 19 and a memory cap, --mem SIZE (or
-# KINGBBLE_MEM_MAX, default 6G, "none" to disable): a systemd user scope with
-# MemoryMax and no swap, else ulimit -v. Measured peaks: about 170 MB per game
+# BLAS/OpenMP, and --mem SIZE (or KINGBBLE_MEM_MAX, default 6G, "none" to
+# disable); every step runs under lib.sh's LIMITS (nice, a systemd user scope
+# with that CPU quota, MemoryMax and no swap, else ulimit -v). Measured peaks: about 170 MB per game
 # process, about 1.1 GB for the model fit. It refuses to start while another
 # issue script or engine binary runs, unless --force.
 # The bot model (the same kind of model fitted on Woogles' bot turns) is scored on
@@ -122,21 +122,21 @@ skip_units "$DONE_UNITS"
 ((DONE_UNITS)) && note "resuming in $MODE mode: $((100 * DONE_UNITS / TOTAL_UNITS))% already done"
 
 if ! is_done word_freq; then
-  step 0 "" "${HEAVY[@]}" "$PY" -m ml.data.word_freq --lexicon lexica/CSW24.txt --raw "$RAW"
+  step 0 "" "$PY" -m ml.data.word_freq --lexicon lexica/CSW24.txt --raw "$RAW"
   mark_done word_freq
 fi
 if ! is_done features; then
-  step "$FILES" "" "${HEAVY[@]}" "$PY" -m ml.data.features "${LEX[@]}" "${WORDS[@]}" --raw "$RAW" \
+  step "$FILES" "" "$PY" -m ml.data.features "${LEX[@]}" "${WORDS[@]}" --raw "$RAW" \
     --top "$TOP" --progress
   mark_done features
 fi
 if ! is_done fit; then
-  STEP_SCALE=$((FIT_UNITS / FIT_STEPS)) step "$FIT_STEPS" "" "${HEAVY[@]}" "$PY" -m ml.human_model.logit \
+  STEP_SCALE=$((FIT_UNITS / FIT_STEPS)) step "$FIT_STEPS" "" "$PY" -m ml.human_model.logit \
     --split train --out "$MODEL" --mlp --top-k 128,192,"$TOP" --report "$OUT/fit.json" --progress
   mark_done fit
 fi
 if ! is_done fit_bot; then
-  STEP_SCALE=$((BOT_FIT_UNITS / FIT_STEPS)) step "$FIT_STEPS" "" "${HEAVY[@]}" "$PY" \
+  STEP_SCALE=$((BOT_FIT_UNITS / FIT_STEPS)) step "$FIT_STEPS" "" "$PY" \
     -m ml.human_model.logit --movers bot --split train --out "$BOT_MODEL" --mlp \
     --top-k 128,192,"$TOP" --report "$OUT/fit_bot.json" --progress
   mark_done fit_bot
@@ -172,7 +172,7 @@ for (game, turn), (rating, split, bot) in sorted(ratings().items()):
   fi
 fi
 if ! is_done human_games; then
-  STEP_SCALE=$TURN_UNITS step $((MAX_TURNS - SCORED)) "" "${HEAVY[@]}" "$EVAL" "${LEX[@]}" \
+  STEP_SCALE=$TURN_UNITS step $((MAX_TURNS - SCORED)) "" "$EVAL" "${LEX[@]}" \
     "${WORDS[@]}" --human-params "$MODEL" --games "$RAW" --turns "$OUT/test_turns.tsv" \
     --models none,rangefinder,human --max-turns "$MAX_TURNS" --samples 500 \
     --records "$OUT/human_games.jsonl" --progress
@@ -180,7 +180,7 @@ if ! is_done human_games; then
 fi
 step 0 "" "$PY" -m ml.eval.metrics "$OUT/human_games.jsonl"
 if ! is_done bot_games; then
-  STEP_SCALE=$TURN_UNITS step "$MAX_BOT_TURNS" "" "${HEAVY[@]}" "$EVAL" "${LEX[@]}" \
+  STEP_SCALE=$TURN_UNITS step "$MAX_BOT_TURNS" "" "$EVAL" "${LEX[@]}" \
     "${WORDS[@]}" --bot-params "$BOT_MODEL" --games "$RAW" --turns "$OUT/bot_test_turns.tsv" \
     --models none,rangefinder,bot --max-turns "$MAX_BOT_TURNS" --samples 500 \
     --records "$OUT/bot_games.jsonl" --progress
@@ -193,7 +193,7 @@ for run in "${PLAY[@]}"; do
   read -ra run_args <<<"$rest"
   left=$((GAMES - $(finished "$RUNS/$name.jsonl")))
   ((left > 0)) || continue
-  STEP_SCALE=$GAME_UNITS step "$left" "" "${HEAVY[@]}" "$EVAL" "${LEX[@]}" "${WORDS[@]}" \
+  STEP_SCALE=$GAME_UNITS step "$left" "" "$EVAL" "${LEX[@]}" "${WORDS[@]}" \
     --human-params "$MODEL" --bot-params "$BOT_MODEL" \
     "${run_args[@]}" --games-played "$GAMES" "${SIM[@]}" --records "$RUNS/$name.jsonl" --progress
 done

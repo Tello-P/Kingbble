@@ -6,6 +6,8 @@ metadata in index.jsonl, and queues the human opponents it meets. Requests are
 spaced by --delay seconds; rerunning skips what is already on disk.
 
   python -m ml.data.woogles --players conrad,wellington --max-games 1000 --delay 1.0
+
+--max-games is the number of games wanted on disk, so a rerun only tops it up.
 """
 
 from __future__ import annotations
@@ -135,28 +137,44 @@ def crawl(
     return saved
 
 
+def count_saved(out: Path, lexicon: str | None = None) -> int:
+    """Games already in out/index.jsonl, in `lexicon` if given."""
+    index = out / "index.jsonl"
+    if not index.exists():
+        return 0
+    metas = [json.loads(line) for line in index.read_text().splitlines() if line.strip()]
+    return sum(1 for m in metas if not lexicon or m.get("lexicon") == lexicon)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--players", required=True, help="comma-separated seed nicknames")
-    ap.add_argument("--max-games", type=int, default=1000)
+    ap.add_argument(
+        "--max-games", type=int, default=1000, help="target games on disk (in --lexicon)"
+    )
     ap.add_argument("--delay", type=float, default=1.0, help="seconds between requests")
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
     ap.add_argument("--lexicon", default="CSW24", help='only this lexicon; "" for all')
     ap.add_argument("--progress", action="store_true", help='"progress: N/max" on stderr')
     args = ap.parse_args()
 
-    def report(saved: int) -> None:
-        print(f"progress: {saved}/{args.max_games}", file=sys.stderr, flush=True)
+    lexicon = args.lexicon or None
+    have = count_saved(args.out, lexicon)
 
+    def report(saved: int) -> None:
+        print(f"progress: {have + saved}/{args.max_games}", file=sys.stderr, flush=True)
+
+    if args.progress:
+        report(0)
     saved = crawl(
         args.players.split(","),
-        args.max_games,
+        max(0, args.max_games - have),
         args.out,
         delay=args.delay,
         on_save=report if args.progress else None,
-        lexicon=args.lexicon or None,
+        lexicon=lexicon,
     )
-    print(f"saved {saved} games to {args.out}")
+    print(f"saved {saved} new games to {args.out} ({have + saved} in total)")
     return 0
 
 
