@@ -9,6 +9,7 @@ dependencies = []
 dev = ["pytest>=8", "ruff>=0.6"]
 data = ["duckdb>=1.0", "pyarrow>=15"]
 ml = ["numpy>=1.26"]
+freq = ["wordfreq>=3"]
 
 [tool.setuptools.packages.find]
 include = ["ml*", "app*"]
