@@ -32,6 +32,24 @@ def test_game_rows_take_metadata_from_the_index():
     assert rows[2]["rack"] == ""
 
 
+SELFPLAY = """#player1 p1 equity+peg+eg
+#player2 p2 human+peg+eg
+#lexicon CSW24
+>p1: AERTXYZ 8E RATE +8 8
+>p2: SAAAAAA 8E RATES +5 5
+"""
+
+
+def test_selfplay_rows_split_by_game_and_mark_the_human_bot():
+    rows = game_rows("game1", SELFPLAY, None, "salt", "selfplay")
+    assert [r["is_bot"] for r in rows] == [True, False]
+    assert {r["lexicon"] for r in rows} == {"CSW24"}
+    splits = {
+        game_rows(f"game{g}", SELFPLAY, None, "salt", "selfplay")[0]["split"] for g in range(1, 50)
+    }
+    assert splits == {"train", "val", "test"}
+
+
 def test_build_and_stats(tmp_path):
     raw, store = tmp_path / "raw", tmp_path / "turns"
     raw.mkdir()
