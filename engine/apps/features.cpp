@@ -180,7 +180,7 @@ int main(int argc, char** argv) {
   long long rows_written = 0, turns = 0, unmatched = 0, filled = 0;
   double rank_seconds = 0, fill_seconds = 0;
   using Clock = std::chrono::steady_clock;
-  int failed = 0;
+  int failed = 0, empty = 0;
   auto write_row = [&](const Option& o) {
     bin.write(reinterpret_cast<const char*>(o.features.data()), sizeof(o.features));
     ++rows_written;
@@ -190,7 +190,9 @@ int main(int argc, char** argv) {
     auto game = ReadGcgFile(files[g].string(), &error);
     std::vector<ReplayedTurn> replayed;
     if (game) replayed = ReplayTurns(*game, &error);
-    if (replayed.empty()) {
+    if (replayed.empty() && error.empty()) {
+      ++empty;  // read and replayed, but no move (e.g. abandoned at the start)
+    } else if (replayed.empty()) {
       ++failed;
       std::cerr << files[g].filename().string() << ": " << error << "\n";
     }
@@ -221,9 +223,9 @@ int main(int argc, char** argv) {
     }
     if (progress) std::cerr << "progress: " << g + 1 << "/" << files.size() << std::endl;
   }
-  std::cout << "games: " << files.size() - failed << " (" << failed << " failed), turns: " << turns
-            << " (" << unmatched << " with an option we do not generate), rows: " << rows_written
-            << "\n";
+  std::cout << "games: " << files.size() - failed - empty << " (" << failed << " failed, " << empty
+            << " without moves), turns: " << turns << " (" << unmatched
+            << " with an option we do not generate), rows: " << rows_written << "\n";
   if (turns > 0 && filled > 0)
     std::cout << "time: ranking " << 1e3 * rank_seconds / turns << " ms per turn, features "
               << 1e6 * fill_seconds / filled << " us per candidate\n";
