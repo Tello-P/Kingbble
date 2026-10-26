@@ -468,7 +468,8 @@ double FeatureComputer::LeaveBingoProbability(const Rack& leave) const {
 }
 
 void FeatureComputer::Fill(const Board& board, const Rack& rack, const TurnContext& ctx,
-                           std::vector<Option>& options, int k, int extra) {
+                           std::vector<Option>& options, int k, int extra,
+                           const std::string& own_play) {
   const int n = static_cast<int>(options.size());
   if (n == 0) return;
   k = std::min(k, n);
@@ -521,8 +522,10 @@ void FeatureComputer::Fill(const Board& board, const Rack& rack, const TurnConte
       const std::string word = MainWord(board, m);
       const FeatureLexicon::WordInfo* info = lexicon_ ? lexicon_->Find(word) : nullptr;
       f[kFeatWordZipf] = info ? info->zipf : 0.f;
-      f[kFeatWordPlays] = info ? static_cast<float>(std::log1p(info->plays)) : 0.f;
-      f[kFeatWordUnfamiliar] = !info || (info->zipf <= 0 && info->plays <= 0) ? 1.f : 0.f;
+      const float plays =
+          info ? std::max(0.f, info->plays - (!own_play.empty() && word == own_play)) : 0.f;
+      f[kFeatWordPlays] = static_cast<float>(std::log1p(plays));
+      f[kFeatWordUnfamiliar] = !info || (info->zipf <= 0 && plays <= 0) ? 1.f : 0.f;
       f[kFeatWordAlt] = info && info->alt ? 1.f : 0.f;
       f[kFeatWordLength] = static_cast<float>(word.size());
       std::array<int, 27> counts{};
