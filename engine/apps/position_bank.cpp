@@ -1,20 +1,25 @@
-// Position bank: RiskBot against SimBot from mid and late game positions, where
-// risk matters. Position i comes from equity self-play stopped at a bag of
+// Position bank: a bot (RiskBot, or SimBot with other settings) against SimBot
+// from mid and late game positions, where risk and search matter. Position i comes from equity
+// self-play stopped at a bag of
 // --min-bag..--max-bag tiles (drawn per position) with the player to move at
 // most --max-lead points ahead or behind. Each position is played to the end
-// --repeats times (each with its own bag order), twice per repeat: a (the risk
-// bot) on the side to move, then b (the sim bot) on it. Both play "+peg+eg"
+// --repeats times (each with its own bag order), twice per repeat: a on the side
+// to move, then b (the sim bot) on it. a is "risk", "riskwin" or "sim", with
+// --a-candidates / --a-iterations overriding its simulation settings. Both play "+peg+eg"
 // (pre-endgame with 1 tile in the bag, endgame with none), and each tracks the
 // other's rack from the start of the game with a RackFilter on --model
 // (rangefinder by default; none for uniform racks; human with --human-params).
 //   kingbble_position_bank --lexicon lexica/CSW24.txt --leaves lexica/CSW24.klv2
-//       --positions 30 --repeats 1 [--a risk|riskwin] [--risk-lambda 1] [--seed 1]
+//       --positions 30 --repeats 1 [--a risk|riskwin|sim] [--risk-lambda 1] [--seed 1]
+//       [--a-candidates N] [--a-iterations N]
 //       [--sim-candidates 8] [--sim-iterations 50] [--threads 3] [--peg-time 2]
 //       [--endgame-time 1] [--model rangefinder] [--human-params FILE]
 //       [--results FILE [--status]] [--progress]
 // Results use kingbble_selfplay's format ("game N: S1 - S2, a in seat K", the
-// two games of a pair numbered 2k-1 and 2k), so a rerun skips finished games.
+// two games of a pair numbered 2k-1 and 2k), so a rerun skips finished games,
+// followed by each bot's moves and seconds spent (", a M moves T s, b M moves T s").
 
+#include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -58,6 +63,7 @@ struct Options {
   std::uint64_t seed = 1;
   std::string a = "risk";
   SimParams sim;
+  int a_candidates = 0, a_iterations = 0;  // 0: as b
   RiskParams risk;
   double peg_time = 2, endgame_time = 1;
 };
@@ -165,6 +171,10 @@ int main(int argc, char** argv) {
       o.seed = std::stoull(value());
     } else if (a == "--a") {
       o.a = value();
+    } else if (a == "--a-candidates") {
+      o.a_candidates = std::stoi(value());
+    } else if (a == "--a-iterations") {
+      o.a_iterations = std::stoi(value());
     } else if (a == "--risk-lambda") {
       o.risk.lambda_scale = std::stod(value());
     } else if (a == "--sim-candidates") {
@@ -188,11 +198,13 @@ int main(int argc, char** argv) {
     } else if (a == "--progress") {
       progress = true;
     } else {
-      std::cerr << "usage: " << argv[0]
-                << " --lexicon FILE --leaves KLV [--positions N] [--repeats N] [--a risk|riskwin]"
-                   " [--risk-lambda L] [--seed S] [--sim-candidates N] [--sim-iterations N]"
-                   " [--threads N] [--peg-time S] [--endgame-time S] [--model NAME]"
-                   " [--human-params FILE] [--results FILE [--status]] [--progress]\n";
+      std::cerr
+          << "usage: " << argv[0]
+          << " --lexicon FILE --leaves KLV [--positions N] [--repeats N] [--a risk|riskwin|sim]"
+             " [--a-candidates N] [--a-iterations N] [--risk-lambda L] [--seed S] "
+             "[--sim-candidates N] [--sim-iterations N]"
+             " [--threads N] [--peg-time S] [--endgame-time S] [--model NAME]"
+             " [--human-params FILE] [--results FILE [--status]] [--progress]\n";
       return 2;
     }
   }
@@ -204,8 +216,9 @@ int main(int argc, char** argv) {
     std::cout << "games: " << done << " of " << games << "\n";
     return 0;
   }
-  if (lexicon.empty() || leaves_path.empty() || (o.a != "risk" && o.a != "riskwin")) {
-    std::cerr << "--lexicon and --leaves are required; --a is risk or riskwin\n";
+  if (lexicon.empty() || leaves_path.empty() ||
+      (o.a != "risk" && o.a != "riskwin" && o.a != "sim")) {
+    std::cerr << "--lexicon and --leaves are required; --a is risk, riskwin or sim\n";
     return 2;
   }
   Gaddag gaddag = Gaddag::FromFile(lexicon);
@@ -213,6 +226,9 @@ int main(int argc, char** argv) {
   EquityBot equity(gaddag, leaves);
   o.sim.seed = o.seed;
   o.risk.mode = o.a == "risk" ? RiskMode::kMeanVariance : RiskMode::kWinProb;
+  SimParams a_sim = o.sim;
+  if (o.a_candidates > 0) a_sim.candidates = o.a_candidates;
+  if (o.a_iterations > 0) a_sim.max_iterations = o.a_iterations;
 
   std::unique_ptr<MoveModel> models[2];
   for (auto& m : models) {
@@ -230,16 +246,16 @@ int main(int argc, char** argv) {
   PreEndgameParams peg;
   peg.candidates = 10;
   peg.time_limit_s = o.peg_time;
-  // sides[0] is a (risk), sides[1] is b (sim).
+  // sides[0] is a, sides[1] is b (sim).
   Side sides[2];
   for (int s = 0; s < 2; ++s) {
     std::unique_ptr<Bot> inner;
-    if (s == 0) {
-      auto risk = std::make_unique<RiskBot>(gaddag, leaves, o.sim, o.risk);
+    if (s == 0 && o.a != "sim") {
+      auto risk = std::make_unique<RiskBot>(gaddag, leaves, a_sim, o.risk);
       sides[s].risk = risk.get();
       inner = std::move(risk);
     } else {
-      auto sim = std::make_unique<SimBot>(gaddag, leaves, o.sim);
+      auto sim = std::make_unique<SimBot>(gaddag, leaves, s == 0 ? a_sim : o.sim);
       sides[s].sim = sim.get();
       inner = std::move(sim);
     }
@@ -288,22 +304,39 @@ int main(int argc, char** argv) {
         game = Game::FromPosition(game.board(), {game.rack(0), game.rack(1)},
                                   {game.score(0), game.score(1)}, me, bag, game.scoreless_turns(),
                                   MixSeed(pos.game_seed ^ (0xBA6ULL + r)));
-        while (!game.over()) table.Play(game, seats[game.to_move()]->bot->Choose(game));
+        int moves[2] = {0, 0};  // by bot: a, b
+        double seconds[2] = {0, 0};
+        while (!game.over()) {
+          const int bot = game.to_move() == seat_a ? 0 : 1;
+          const auto t0 = std::chrono::steady_clock::now();
+          const Move m = seats[game.to_move()]->bot->Choose(game);
+          seconds[bot] +=
+              std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+          ++moves[bot];
+          table.Play(game, m);
+        }
+        char timing[96];
+        std::snprintf(timing, sizeof timing, ", a %d moves %.2f s, b %d moves %.2f s", moves[0],
+                      seconds[0], moves[1], seconds[1]);
         results.Append(number, "game " + std::to_string(number) + ": " +
                                    std::to_string(game.score(0)) + " - " +
                                    std::to_string(game.score(1)) + ", a in seat " +
-                                   std::to_string(seat_a + 1));
+                                   std::to_string(seat_a + 1) + timing);
         if (progress) std::cerr << "progress: " << ++done << "/" << games << std::endl;
       }
     }
   }
-  int wins = 0, n = 0;
+  int wins = 0, n = 0, moves[2] = {0, 0};
   long long spread = 0;
+  double seconds[2] = {0, 0};
   for (const std::string& line : results.lines()) {
-    int g = 0, s0 = 0, s1 = 0, seat = 0;
-    if (std::sscanf(line.c_str(), "game %d: %d - %d, a in seat %d", &g, &s0, &s1, &seat) != 4 ||
-        g > games)
-      continue;
+    int g = 0, s0 = 0, s1 = 0, seat = 0, ma = 0, mb = 0;
+    double ta = 0, tb = 0;
+    const int read = std::sscanf(
+        line.c_str(), "game %d: %d - %d, a in seat %d, a %d moves %lf s, b %d moves %lf s", &g, &s0,
+        &s1, &seat, &ma, &ta, &mb, &tb);
+    if (read < 4 || g > games) continue;
+    if (read == 8) moves[0] += ma, moves[1] += mb, seconds[0] += ta, seconds[1] += tb;
     const int sa = seat == 1 ? s0 : s1, sb = seat == 1 ? s1 : s0;
     wins += 2 * (sa > sb) + (sa == sb);
     spread += sa - sb;
@@ -311,6 +344,8 @@ int main(int argc, char** argv) {
   }
   std::cout << "a=" << o.a << "+peg+eg vs b=sim+peg+eg over " << n
             << " games: a win %: " << (n ? 50.0 * wins / n : 0)
-            << ", a avg spread: " << (n ? double(spread) / n : 0) << "\n";
+            << ", a avg spread: " << (n ? double(spread) / n : 0)
+            << ", s/move a: " << (moves[0] ? seconds[0] / moves[0] : 0)
+            << ", b: " << (moves[1] ? seconds[1] / moves[1] : 0) << "\n";
   return 0;
 }
