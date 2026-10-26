@@ -6,8 +6,12 @@ SCRIPT = ROOT / "scripts" / "issues" / "issue_47_inference_eval.sh"
 
 
 def run(*args):
-    return subprocess.run(["bash", str(SCRIPT), "--quick", "--dry-run", *args],
-                          capture_output=True, text=True, timeout=60)
+    return subprocess.run(
+        ["bash", str(SCRIPT), "--quick", "--dry-run", *args],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
 
 
 def test_refuses_while_another_issue_script_runs(tmp_path):

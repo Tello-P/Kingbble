@@ -32,6 +32,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from ml.eval.results_log import ResultsLog  # noqa: E402
+
 HELPER = ROOT / "scripts" / "macondo_preendgame" / "main.go"
 # Macondo infers the letter distribution from the lexicon name prefix.
 LEX_NAME = "NWL_ENABLE"
@@ -224,7 +225,7 @@ def main() -> int:
         cmd = positions(j) + ["--solve", "--exhaustive", "--only", ",".join(map(str, todo)),
                               "--time-limit", str(args.time_limit)]  # fmt: skip
         out = stream_lines(cmd)
-        for k, _cgp in zip(todo, out):
+        for k, _cgp in zip(todo, out, strict=False):
             sol = json.loads(next(out))
             ours[(j, k)] = sol
             log.append({"job": j, "k": k, "ours": sol})
@@ -243,7 +244,7 @@ def main() -> int:
         )
         cmd = [str(helper), "-data", str(work / "data"), "-lex", LEX_NAME, "-no-cutoff",
                "-threads", str(args.macondo_threads), "-timeout", str(args.time_limit)]  # fmt: skip
-        for k, line in zip(todo, stream_lines(cmd, lines)):
+        for k, line in zip(todo, stream_lines(cmd, lines), strict=False):
             theirs[(j, k)] = json.loads(line)
             log.append({"job": j, "k": k, "theirs": theirs[(j, k)]})
             progress.step()
@@ -258,6 +259,7 @@ def main() -> int:
     print(f"wall time with {args.jobs} jobs (this run): ours {ours_time:.0f} s,"
           f" macondo {macondo_time:.0f} s")  # fmt: skip
     return summarize(keys, cgps, log, args.time_limit)
+
 
 if __name__ == "__main__":
     sys.exit(main())

@@ -116,7 +116,8 @@ void WriteRecord(std::ostream& out, const std::string& model, const RackPosterio
   bool first = true;
   for (int t = 0; t < kNumTileTypes; ++t) {
     if (possible.Count(Tile(t)) == 0) continue;
-    out << (first ? "" : ",") << "\"" << TileToChar(Tile(t)) << "\":" << post.TileProbability(Tile(t));
+    out << (first ? "" : ",") << "\"" << TileToChar(Tile(t))
+        << "\":" << post.TileProbability(Tile(t));
     first = false;
   }
   out << "}}\n";
@@ -370,8 +371,8 @@ int SelfPlay(const Options& o, const Setup& setup, Journal& journal) {
   std::cout << "a=" << o.model_a << " vs b=" << o.model_b << " (rare a/b: " << o.rare[0] << "/"
             << o.rare[1] << "): wins a/b/ties: " << wins[0] << "/" << wins[1] << "/" << wins[2]
             << ", a win %: " << (n ? 100.0 * (wins[0] + 0.5 * wins[2]) / n : 0)
-            << ", a avg spread: " << (n ? double(spread_a) / n : 0) << ", rare moves: " << rare_moves
-            << ", surprises: " << surprises << "\n";
+            << ", a avg spread: " << (n ? double(spread_a) / n : 0)
+            << ", rare moves: " << rare_moves << ", surprises: " << surprises << "\n";
   return 0;
 }
 
@@ -461,7 +462,8 @@ int main(int argc, char** argv) {
   }
   if (lexicon.empty() || leaves_path.empty() || o.records_path.empty() ||
       o.games_dir.empty() == (o.games_played == 0)) {
-    std::cerr << "--lexicon, --leaves, --records and one of --games or --games-played are required\n";
+    std::cerr
+        << "--lexicon, --leaves, --records and one of --games or --games-played are required\n";
     return 2;
   }
   Gaddag gaddag = Gaddag::FromFile(lexicon);

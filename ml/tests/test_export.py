@@ -34,14 +34,14 @@ def test_export_writes_one_row_per_human_turn_with_rack(tmp_path):
     counts = export(store, out)
     assert sum(counts.values()) == 4
     meta = json.loads((out / "meta.json").read_text())
-    for split, info in meta["splits"].items():
+    for _split, info in meta["splits"].items():
         n = info["turns"]
         for spec in info["arrays"].values():
             size = int(spec["dtype"][-1])
             assert (out / spec["file"]).stat().st_size == n * spec["shape"][1] * size
     # ann's turns sit together in one split, in turn order.
     rows = []
-    for split, info in meta["splits"].items():
+    for _split, info in meta["splits"].items():
         rack = (out / info["arrays"]["rack"]["file"]).read_bytes()
         nums = (out / info["arrays"]["numbers"]["file"]).read_bytes()
         for i in range(info["turns"]):

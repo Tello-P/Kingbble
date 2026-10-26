@@ -39,13 +39,35 @@ Rack TilesOf(const std::string& tiles) {
 const std::array<const char*, kNumMoveFeatures>& MoveFeatureNames() {
   static const std::array<const char*, kNumMoveFeatures> names = [] {
     std::array<const char*, kNumMoveFeatures> n{};
-    const char* fixed[] = {
-        "gap", "score", "leave", "log_rank", "tiles", "bingo", "exchange", "pass",
-        "word_zipf", "word_plays", "word_unfamiliar", "word_length", "word_alt",
-        "word_log_prob", "rack_anagrams",
-        "had_bingo", "bingo_count", "bingo_easiest", "bingo_gap", "missed_bingo",
-        "leave_size", "leave_vowels", "leave_consonants", "leave_duplicates", "leave_s",
-        "leave_blank", "leave_q_no_u", "leave_synergy", "leave_bingo_prob"};
+    const char* fixed[] = {"gap",
+                           "score",
+                           "leave",
+                           "log_rank",
+                           "tiles",
+                           "bingo",
+                           "exchange",
+                           "pass",
+                           "word_zipf",
+                           "word_plays",
+                           "word_unfamiliar",
+                           "word_length",
+                           "word_alt",
+                           "word_log_prob",
+                           "rack_anagrams",
+                           "had_bingo",
+                           "bingo_count",
+                           "bingo_easiest",
+                           "bingo_gap",
+                           "missed_bingo",
+                           "leave_size",
+                           "leave_vowels",
+                           "leave_consonants",
+                           "leave_duplicates",
+                           "leave_s",
+                           "leave_blank",
+                           "leave_q_no_u",
+                           "leave_synergy",
+                           "leave_bingo_prob"};
     int i = 0;
     for (const char* f : fixed) n[i++] = f;
     static const std::array<std::string, kNumTileTypes> counts = [] {
@@ -55,14 +77,40 @@ const std::array<const char*, kNumMoveFeatures>& MoveFeatureNames() {
       return c;
     }();
     for (const std::string& c : counts) n[i++] = c.c_str();
-    const char* rest[] = {
-        "on_dl", "on_tl", "on_dw", "on_tw", "cross_words", "hooks", "through", "center_dist",
-        "vertical", "opens_tw", "bingo_lanes", "score_rank", "equity_z", "second_gap",
-        "non_bingo_gap", "score_diff", "bag_tiles", "turn_number", "endgame", "prev_exchange",
-        "rating", "rating_known", "gap_x_phase", "score_x_phase", "leave_x_phase",
-        "bingo_x_phase", "exchange_x_phase", "gap_x_rating", "log_rank_x_rating",
-        "missed_bingo_x_rating", "zipf_x_rating", "gap_x_lead", "score_x_lead",
-        "exchange_x_lead"};
+    const char* rest[] = {"on_dl",
+                          "on_tl",
+                          "on_dw",
+                          "on_tw",
+                          "cross_words",
+                          "hooks",
+                          "through",
+                          "center_dist",
+                          "vertical",
+                          "opens_tw",
+                          "bingo_lanes",
+                          "score_rank",
+                          "equity_z",
+                          "second_gap",
+                          "non_bingo_gap",
+                          "score_diff",
+                          "bag_tiles",
+                          "turn_number",
+                          "endgame",
+                          "prev_exchange",
+                          "rating",
+                          "rating_known",
+                          "gap_x_phase",
+                          "score_x_phase",
+                          "leave_x_phase",
+                          "bingo_x_phase",
+                          "exchange_x_phase",
+                          "gap_x_rating",
+                          "log_rank_x_rating",
+                          "missed_bingo_x_rating",
+                          "zipf_x_rating",
+                          "gap_x_lead",
+                          "score_x_lead",
+                          "exchange_x_lead"};
     for (const char* f : rest) n[i++] = f;
     if (i != kNumMoveFeatures) throw std::logic_error("MoveFeatureNames out of date");
     return n;
@@ -237,8 +285,10 @@ FeatureLexicon FeatureLexicon::FromWords(const std::vector<std::string>& words) 
     bool ok = true;
     for (char ch : w) {
       const char u = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
-      if (u < 'A' || u > 'Z') ok = false;
-      else ++counts[u - 'A' + 1];
+      if (u < 'A' || u > 'Z')
+        ok = false;
+      else
+        ++counts[u - 'A' + 1];
     }
     if (ok) ++lex.sevens_[LetterKey(counts)];
   }
@@ -398,7 +448,7 @@ std::string MainWord(const Board& board, const Move& move) {
 }
 
 FeatureComputer::FeatureComputer(const Leaves& leaves, const FeatureLexicon* lexicon)
-    : leaves_(leaves), lexicon_(lexicon) {
+    : lexicon_(lexicon) {
   for (int a = 0; a < kNumTileTypes; ++a) {
     Rack r;
     r.Add(Tile(a));
