@@ -34,19 +34,19 @@ enum MoveFeature : int {
   kFeatExchange,  // 1 for an exchange
   kFeatPass,      // 1 for a pass
   // A. The main word (0 for exchanges and passes).
-  kFeatWordZipf,       // English frequency (wordfreq Zipf scale), 0 if unknown
-  kFeatWordPlays,      // log(1 + times played in the train games)
-  kFeatWordUnfamiliar, // 1 if the word is neither in the frequency list nor played
+  kFeatWordZipf,        // English frequency (wordfreq Zipf scale), 0 if unknown
+  kFeatWordPlays,       // log(1 + times played in the train games)
+  kFeatWordUnfamiliar,  // 1 if the word is neither in the frequency list nor played
   kFeatWordLength,
-  kFeatWordAlt,        // 1 if the word is also in the second (American) list
-  kFeatWordLogProb,    // log probability of drawing its letters, per letter
-  kFeatRackAnagrams,   // log(1 + seven-letter anagrams of the rack)
+  kFeatWordAlt,       // 1 if the word is also in the second (American) list
+  kFeatWordLogProb,   // log probability of drawing its letters, per letter
+  kFeatRackAnagrams,  // log(1 + seven-letter anagrams of the rack)
   // B. Missed bingos.
-  kFeatHadBingo,       // some option is a bingo
-  kFeatBingoCount,     // log(1 + bingo options)
-  kFeatBingoEasiest,   // highest Zipf frequency of a bingo word
-  kFeatBingoGap,       // best bingo equity minus this option's (0 without bingos)
-  kFeatMissedBingo,    // a bingo was available and this option is not one
+  kFeatHadBingo,      // some option is a bingo
+  kFeatBingoCount,    // log(1 + bingo options)
+  kFeatBingoEasiest,  // highest Zipf frequency of a bingo word
+  kFeatBingoGap,      // best bingo equity minus this option's (0 without bingos)
+  kFeatMissedBingo,   // a bingo was available and this option is not one
   // C. The leave.
   kFeatLeaveSize,
   kFeatLeaveVowels,
@@ -55,9 +55,9 @@ enum MoveFeature : int {
   kFeatLeaveS,
   kFeatLeaveBlank,
   kFeatLeaveQNoU,
-  kFeatLeaveSynergy,     // sum of pair leave values minus their single values
-  kFeatLeaveBingoProb,   // chance of a seven-letter bingo after drawing to seven
-  kFeatLeaveCount0,      // 27 counts: blank, then A..Z
+  kFeatLeaveSynergy,    // sum of pair leave values minus their single values
+  kFeatLeaveBingoProb,  // chance of a seven-letter bingo after drawing to seven
+  kFeatLeaveCount0,     // 27 counts: blank, then A..Z
   kFeatLeaveCountLast = kFeatLeaveCount0 + kNumTileTypes - 1,
   // D. Shape on the board.
   kFeatOnDL,
@@ -73,17 +73,17 @@ enum MoveFeature : int {
   kFeatOpensTW,     // empty triple-word squares newly in reach of a tile
   kFeatBingoLanes,  // change in lines with a playable run of seven empty squares
   // F. Ranking within the turn.
-  kFeatScoreRank,   // log(1 + rank by score)
-  kFeatEquityZ,     // equity standardized over the turn's options
-  kFeatSecondGap,   // best minus second best equity (turn level)
-  kFeatNonBingoGap, // best non-bingo equity minus this option's
+  kFeatScoreRank,    // log(1 + rank by score)
+  kFeatEquityZ,      // equity standardized over the turn's options
+  kFeatSecondGap,    // best minus second best equity (turn level)
+  kFeatNonBingoGap,  // best non-bingo equity minus this option's
   // G. Context (turn level).
-  kFeatScoreDiff,   // mover's score minus the opponent's, / 100
+  kFeatScoreDiff,  // mover's score minus the opponent's, / 100
   kFeatBagTiles,
   kFeatTurnNumber,
-  kFeatEndgame,     // empty bag
-  kFeatPrevExchange,// the mover exchanged on their previous turn
-  kFeatRating,      // (rating - 1500) / 500, 0 if unknown
+  kFeatEndgame,       // empty bag
+  kFeatPrevExchange,  // the mover exchanged on their previous turn
+  kFeatRating,        // (rating - 1500) / 500, 0 if unknown
   kFeatRatingKnown,
   // H. Interactions (phase = share of the bag drawn, lead = tanh(diff / 100)).
   kFeatGapPhase,
@@ -160,7 +160,7 @@ class FeatureLexicon {
   void TabulateLeaves();
 
   std::unordered_map<std::string, WordInfo> info_;
-  std::unordered_map<std::uint64_t, int> sevens_;          // sorted letters -> words
+  std::unordered_map<std::uint64_t, int> sevens_;  // sorted letters -> words
   // (leave letters, blanks on it) -> chance.
   std::unordered_map<std::uint64_t, float> leave_bingo_;
 };
@@ -182,7 +182,6 @@ class FeatureComputer {
   double LeaveBingoProbability(const Rack& leave) const;
 
  private:
-  const Leaves& leaves_;
   const FeatureLexicon* lexicon_;
   std::array<float, kNumTileTypes> single_{};
   std::array<std::array<float, kNumTileTypes>, kNumTileTypes> pair_{};  // synergy

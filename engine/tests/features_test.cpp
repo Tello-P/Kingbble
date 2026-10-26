@@ -179,7 +179,7 @@ TEST(Features, FillComputesTheExtendedFeatures) {
   EXPECT_EQ(f[kFeatThrough], 0.f);
   EXPECT_EQ(f[kFeatCrossWords], 0.f);
   EXPECT_GT(f[kFeatBingoLanes], 0.f);  // the first move opens lanes
-  EXPECT_EQ(f[kFeatOpensTW], 4.f);  // 8A and 8O by the row, 1H and 15H by the centre column
+  EXPECT_EQ(f[kFeatOpensTW], 4.f);     // 8A and 8O by the row, 1H and 15H by the centre column
   EXPECT_EQ(f[kFeatHadBingo], 0.f);
   EXPECT_EQ(f[kFeatMissedBingo], 0.f);
   EXPECT_FLOAT_EQ(f[kFeatScoreDiff], -0.5f);
@@ -208,7 +208,8 @@ TEST(Features, LeaveBingoProbabilityIsExact) {
   // Exact without a blank on the leave: an A, 9 of the 94 tiles left.
   EXPECT_NEAR(fc.LeaveBingoProbability(*Rack::FromString("EINRST")), 9.0 / 94, 1e-6);
   // AEINRST from a full bag: 9 * 12 * 9 * 6 * 6 * 4 * 6 ways out of C(100, 7).
-  EXPECT_NEAR(fc.LeaveBingoProbability(Rack{}), 9.0 * 12 * 9 * 6 * 6 * 4 * 6 / 16007560800.0, 1e-12);
+  EXPECT_NEAR(fc.LeaveBingoProbability(Rack{}), 9.0 * 12 * 9 * 6 * 6 * 4 * 6 / 16007560800.0,
+              1e-12);
   // A blank on the leave: an A or a T, 15 of the 94 tiles left.
   EXPECT_NEAR(fc.LeaveBingoProbability(*Rack::FromString("?EINRS")), 15.0 / 94, 1e-6);
   EXPECT_NEAR(fc.LeaveBingoProbability(*Rack::FromString("?EINRST")), 1.0, 1e-6);

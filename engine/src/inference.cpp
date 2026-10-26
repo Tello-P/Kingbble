@@ -188,8 +188,9 @@ HumanModelParams HumanModelParams::FromFile(const std::string& path) {
       order.clear();
       for (std::string name; ss >> name;) {
         const int f = MoveFeatureIndex(name);
-        if (f < 0) throw std::runtime_error(path + ":" + std::to_string(number) +
-                                            ": unknown feature " + name);
+        if (f < 0)
+          throw std::runtime_error(path + ":" + std::to_string(number) + ": unknown feature " +
+                                   name);
         order.push_back(f);
       }
       ok = !order.empty() && p.band_ratings.empty();
@@ -479,7 +480,8 @@ void RackFilter::MaybeResample() {
   double cum = 0;
   std::size_t i = 0;
   for (int j = 0; j < n; ++j, u += step) {
-    while (i + 1 < hypotheses_.size() && cum + hypotheses_[i].weight < u) cum += hypotheses_[i++].weight;
+    while (i + 1 < hypotheses_.size() && cum + hypotheses_[i].weight < u)
+      cum += hypotheses_[i++].weight;
     out.push_back({hypotheses_[i].rack, step});
   }
   hypotheses_ = std::move(out);
@@ -502,7 +504,8 @@ double RackFilter::Likelihood(const Observation& obs, const Rack& rack) {
 void RackFilter::Resync(const Rack& unseen, int rack_size) {
   if (hypotheses_.empty() || rack_size != rack_size_ || !ContainsTiles(unseen_, unseen)) {
     // Not a draw from the bag we were tracking: keep what still fits.
-    if (exact_ || CountSubRacks(unseen, rack_size, params_.exact_limit + 1) <= params_.exact_limit) {
+    if (exact_ ||
+        CountSubRacks(unseen, rack_size, params_.exact_limit + 1) <= params_.exact_limit) {
       SetExact(unseen, rack_size, params_.prior_mix);
       return;
     }
@@ -559,7 +562,8 @@ void RackFilter::Widen(const Rack& played) {
   }
   std::bernoulli_distribution fresh(params_.surprise_mix);
   for (Hypothesis& h : hypotheses_)
-    if (fresh(rng_)) h.rack = Rejuvenate(DrawTiles(unseen_, rack_size_, rng_), played, unseen_, rack_size_);
+    if (fresh(rng_))
+      h.rack = Rejuvenate(DrawTiles(unseen_, rack_size_, rng_), played, unseen_, rack_size_);
 }
 
 void RackFilter::ObserveOpponent(const Observation& obs) {

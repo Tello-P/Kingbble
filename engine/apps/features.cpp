@@ -204,8 +204,7 @@ int main(int argc, char** argv) {
       const int chosen = FindOption(options, t.move);
       const int n = std::min(static_cast<int>(options.size()), top);
       const auto t1 = Clock::now();
-      const TurnContext ctx{t.bag_size, t.score_diff, t.turn, t.prev_exchange,
-                            ti ? ti->rating : 0};
+      const TurnContext ctx{t.bag_size, t.score_diff, t.turn, t.prev_exchange, ti ? ti->rating : 0};
       computer.Fill(t.board, t.rack, ctx, options, n, chosen);
       const auto t2 = Clock::now();
       rank_seconds += std::chrono::duration<double>(t1 - t0).count();
