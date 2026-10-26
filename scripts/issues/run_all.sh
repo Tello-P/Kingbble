@@ -9,6 +9,7 @@
 # final validation. #38 (data collection) has no quick mode and is left out.
 # With ISSUE numbers only those run. #38 needs --players (or KINGBBLE_PLAYERS)
 # and is skipped without it.
+source "$(dirname "${BASH_SOURCE[0]}")/inhibit.sh"
 set -euo pipefail
 DIR=$(cd "$(dirname "$0")" && pwd)
 
@@ -20,6 +21,7 @@ PLAN=(
   "30 360 issue_30_preendgame_macondo.sh"
   "34 1200 issue_34_quackle_and_smp.sh"
   "38 200 issue_38_collect_turns.sh"
+  "47 205 issue_47_inference_eval.sh"
 )
 
 dry=() quick=() more=() status=0 players=${KINGBBLE_PLAYERS:-} only=()

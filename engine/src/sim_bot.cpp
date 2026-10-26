@@ -30,17 +30,29 @@ SimBot::SimBot(const Gaddag& gaddag, const Leaves& leaves, SimParams params) : p
 
 Game SimBot::SamplePosition(const Game& game, std::uint64_t seed) const {
   const int me = game.to_move();
-  Rack unseen = UnseenTiles(game.board(), game.rack(me));
-  std::vector<Tile> pool;
-  for (int t = 0; t < kNumTileTypes; ++t) pool.insert(pool.end(), unseen.Count(Tile(t)), Tile(t));
+  const Rack unseen = UnseenTiles(game.board(), game.rack(me));
+  const int opp_size = unseen.Size() - game.bag_size();
   std::mt19937_64 rng(seed);
-  std::shuffle(pool.begin(), pool.end(), rng);
-
-  const std::size_t opp_size = pool.size() - static_cast<std::size_t>(game.bag_size());
   std::array<Rack, 2> racks;
   racks[me] = game.rack(me);
+  Rack rest = unseen;
+  // Its own stream, so rejected racks leave the uniform deal unchanged.
+  std::mt19937_64 pick(MixSeed(~seed));
+  if (sampler_ && std::uniform_real_distribution<double>(0, 1)(pick) < params_.posterior_share) {
+    // A rack that does not fit the position falls back to a uniform draw.
+    std::optional<Rack> rack = sampler_->SampleRack(pick);
+    if (rack && rack->Size() == opp_size && ContainsTiles(unseen, *rack)) {
+      racks[1 - me] = *rack;
+      rest = MinusTiles(unseen, *rack);
+    }
+  }
+  std::vector<Tile> pool;
+  for (int t = 0; t < kNumTileTypes; ++t) pool.insert(pool.end(), rest.Count(Tile(t)), Tile(t));
+  std::shuffle(pool.begin(), pool.end(), rng);
+
+  const std::size_t deal = static_cast<std::size_t>(opp_size - racks[1 - me].Size());
   Rack bag;
-  for (std::size_t i = 0; i < pool.size(); ++i) (i < opp_size ? racks[1 - me] : bag).Add(pool[i]);
+  for (std::size_t i = 0; i < pool.size(); ++i) (i < deal ? racks[1 - me] : bag).Add(pool[i]);
   return Game::FromPosition(game.board(), racks, {game.score(0), game.score(1)}, me, bag,
                             game.scoreless_turns(), MixSeed(seed));
 }

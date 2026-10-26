@@ -23,6 +23,8 @@ add_library(scrabble_engine
   src/kwg.cpp
   src/cgp.cpp
   src/wordprune.cpp
+  src/features.cpp
+  src/inference.cpp
 )
 
 add_executable(kingbble_selfplay apps/selfplay.cpp)
@@ -33,6 +35,10 @@ add_executable(kingbble_positions apps/positions.cpp)
 target_link_libraries(kingbble_positions PRIVATE scrabble_engine)
 add_executable(kingbble_quackle_match apps/quackle_match.cpp)
 target_link_libraries(kingbble_quackle_match PRIVATE scrabble_engine)
+add_executable(kingbble_features apps/features.cpp)
+target_link_libraries(kingbble_features PRIVATE scrabble_engine)
+add_executable(kingbble_inference_eval apps/inference_eval.cpp)
+target_link_libraries(kingbble_inference_eval PRIVATE scrabble_engine)
 find_package(Threads REQUIRED)
 target_link_libraries(scrabble_engine PUBLIC Threads::Threads)
 target_include_directories(scrabble_engine PUBLIC include)
@@ -68,6 +74,9 @@ if(SCRABBLE_BUILD_TESTS)
     tests/preendgame_test.cpp
     tests/approx_preendgame_test.cpp
     tests/wordprune_test.cpp
+    tests/features_test.cpp
+    tests/inference_test.cpp
+    tests/journal_test.cpp
   )
   target_compile_definitions(engine_tests PRIVATE
     KINGBBLE_FIXTURES="${PROJECT_SOURCE_DIR}/lexica/fixtures")

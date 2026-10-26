@@ -5,6 +5,7 @@
 # the tool's own lines plus "[#N] P% (done/total) ETA ..." status lines, counted
 # from "progress: D/T" lines printed by the tool or from lines matching a regex.
 
+source "$(dirname "${BASH_SOURCE[0]}")/inhibit.sh"
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
@@ -17,11 +18,21 @@ PY=${PYTHON:-$([[ -x .venv/bin/python ]] && echo .venv/bin/python || echo python
 # swap, at the lowest CPU and I/O priority.
 MAX_THREADS=${KINGBBLE_MAX_THREADS:-3}
 MAX_MEM=${KINGBBLE_MAX_MEM:-6G}
-LIMITS=(nice -n 19 ionice -c3)
-if command -v systemd-run >/dev/null && systemd-run --user --scope --quiet true 2>/dev/null; then
-  LIMITS=(systemd-run --user --scope --quiet -p MemoryMax="$MAX_MEM" -p MemorySwapMax=0
-    -p CPUQuota=$((100 * MAX_THREADS))% "${LIMITS[@]}")
-fi
+# set_limits: LIMITS from MAX_THREADS and MAX_MEM ("none": no memory cap).
+set_limits() {
+  LIMITS=(nice -n 19 ionice -c3)
+  if command -v systemd-run >/dev/null && systemd-run --user --scope --quiet true 2>/dev/null; then
+    local mem=()
+    [[ $MAX_MEM != none ]] && mem=(-p MemoryMax="$MAX_MEM" -p MemorySwapMax=0)
+    LIMITS=(systemd-run --user --scope --quiet "${mem[@]}" -p CPUQuota=$((100 * MAX_THREADS))%
+      "${LIMITS[@]}")
+  elif [[ $MAX_MEM != none ]]; then
+    local kb
+    kb=$(numfmt --from=iec "$MAX_MEM")
+    LIMITS=(bash -c "ulimit -v $((kb / 1024)); exec nice -n 19 ionice -c3 \"\$@\"" limits)
+  fi
+}
+set_limits
 DRY_RUN=0
 FRESH=0   # --fresh: forget the results of earlier runs and start over
 STATUS=0  # --status: only report how far the run is, from its results files
@@ -121,9 +132,11 @@ results_file() {
 
 # step UNITS REGEX CMD...: runs CMD. Its "progress: D/T" lines (D of this step)
 # or, with a non-empty REGEX, its lines matching REGEX advance the count; those
-# lines only go to the log. Set STEP_LOG to also copy the output to that file.
+# lines only go to the log. Set STEP_LOG to also copy the output to that file,
+# and STEP_SCALE to weigh each of the step's units as that many script units
+# (so the percentage and ETA follow time when steps have units of unequal cost).
 step() {
-  local units=$1 regex=$2
+  local units=$1 regex=$2 scale=${STEP_SCALE:-1}
   shift 2
   if ((STATUS)); then
     # Every tool that keeps a results file reports on it with --status.
@@ -133,7 +146,7 @@ step() {
   if ((DRY_RUN)); then
     printf '%q ' "$@"
     echo
-    DONE=$((DONE + units))
+    DONE=$((DONE + units * scale))
     return
   fi
   local base=$DONE
@@ -155,17 +168,59 @@ step() {
         continue
       fi
       ((n > units)) && n=$units
-      pct=$((100 * (base + n) / TOTAL))
+      pct=$((100 * (base + n * scale) / TOTAL))
       # Print when the percentage moves or once a minute.
       if ((pct != shown || SECONDS - shown_at >= 60)); then
-        status $((base + n))
+        status $((base + n * scale))
         shown=$pct
         shown_at=$SECONDS
       fi
     done
   }
-  DONE=$((base + units))
+  DONE=$((base + units * scale))
   status "$DONE" | tee -a "$LOG"
+}
+
+# limits_init "$@": the load limits from --threads N (or KINGBBLE_THREADS /
+# KINGBBLE_MAX_THREADS, default 3), --mem SIZE (or KINGBBLE_MEM_MAX /
+# KINGBBLE_MAX_MEM, default 6G, "none" for no memory cap) and --force. Sets
+# MAX_THREADS (also for BLAS/OpenMP), MAX_MEM, FORCE and LIMITS, which step
+# applies to every command. THREADS and BUILD_JOBS are kept for the scripts that
+# name them.
+limits_init() {
+  local args=("$@") i
+  MAX_THREADS=${KINGBBLE_THREADS:-$MAX_THREADS} MAX_MEM=${KINGBBLE_MEM_MAX:-$MAX_MEM} FORCE=0
+  for ((i = 0; i < ${#args[@]}; i++)); do
+    case ${args[i]} in
+      --threads) MAX_THREADS=${args[i + 1]:-} ;;
+      --mem) MAX_MEM=${args[i + 1]:-} ;;
+      --force) FORCE=1 ;;
+    esac
+  done
+  THREADS=$MAX_THREADS BUILD_JOBS=$MAX_THREADS
+  export OMP_NUM_THREADS=$THREADS OPENBLAS_NUM_THREADS=$THREADS MKL_NUM_THREADS=$THREADS \
+    NUMEXPR_NUM_THREADS=$THREADS
+  set_limits
+}
+
+# busy_check N: exits unless --force (limits_init) when another issue script or
+# engine binary runs (the machine runs out of memory with several heavy jobs).
+# No subshells here: they would show up with this script's command line.
+busy_check() {
+  local pat='^([^ ]*/)?(ba)?sh [^ ]*issue_[0-9]+_[^ ]*\.sh|^[^ ]*(kingbble_[a-z_]+|engine_tests|macondo)( |$)'
+  local list pid cmd others=""
+  list=$(mktemp)
+  pgrep -af -- "$pat" >"$list" || true
+  while read -r pid cmd; do
+    [[ $pid == "$$" || $pid == "$PPID" ]] && continue
+    others+="  $pid $cmd"$'\n'
+  done <"$list"
+  rm -f "$list"
+  if [[ -n $others ]] && ((!FORCE)); then
+    echo "[#$1] another heavy run is active; wait for it or pass --force:" >&2
+    printf '%s' "$others" >&2
+    exit 1
+  fi
 }
 
 # finish: true when the script should stop after its steps (status or dry run).
@@ -189,13 +244,15 @@ need_csw24() {
   need lexica/CSW24.klv2 "download CSW24.klv2 from woogles-io/liwords (see scripts/issues/lib.sh)"
 }
 
-# build_engine: configures and builds the engine (quick when up to date).
+# build_engine: configures and builds the engine (quick when up to date), with
+# BUILD_JOBS jobs (default MAX_THREADS) under LIMITS.
 build_engine() {
+  local jobs=${BUILD_JOBS:-$MAX_THREADS}
   ((STATUS)) && return
   if ((DRY_RUN)); then
-    echo "cmake -S . -B build && cmake --build build -j$MAX_THREADS"
+    echo "cmake -S . -B build && cmake --build build -j$jobs"
     return
   fi
   "${LIMITS[@]}" cmake -S . -B build >>"$LOG" 2>&1
-  "${LIMITS[@]}" cmake --build build -j"$MAX_THREADS" >>"$LOG" 2>&1
+  "${LIMITS[@]}" cmake --build build -j"$jobs" >>"$LOG" 2>&1
 }
