@@ -21,8 +21,10 @@
 // scales the theoretical lambda, --risk-rest-sd sets the spread to come per
 // root of a tile, --risk-shrink the variance shrinkage, --risk-relative uses
 // the variance relative to the best candidate and --risk-iterations multiplies
-// the iterations inside the window. --paired plays each deal twice, games 2k-1 and 2k, with
-// the bots swapping seats, so luck of the draw cancels out in each pair.
+// the iterations inside the window. --sim-plies sets both bots' playout depth
+// and --a-plies bot a's alone. Result lines end with each bot's moves and
+// seconds (", a M moves T s, b M moves T s"). --paired plays each deal twice, games 2k-1 and 2k,
+// with the bots swapping seats, so luck of the draw cancels out in each pair.
 
 #include <chrono>
 #include <cstdlib>
@@ -86,6 +88,7 @@ int main(int argc, char** argv) {
   std::string results_path;
   bool status_only = false;
   bool paired = false;
+  int a_plies = 0;  // 0: as b
   SimParams sim;
   RiskParams risk;
   double endgame_time = 5;
@@ -114,6 +117,8 @@ int main(int argc, char** argv) {
       sim.candidates = std::stoi(value());
     } else if (a == "--sim-iterations") {
       sim.max_iterations = std::stoi(value());
+    } else if (a == "--a-plies") {
+      a_plies = std::stoi(value());
     } else if (a == "--sim-plies") {
       sim.plies = std::stoi(value());
     } else if (a == "--sim-time") {
@@ -163,7 +168,8 @@ int main(int argc, char** argv) {
     } else {
       std::cerr << "usage: " << argv[0]
                 << " --lexicon FILE [--leaves KLV] [--a BOT] [--b BOT] [--games N] [--seed S]"
-                   " [--sim-candidates N] [--sim-iterations N] [--sim-plies N] [--sim-time S]"
+                   " [--sim-candidates N] [--sim-iterations N] [--sim-plies N] [--a-plies N] "
+                   "[--sim-time S]"
                    " [--threads N] [--endgame-time S]"
                    " [--peg-bag N] [--peg-candidates N] [--peg-time S] [--apeg-candidates N]"
                    " [--apeg-samples N] [--apeg-plies N] [--apeg-time S] [--verbose]"
@@ -195,8 +201,10 @@ int main(int argc, char** argv) {
     std::cout << "leaves: " << leaves->Size() << "\n";
   }
   sim.seed = seed;
+  SimParams a_sim = sim;
+  if (a_plies > 0) a_sim.plies = a_plies;
   std::unique_ptr<Bot> bots[2] = {
-      MakeBot(kind_a, gaddag, leaves.get(), sim, endgame_time, peg, risk),
+      MakeBot(kind_a, gaddag, leaves.get(), a_sim, endgame_time, peg, risk),
       MakeBot(kind_b, gaddag, leaves.get(), sim, endgame_time, peg, risk)};
 
   long long turns = 0, generated = 0;
@@ -213,11 +221,17 @@ int main(int argc, char** argv) {
     const int deal = paired ? g / 2 : g;
     Game game(MixSeed(MixSeed(seed) + static_cast<std::uint64_t>(deal)));
     const int seat_a = g % 2;  // seat of bot a in this game
+    int moves[2] = {0, 0};     // by bot: a, b
+    double seconds[2] = {0, 0};
     while (!game.over()) {
-      Bot& bot = *bots[game.to_move() == seat_a ? 0 : 1];
+      const int side = game.to_move() == seat_a ? 0 : 1;
+      Bot& bot = *bots[side];
       auto t = Clock::now();
       Move m = bot.Choose(game);
-      gen_s += std::chrono::duration<double>(Clock::now() - t).count();
+      const double spent = std::chrono::duration<double>(Clock::now() - t).count();
+      gen_s += spent;
+      seconds[side] += spent;
+      ++moves[side];
       generated += static_cast<long long>(bot.last_num_moves());
       ++turns;
       if (verbose) {
@@ -227,8 +241,12 @@ int main(int argc, char** argv) {
       game.Apply(m);
     }
     const int s0 = game.score(0), s1 = game.score(1);
+    char timing[96];
+    std::snprintf(timing, sizeof timing, ", a %d moves %.2f s, b %d moves %.2f s", moves[0],
+                  seconds[0], moves[1], seconds[1]);
     results.Append(g + 1, "game " + std::to_string(g + 1) + ": " + std::to_string(s0) + " - " +
-                              std::to_string(s1) + ", a in seat " + std::to_string(seat_a + 1));
+                              std::to_string(s1) + ", a in seat " + std::to_string(seat_a + 1) +
+                              timing);
     if (verbose) std::cout << "game " << g + 1 << ": " << s0 << " - " << s1 << "\n";
     report();
   }
