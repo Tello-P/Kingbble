@@ -129,6 +129,39 @@ TEST(Features, LexiconCountsSevenLetterAnagramsWithBlanks) {
   EXPECT_EQ(lex.Find("EAT"), nullptr);
 }
 
+// #50: a train turn's own play is not part of its word's familiarity.
+TEST(Features, OwnPlayIsLeftOutOfTheWordCount) {
+  Gaddag gaddag = Gaddag::FromWords({"AT", "TA", "EAT", "TEA", "ATE", "RATE", "TEAR", "RATES"});
+  Leaves leaves = Leaves::FromFile(Fixture("leaves_small.klv2"));
+  FeatureLexicon lex = FeatureLexicon::FromWords({"RETAINS"});
+  lex.SetInfo("RATE", {0.f, 1, false});
+  lex.SetInfo("TEAR", {0.f, 3, false});
+  MoveGenerator gen(gaddag);
+  Board board;
+  Rack rack = *Rack::FromString("AERTSXZ");
+  Move rate;
+  rate.kind = Move::Kind::kPlace;
+  rate.row = 7;
+  rate.col = 4;
+  rate.tiles = "RATE";
+  Move tear = rate;
+  tear.tiles = "TEAR";
+  TurnContext ctx{86, 0, 0, false, 0};
+  auto options = RankOptions(gen, board, rack, 86, UnseenTiles(board, rack), leaves);
+  FeatureComputer fc(leaves, &lex);
+  fc.Fill(board, rack, ctx, options, static_cast<int>(options.size()), -1, "RATE");
+  const auto& played = options[FindOption(options, rate)].features;
+  EXPECT_EQ(played[kFeatWordPlays], 0.f);  // its only play was this one
+  EXPECT_EQ(played[kFeatWordUnfamiliar], 1.f);
+  const auto& other = options[FindOption(options, tear)].features;
+  EXPECT_FLOAT_EQ(other[kFeatWordPlays], std::log1p(3.f));  // other words keep their counts
+  // Without an own play (val, test, inference) the counts are as stored.
+  fc.Fill(board, rack, ctx, options, static_cast<int>(options.size()));
+  const auto& as_stored = options[FindOption(options, rate)].features;
+  EXPECT_FLOAT_EQ(as_stored[kFeatWordPlays], std::log1p(1.f));
+  EXPECT_EQ(as_stored[kFeatWordUnfamiliar], 0.f);
+}
+
 TEST(Features, MainWordReadsPlayedThroughLetters) {
   Board board;
   board.Place(7, 7, *TileFromChar('A'), false);
