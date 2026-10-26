@@ -5,8 +5,8 @@
 # log-loss and a paired match, and logs it all to MLflow (build/mlruns). Check:
 # the run finishes on its own and the model beats the uniform bag in log-loss.
 #
-# Full mode: level 0 (1,000 games), a 10-game match at 5 candidates x 30
-# iterations (about 25 min on 3 threads). --quick: 50 games, a 4-game match at
+# Full mode: level 0 (1,000 games), log-loss on 300 test turns and a 10-game
+# match at 5 candidates x 30 (about 15 min on 2 threads). --quick: 50 games, a 4-game match at
 # 3 x 10 (about 3 min). The loop keeps its state in its work directory: stop the
 # script any time and run it again to go on (--fresh starts over, --status
 # reports).
@@ -31,7 +31,8 @@ need_csw24
 build_engine
 if ((FRESH && !DRY_RUN)); then rm -rf "$WORK"; fi
 
-SIZE=(--level 0) MATCH=(--eval-games 10 --eval-sim-candidates 5 --eval-sim-iterations 30)
+SIZE=(--level 0)
+MATCH=(--eval-games 10 --eval-sim-candidates 5 --eval-sim-iterations 30 --eval-max-turns 300)
 if ((QUICK)); then
   SIZE=(--games 50)
   MATCH=(--eval-games 4 --eval-sim-candidates 3 --eval-sim-iterations 10 --eval-max-turns 300)

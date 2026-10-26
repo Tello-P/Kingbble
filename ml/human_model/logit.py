@@ -168,7 +168,8 @@ def in_rating_range(info: dict, low: int | None, high: int | None) -> dict:
     """info without the turns whose known rating lies outside [low, high]; turns
     without a rating (e.g. self-play) stay."""
     return {
-        key: v for key, v in info.items()
+        key: v
+        for key, v in info.items()
         if v[0] is None or ((low is None or v[0] >= low) and (high is None or v[0] <= high))
     }
 

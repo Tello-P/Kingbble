@@ -34,9 +34,18 @@ class Fake:
         return {"verdict": self.verdicts.pop(0)}
 
     def auto(self, cpu_hours=10.0, gb=10.0):
-        return Auto(Config(level=0, top_k="64"), self.tmp, Limits(1, "none"), cpu_hours, gb,
-                    train_fn=self.train, evaluate_fn=self.evaluate, cpu_fn=lambda: self.cpu,
-                    disk_fn=lambda p: 0, log=lambda *a: None)
+        return Auto(
+            Config(level=0, top_k="64"),
+            self.tmp,
+            Limits(1, "none"),
+            cpu_hours,
+            gb,
+            train_fn=self.train,
+            evaluate_fn=self.evaluate,
+            cpu_fn=lambda: self.cpu,
+            disk_fn=lambda p: 0,
+            log=lambda *a: None,
+        )
 
 
 def test_goes_up_while_better_and_still_dropping(tmp_path):
@@ -85,8 +94,19 @@ def test_disk_budget(tmp_path):
 
 
 def test_parser_and_status(tmp_path, capsys):
-    args = parser().parse_args(["auto", "--budget-cpu-hours", "2", "--budget-gb", "1",
-                                "--level", "1", "--min-rating", "1500"])
+    args = parser().parse_args(
+        [
+            "auto",
+            "--budget-cpu-hours",
+            "2",
+            "--budget-gb",
+            "1",
+            "--level",
+            "1",
+            "--min-rating",
+            "1500",
+        ]
+    )
     assert (args.level, args.min_rating, args.budget_gb) == (1, 1500, 1.0)
     assert main(["status", "--work", str(tmp_path)]) == 0
     assert "disk: 0.00 GB" in capsys.readouterr().out

@@ -9,16 +9,32 @@ from ml import tracking
 def version_dir(tmp_path):
     v = tmp_path / "v001"
     v.mkdir()
-    (v / "config.json").write_text(json.dumps({"level": 0, "games": 40, "bots": ["a", "b"],
-                                               "min_rating": None, "seconds": 3.5}))
-    (v / "curve.json").write_text(json.dumps([
-        {"fraction": 0.5, "train_turns": 100, "val_turns": 20, "val_nll": 2.0},
-        {"fraction": 1.0, "train_turns": 200, "val_turns": 20, "val_nll": 1.9}]))
+    (v / "config.json").write_text(
+        json.dumps(
+            {"level": 0, "games": 40, "bots": ["a", "b"], "min_rating": None, "seconds": 3.5}
+        )
+    )
+    (v / "curve.json").write_text(
+        json.dumps(
+            [
+                {"fraction": 0.5, "train_turns": 100, "val_turns": 20, "val_nll": 2.0},
+                {"fraction": 1.0, "train_turns": 200, "val_turns": 20, "val_nll": 1.9},
+            ]
+        )
+    )
     (v / "model.txt").write_text("version 2\n")
-    (v / "evaluation.json").write_text(json.dumps({
-        "previous": None, "min_gain": 0.01, "verdict": "better", "seconds": 2.0,
-        "log_loss": {"none": 4.5, "new": 3.3, "turns": 21},
-        "match": {"pairs": 1, "games": 2, "win": None, "opponent": "none"}}))
+    (v / "evaluation.json").write_text(
+        json.dumps(
+            {
+                "previous": None,
+                "min_gain": 0.01,
+                "verdict": "better",
+                "seconds": 2.0,
+                "log_loss": {"none": 4.5, "new": 3.3, "turns": 21},
+                "match": {"pairs": 1, "games": 2, "win": None, "opponent": "none"},
+            }
+        )
+    )
     return v
 
 

@@ -70,9 +70,25 @@ def data_dir(work: Path, cfg: Config) -> Path:
 def generate(cfg: Config, data: Path, limits: Limits) -> int:
     """Plays the missing games up to cfg.size(); returns the games in the results file."""
     data.mkdir(parents=True, exist_ok=True)
-    cmd = [SELFPLAY, "--lexicon", cfg.lexicon, "--leaves", cfg.leaves, "--a", cfg.bots[0],
-           "--b", cfg.bots[1], "--games", cfg.size(), "--seed", cfg.seed,
-           "--results", data / "results.txt", "--gcg-dir", data / "gcg"]
+    cmd = [
+        SELFPLAY,
+        "--lexicon",
+        cfg.lexicon,
+        "--leaves",
+        cfg.leaves,
+        "--a",
+        cfg.bots[0],
+        "--b",
+        cfg.bots[1],
+        "--games",
+        cfg.size(),
+        "--seed",
+        cfg.seed,
+        "--results",
+        data / "results.txt",
+        "--gcg-dir",
+        data / "gcg",
+    ]
     if cfg.human_params:
         cmd += ["--human-params", cfg.human_params]
     limits.run(cmd, stdout=subprocess.DEVNULL)
@@ -81,8 +97,11 @@ def generate(cfg: Config, data: Path, limits: Limits) -> int:
 
 def finished_games(data: Path) -> int:
     path = data / "results.txt"
-    return sum(1 for line in path.read_text().splitlines() if line.startswith("game ")) \
-        if path.exists() else 0
+    return (
+        sum(1 for line in path.read_text().splitlines() if line.startswith("game "))
+        if path.exists()
+        else 0
+    )
 
 
 def prepare(cfg: Config, data: Path, limits: Limits) -> Path:
@@ -108,9 +127,24 @@ def prepare(cfg: Config, data: Path, limits: Limits) -> Path:
     if tmp.exists():
         shutil.rmtree(tmp)
     write_turn_info(store_turns(store), tmp / "turn_info.tsv")
-    limits.run([FEATURES, "--lexicon", cfg.lexicon, "--leaves", cfg.leaves, "--games", raw,
-                "--out", tmp, "--top", "128", "--turn-info", tmp / "turn_info.tsv"],
-               stdout=subprocess.DEVNULL)
+    limits.run(
+        [
+            FEATURES,
+            "--lexicon",
+            cfg.lexicon,
+            "--leaves",
+            cfg.leaves,
+            "--games",
+            raw,
+            "--out",
+            tmp,
+            "--top",
+            "128",
+            "--turn-info",
+            tmp / "turn_info.tsv",
+        ],
+        stdout=subprocess.DEVNULL,
+    )
     tmp.rename(feats)
     return feats
 
@@ -122,19 +156,42 @@ def train_turns(feats: Path, store: Path, cfg: Config) -> int:
 
     info = in_rating_range(ratings(feats, store), cfg.min_rating, cfg.max_rating)
     return sum(
-        1 for rating, split, bot in info.values()
+        1
+        for rating, split, bot in info.values()
         if split == "train" and (cfg.movers == "all" or (cfg.movers == "bot") == bot)
     )
 
 
-def fit(cfg: Config, feats: Path, store: Path, out: Path, n_train: int,
-        limits: Limits) -> dict:
+def fit(cfg: Config, feats: Path, store: Path, out: Path, n_train: int, limits: Limits) -> dict:
     """Fits the logit on n_train turns; its report (val_nll_logit and the rest)."""
     model, report = out.with_suffix(".txt"), out.with_suffix(".json")
-    cmd = [sys.executable, "-m", "ml.human_model.logit", "--features", feats, "--store", store,
-           "--out", model, "--report", report, "--movers", cfg.movers,
-           "--max-train", n_train, "--search-train", min(n_train, 20000),
-           "--max-val", cfg.max_val, "--top-k", cfg.top_k, "--l2", cfg.l2, "--l1", cfg.l1]
+    cmd = [
+        sys.executable,
+        "-m",
+        "ml.human_model.logit",
+        "--features",
+        feats,
+        "--store",
+        store,
+        "--out",
+        model,
+        "--report",
+        report,
+        "--movers",
+        cfg.movers,
+        "--max-train",
+        n_train,
+        "--search-train",
+        min(n_train, 20000),
+        "--max-val",
+        cfg.max_val,
+        "--top-k",
+        cfg.top_k,
+        "--l2",
+        cfg.l2,
+        "--l1",
+        cfg.l1,
+    ]
     if cfg.min_rating is not None:
         cmd += ["--min-rating", cfg.min_rating]
     if cfg.max_rating is not None:
@@ -161,8 +218,7 @@ def still_dropping(curve: list[dict], min_gain: float = 0.002) -> bool:
     return by_fraction[0.5] - by_fraction[1.0] >= min_gain
 
 
-def train(cfg: Config, work: Path = DEFAULT_WORK, limits: Limits | None = None,
-          log=print) -> Path:
+def train(cfg: Config, work: Path = DEFAULT_WORK, limits: Limits | None = None, log=print) -> Path:
     """Generates, prepares and fits; returns the new version's directory."""
     limits = limits or Limits()
     start = time.time()
@@ -185,17 +241,31 @@ def train(cfg: Config, work: Path = DEFAULT_WORK, limits: Limits | None = None,
     for fraction in cfg.fractions:
         size = max(1, round(n * fraction))
         report = fit(cfg, feats, store, tmp / f"fit_{round(100 * fraction)}", size, limits)
-        curve.append({"fraction": fraction, "train_turns": report["train_turns"],
-                      "val_turns": report["val_turns"], "val_nll": report["val_nll_logit"]})
-        log(f"  {round(100 * fraction)} %: {report['train_turns']} turns, "
-            f"val NLL {report['val_nll_logit']:.4f}")
+        curve.append(
+            {
+                "fraction": fraction,
+                "train_turns": report["train_turns"],
+                "val_turns": report["val_turns"],
+                "val_nll": report["val_nll_logit"],
+            }
+        )
+        log(
+            f"  {round(100 * fraction)} %: {report['train_turns']} turns, "
+            f"val NLL {report['val_nll_logit']:.4f}"
+        )
     shutil.copy(tmp / f"fit_{round(100 * cfg.fractions[-1])}.txt", tmp / "model.txt")
     (tmp / "curve.json").write_text(json.dumps(curve, indent=1) + "\n")
-    config = asdict(cfg) | {"games_played": games, "data": str(data), "features": str(feats),
-                            "raw": str(data / f"raw_{cfg.size()}"),
-                            "store": str(store), "train_turns": n, "commit": _commit(),
-                            "seconds": round(time.time() - start, 1),
-                            "still_dropping": still_dropping(curve)}
+    config = asdict(cfg) | {
+        "games_played": games,
+        "data": str(data),
+        "features": str(feats),
+        "raw": str(data / f"raw_{cfg.size()}"),
+        "store": str(store),
+        "train_turns": n,
+        "commit": _commit(),
+        "seconds": round(time.time() - start, 1),
+        "still_dropping": still_dropping(curve),
+    }
     (tmp / "config.json").write_text(json.dumps(config, indent=1) + "\n")
     tmp.rename(version)
     log(f"saved {version}")
@@ -204,8 +274,9 @@ def train(cfg: Config, work: Path = DEFAULT_WORK, limits: Limits | None = None,
 
 
 def _commit() -> str:
-    r = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True,
-                       cwd=ROOT)
+    r = subprocess.run(
+        ["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, cwd=ROOT
+    )
     return r.stdout.strip()
 
 
@@ -231,17 +302,27 @@ def config_from(args) -> tuple[Config, Limits]:
     bots = tuple(args.bots.split(","))
     if len(bots) != 2:
         raise SystemExit("--bots takes two bots, e.g. equity,human")
-    cfg = Config(level=args.level, games=args.games, lexicon=args.lexicon, leaves=args.leaves,
-                 bots=bots, human_params=args.human_params, movers=args.movers,
-                 min_rating=args.min_rating, max_rating=args.max_rating, seed=args.seed)
+    cfg = Config(
+        level=args.level,
+        games=args.games,
+        lexicon=args.lexicon,
+        leaves=args.leaves,
+        bots=bots,
+        human_params=args.human_params,
+        movers=args.movers,
+        min_rating=args.min_rating,
+        max_rating=args.max_rating,
+        seed=args.seed,
+    )
     return cfg, Limits(args.threads, args.mem)
 
 
 def check_busy(force: bool) -> None:
     others = busy()
     if others and not force:
-        raise SystemExit("another heavy run is active; wait for it or pass --force:\n  "
-                         + "\n  ".join(others))
+        raise SystemExit(
+            "another heavy run is active; wait for it or pass --force:\n  " + "\n  ".join(others)
+        )
 
 
 def main() -> int:

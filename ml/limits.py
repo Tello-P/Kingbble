@@ -23,15 +23,20 @@ BUSY = re.compile(
 
 @dataclass
 class Limits:
-    threads: int = int(os.environ.get("KINGBBLE_THREADS")
-                       or os.environ.get("KINGBBLE_MAX_THREADS") or 3)
+    threads: int = int(
+        os.environ.get("KINGBBLE_THREADS") or os.environ.get("KINGBBLE_MAX_THREADS") or 3
+    )
     mem: str = os.environ.get("KINGBBLE_MEM_MAX") or os.environ.get("KINGBBLE_MAX_MEM") or "6G"
 
     def env(self) -> dict:
         """The environment with BLAS/OpenMP capped to `threads`."""
         env = dict(os.environ)
-        for name in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
-                     "NUMEXPR_NUM_THREADS"):
+        for name in (
+            "OMP_NUM_THREADS",
+            "OPENBLAS_NUM_THREADS",
+            "MKL_NUM_THREADS",
+            "NUMEXPR_NUM_THREADS",
+        ):
             env[name] = str(self.threads)
         return env
 
@@ -39,10 +44,21 @@ class Limits:
         """The command prefix that applies the limits."""
         nice = ["nice", "-n", "19", "ionice", "-c3"]
         if shutil.which("systemd-run") and _scopes_work():
-            mem = [] if self.mem == "none" else ["-p", f"MemoryMax={self.mem}",
-                                                 "-p", "MemorySwapMax=0"]
-            return ["systemd-run", "--user", "--scope", "--quiet", *mem,
-                    "-p", f"CPUQuota={100 * self.threads}%", *nice]
+            mem = (
+                []
+                if self.mem == "none"
+                else ["-p", f"MemoryMax={self.mem}", "-p", "MemorySwapMax=0"]
+            )
+            return [
+                "systemd-run",
+                "--user",
+                "--scope",
+                "--quiet",
+                *mem,
+                "-p",
+                f"CPUQuota={100 * self.threads}%",
+                *nice,
+            ]
         if self.mem == "none":
             return nice
         kb = _bytes(self.mem) // 1024
@@ -60,8 +76,12 @@ _SCOPES: bool | None = None
 def _scopes_work() -> bool:
     global _SCOPES
     if _SCOPES is None:
-        _SCOPES = subprocess.run(["systemd-run", "--user", "--scope", "--quiet", "true"],
-                                 capture_output=True).returncode == 0
+        _SCOPES = (
+            subprocess.run(
+                ["systemd-run", "--user", "--scope", "--quiet", "true"], capture_output=True
+            ).returncode
+            == 0
+        )
     return _SCOPES
 
 
