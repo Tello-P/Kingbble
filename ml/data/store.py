@@ -32,10 +32,16 @@ def game_rows(
     """Turns of one game with its metadata: lexicon, bot flag and rating of the mover.
 
     The mover's nickname is replaced by its pseudonym (player_id), which also
-    picks the turn's split.
+    picks the turn's split. Self-play games (kingbble_selfplay --gcg-dir) name
+    each seat's bot: only the "human" bot (the human move model) counts as human,
+    and the split goes by game, since every game has the same two nicknames.
     """
     game = parse_gcg(gcg)
     players = {p["nickname"]: p for p in (meta or {}).get("players", [])}
+    if source == "selfplay":
+        players = {
+            nickname: {"is_bot": name.split("+")[0] != "human"} for nickname, name in game.players
+        }
     lexicon = (meta or {}).get("lexicon") or game.lexicon or "unknown"
     rows = []
     for row in turns(game):
@@ -44,7 +50,7 @@ def game_rows(
         player_id = pseudonym(nickname, salt)
         row.update(
             player_id=player_id,
-            split=split_of(player_id),
+            split=split_of(game_id if source == "selfplay" else player_id),
             source=source,
             game_id=game_id,
             lexicon=lexicon,

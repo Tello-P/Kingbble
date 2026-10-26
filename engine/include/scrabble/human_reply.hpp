@@ -1,7 +1,9 @@
 #pragma once
 
+#include <cstdint>
 #include <random>
 
+#include "scrabble/bot.hpp"
 #include "scrabble/features.hpp"
 #include "scrabble/inference.hpp"
 #include "scrabble/movegen.hpp"
@@ -33,6 +35,22 @@ class HumanReplyPolicy : public ReplyPolicy {
   FeatureComputer features_;
   int rating_;
   int top_;
+};
+
+// A player that moves as the human move model predicts: a simulated human
+// opponent for self-play, drawing from HumanReplyPolicy's distribution.
+class HumanBot : public Bot {
+ public:
+  // `params` and `lexicon` (may be null) must outlive the bot.
+  HumanBot(const Gaddag& gaddag, const Leaves& leaves, const HumanModelParams& params,
+           const FeatureLexicon* lexicon, int rating, std::uint64_t seed, int top = 32)
+      : policy_(gaddag, leaves, params, lexicon, rating, top), rng_(seed) {}
+
+  Move Choose(const Game& game) override { return policy_.Pick(game, rng_); }
+
+ private:
+  HumanReplyPolicy policy_;
+  std::mt19937_64 rng_;
 };
 
 }  // namespace scrabble
