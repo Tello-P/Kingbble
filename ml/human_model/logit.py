@@ -11,7 +11,7 @@ the logit on val; the logit weights stay in the file as the fallback.
   python -m ml.human_model.logit [--features data/features] [--store data/turns]
                                  [--out models/human_model.txt] [--bands 0,1400,1700,2000]
                                  [--top-k 64,96,128] [--drop A,B] [--mlp] [--test]
-                                 [--report report.json]
+                                 [--report report.json] [--min-rating R] [--max-rating R]
 
 The output is read by HumanModelParams::FromFile in the engine.
 """
@@ -43,7 +43,7 @@ from ml.human_model.dataset import (
 
 DEFAULT_MODEL = Path(__file__).resolve().parents[2] / "models" / "human_model.txt"
 DEFAULT_BANDS = (0, 1400, 1700, 2000)
-__all__ = ["band_of", "fit", "fit_bands", "log_p", "write_params"]
+__all__ = ["band_of", "fit", "fit_bands", "in_rating_range", "log_p", "write_params"]
 
 
 def _objective(ts: TurnSet, scaler: Scaler, w: np.ndarray, hessian: bool):
@@ -164,6 +164,16 @@ def fit_bands(
     return best[0], best[1]
 
 
+def in_rating_range(info: dict, low: int | None, high: int | None) -> dict:
+    """info without the turns whose known rating lies outside [low, high]; turns
+    without a rating (e.g. self-play) stay."""
+    return {
+        key: v
+        for key, v in info.items()
+        if v[0] is None or ((low is None or v[0] >= low) and (high is None or v[0] <= high))
+    }
+
+
 def raw_weights(w: np.ndarray, scaler: Scaler) -> np.ndarray:
     """Weights on the unstandardized features (the mean shift cancels in a softmax)."""
     return w / scaler.scale
@@ -219,6 +229,8 @@ def main() -> int:
         help="whose turns to fit: humans (the human model) or Woogles' bots",
     )
     ap.add_argument("--drop", default="", help="feature groups to leave out, e.g. A,B")
+    ap.add_argument("--min-rating", type=int, help="leave out turns rated below this")
+    ap.add_argument("--max-rating", type=int, help="leave out turns rated above this")
     ap.add_argument("--max-train", type=int, default=60000)
     ap.add_argument("--max-val", type=int, default=20000)
     ap.add_argument(
@@ -243,7 +255,7 @@ def main() -> int:
     cols = columns(names, [g for g in args.drop.split(",") if g])
     kept = [names[i] for i in cols]
     turns, options = load(args.features)
-    info = ratings(args.features, args.store)
+    info = in_rating_range(ratings(args.features, args.store), args.min_rating, args.max_rating)
     steps = 2 + len(args.l2.split(",")) * len(args.l1.split(",")) + 2 * bool(args.mlp)
     done = 0
 
