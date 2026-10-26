@@ -18,8 +18,6 @@ import argparse
 import math
 from pathlib import Path
 
-import duckdb
-
 from ml.data.gcg import parse_gcg
 from ml.data.store import DEFAULT_STORE
 from ml.data.woogles import DEFAULT_OUT as DEFAULT_RAW
@@ -86,6 +84,7 @@ def main() -> None:
     ap.add_argument("--min-rating", type=int, default=0)
     ap.add_argument("--plies", type=int, default=3)
     args = ap.parse_args()
+    import duckdb
 
     parquet = args.store / f"lexicon={args.lexicon}" / "*.parquet"
     rows = duckdb.sql(
