@@ -83,16 +83,21 @@ def load(path: Path = DEFAULT_OUT):
 
     with open(path / "turns.tsv", newline="") as f:
         turns = [
-            Turn(r["game_id"], *(int(r[k]) for k in ("turn", "player")), r["rack"],
-                 *(int(r[k]) for k in ("bag", "options", "chosen", "first_row", "rows")))
+            Turn(
+                r["game_id"],
+                *(int(r[k]) for k in ("turn", "player")),
+                r["rack"],
+                *(int(r[k]) for k in ("bag", "options", "chosen", "first_row", "rows")),
+            )
             for r in csv.DictReader(f, delimiter="\t")
         ]
     names, _, offset = header(path / "options.bin")
     rows = ((path / "options.bin").stat().st_size - offset) // (4 * len(names))
     if rows == 0:
         return turns, np.zeros((0, len(names)), dtype="<f4")
-    options = np.memmap(path / "options.bin", dtype="<f4", mode="r", offset=offset,
-                        shape=(rows, len(names)))
+    options = np.memmap(
+        path / "options.bin", dtype="<f4", mode="r", offset=offset, shape=(rows, len(names))
+    )
     return turns, options
 
 
@@ -106,8 +111,11 @@ def _store_view(store: Path):
 
 def store_turns(store: Path = DEFAULT_STORE) -> dict:
     """(game_id, turn) -> (rating or None, split, is_bot) for every turn in the store."""
-    rows = _store_view(store).execute(
-        "SELECT game_id, turn, rating, split, is_bot FROM turns").fetchall()
+    rows = (
+        _store_view(store)
+        .execute("SELECT game_id, turn, rating, split, is_bot FROM turns")
+        .fetchall()
+    )
     return {(g, t): (rating, split, bool(bot)) for g, t, rating, split, bot in rows}
 
 
@@ -143,8 +151,19 @@ def build(
     alt_lexicon: Path | None = DEFAULT_ALT_LEXICON,
 ) -> str:
     """Runs the engine; optional inputs that do not exist are left out."""
-    cmd = [str(tool), "--lexicon", str(lexicon), "--leaves", str(leaves), "--games", str(raw),
-           "--out", str(out), "--top", str(top)]
+    cmd = [
+        str(tool),
+        "--lexicon",
+        str(lexicon),
+        "--leaves",
+        str(leaves),
+        "--games",
+        str(raw),
+        "--out",
+        str(out),
+        "--top",
+        str(top),
+    ]
     if store is not None and store.exists():
         write_turn_info(store_turns(store), out / "turn_info.tsv")
         cmd += ["--turn-info", str(out / "turn_info.tsv")]
@@ -170,8 +189,20 @@ def main() -> int:
     ap.add_argument("--tool", type=Path, default=DEFAULT_TOOL)
     ap.add_argument("--progress", action="store_true")
     args = ap.parse_args()
-    print(build(args.lexicon, args.leaves, args.raw, args.out, args.top, args.tool, args.progress,
-                args.store, args.word_freq, args.alt_lexicon))
+    print(
+        build(
+            args.lexicon,
+            args.leaves,
+            args.raw,
+            args.out,
+            args.top,
+            args.tool,
+            args.progress,
+            args.store,
+            args.word_freq,
+            args.alt_lexicon,
+        )
+    )
     return 0
 
 

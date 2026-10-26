@@ -43,8 +43,16 @@ def test_build_on_the_sample_game(tmp_path):
     raw = tmp_path / "raw"
     raw.mkdir()
     shutil.copy(FIXTURES / "sample.gcg", raw)
-    build(FIXTURES / "enable_small.txt", FIXTURES / "leaves_small.klv2", raw, tmp_path / "f", top=8,
-          store=None, word_freq=None, alt_lexicon=None)
+    build(
+        FIXTURES / "enable_small.txt",
+        FIXTURES / "leaves_small.klv2",
+        raw,
+        tmp_path / "f",
+        top=8,
+        store=None,
+        word_freq=None,
+        alt_lexicon=None,
+    )
     turns, options = load(tmp_path / "f")
     names, version, _ = header(tmp_path / "f" / "options.bin")
     assert version == 2 and names[: len(BASE_FEATURES)] == BASE_FEATURES
