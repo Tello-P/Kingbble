@@ -20,6 +20,8 @@
 // built on its model ("none" deals uniform racks only), seats swapped every game.
 //   kingbble_inference_eval --lexicon ... --leaves ... --a human --b rangefinder
 //       --games-played 100 --seed 1 --records out.jsonl [--b-rare 0.3] [--progress]
+// --paired plays each deal twice (games 2k and 2k+1) with the seats swapped, so
+// the luck of the draw cancels out in each pair.
 // --a-rare / --b-rare P make that side play, with probability P, a uniformly
 // random legal option ranked --rare-from or lower by static equity (the
 // stress test). Records score each tracked rack before the tracker moves.
@@ -156,6 +158,7 @@ struct Options {
   double rare[2] = {0, 0};
   int rare_from = 10;
   int games_played = 0;
+  bool paired = false;  // games 2k and 2k+1 share a deal, with the seats swapped
   long long max_turns = 0;
   std::uint64_t seed = 1;
   bool progress = false;
@@ -297,7 +300,7 @@ int SelfPlay(const Options& o, const Setup& setup, Journal& journal) {
     long long rare_moves = 0, surprises = 0;
     int turn = 0;
     bool exchanged[2] = {false, false};
-    Game game(MixSeed(MixSeed(o.seed) + static_cast<std::uint64_t>(g)));
+    Game game(MixSeed(MixSeed(o.seed) + static_cast<std::uint64_t>(o.paired ? g / 2 : g)));
     const int seat_a = g % 2;
     auto side_of = [&](int seat) -> Side& { return sides[seat == seat_a ? 0 : 1]; };
     for (int seat = 0; seat < 2; ++seat)
@@ -431,6 +434,8 @@ int main(int argc, char** argv) {
       o.rare[1] = std::stod(value());
     } else if (a == "--rare-from") {
       o.rare_from = std::stoi(value());
+    } else if (a == "--paired") {
+      o.paired = true;
     } else if (a == "--games-played") {
       o.games_played = std::stoi(value());
     } else if (a == "--sim-candidates") {
@@ -448,15 +453,16 @@ int main(int argc, char** argv) {
     } else if (a == "--progress") {
       o.progress = true;
     } else {
-      std::cerr << "usage: " << argv[0]
-                << " --lexicon FILE --leaves KLV --records JSONL [--human-params FILE]"
-                   " [--bot-params FILE]"
-                   " [--word-freq TSV] [--alt-lexicon FILE] [--tau T]"
-                   " (--games DIR [--turns TSV] [--models LIST] [--max-turns N] [--samples N]"
-                   " | --games-played N [--a MODEL] [--b MODEL] [--a-rare P] [--b-rare P]"
-                   " [--rare-from K] [--sim-candidates N] [--sim-iterations N]"
-                   " [--posterior-share P] [--particles N] [--surprise-bits B] [--threads N]"
-                   " [--seed S]) [--exact-limit N] [--progress]\n";
+      std::cerr
+          << "usage: " << argv[0]
+          << " --lexicon FILE --leaves KLV --records JSONL [--human-params FILE]"
+             " [--bot-params FILE]"
+             " [--word-freq TSV] [--alt-lexicon FILE] [--tau T]"
+             " (--games DIR [--turns TSV] [--models LIST] [--max-turns N] [--samples N]"
+             " | --games-played N [--paired] [--a MODEL] [--b MODEL] [--a-rare P] [--b-rare P]"
+             " [--rare-from K] [--sim-candidates N] [--sim-iterations N]"
+             " [--posterior-share P] [--particles N] [--surprise-bits B] [--threads N]"
+             " [--seed S]) [--exact-limit N] [--progress]\n";
       return 2;
     }
   }
