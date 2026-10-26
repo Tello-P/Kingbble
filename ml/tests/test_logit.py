@@ -4,7 +4,15 @@ np = pytest.importorskip("numpy")
 
 from ml.data.features import Turn  # noqa: E402
 from ml.human_model.dataset import Scaler, mixture_nll, select, tune_mixture  # noqa: E402
-from ml.human_model.logit import band_of, fit, fit_bands, log_p, raw_weights, write_params  # noqa: E402
+from ml.human_model.logit import (  # noqa: E402
+    band_of,
+    fit,
+    fit_bands,
+    in_rating_range,
+    log_p,
+    raw_weights,
+    write_params,
+)
 
 
 def synthetic(w, turns=1500, options=12, seed=0, rating=lambda i: 1600):
@@ -138,3 +146,11 @@ def test_band_mixtures_are_tuned_within_each_band():
     assert len(mixes) == 3 and mixes[2] == (0.05, 0.1)
     assert banded_mixture_nll(lp, ts, mixes) == pytest.approx(nll)
     assert nll <= mixture_nll(lp, ts, 0.05, 0.1) + 1e-12
+
+
+def test_rating_range_keeps_unrated_turns():
+    info = {("g", 1): (1200, "train", False), ("g", 2): (1800, "train", False),
+            ("g", 3): (None, "train", True)}
+    assert set(in_rating_range(info, 1500, None)) == {("g", 2), ("g", 3)}
+    assert set(in_rating_range(info, None, 1500)) == {("g", 1), ("g", 3)}
+    assert in_rating_range(info, None, None) == info
