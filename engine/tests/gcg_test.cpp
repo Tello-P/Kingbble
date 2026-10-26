@@ -115,6 +115,28 @@ TEST(Gcg, AssignsPlayersWithoutPragmas) {
   EXPECT_EQ(g->events[2].player, 0);
 }
 
+// #71: Woogles writes these with an empty rack once the player has gone out.
+TEST(Gcg, ReadsTimeAndChallengeLinesWithAnEmptyRack) {
+  const std::string text = std::string(kHeader) +
+                           ">a: AB 8H AB +8 8\n"
+                           ">a:  (time) -10 -2\n"
+                           ">b:  (challenge) +5 5\n";
+  std::string error;
+  auto game = ParseGcg(text, &error);
+  ASSERT_TRUE(game) << error;
+  ASSERT_EQ(game->events.size(), 3u);
+  EXPECT_EQ(game->events[1].kind, GcgEvent::Kind::kTimePenalty);
+  EXPECT_EQ(game->events[1].rack, "");
+  EXPECT_EQ(game->events[1].score, -10);
+  EXPECT_EQ(game->events[2].kind, GcgEvent::Kind::kChallengeBonus);
+  EXPECT_EQ(game->events[2].player, 1);
+  GcgReplay r = ReplayGcg(*game);
+  ASSERT_TRUE(r.ok) << r.error;
+  EXPECT_EQ(r.scores[0], -2);
+  EXPECT_EQ(r.scores[1], 5);
+  EXPECT_TRUE(ParseGcg(WriteGcg(*game)));  // written back the same way
+}
+
 TEST(Gcg, RejectsMalformedLines) {
   std::string error;
   EXPECT_FALSE(ParseGcg(std::string(kHeader) + ">c: A 8H A +1 1\n", &error));
