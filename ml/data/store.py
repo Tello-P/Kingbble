@@ -1,7 +1,7 @@
 """Turn store: downloaded GCG games as Parquet, queried with DuckDB.
 
-  python -m ml.data.store build   # data/raw/woogles -> data/turns (Parquet, by lexicon)
-  python -m ml.data.store stats   # games, turns and human turns with a known rack
+python -m ml.data.store build   # data/raw/woogles -> data/turns (Parquet, by lexicon)
+python -m ml.data.store stats   # games, turns and human turns with a known rack
 """
 
 from __future__ import annotations
@@ -15,7 +15,8 @@ from pathlib import Path
 from ml.data.gcg import GcgError, parse_gcg, turns
 from ml.data.pseudonym import load_salt, pseudonym
 from ml.data.split import split_of
-from ml.data.woogles import BOTS, DEFAULT_OUT as DEFAULT_RAW
+from ml.data.woogles import BOTS
+from ml.data.woogles import DEFAULT_OUT as DEFAULT_RAW
 
 DEFAULT_STORE = Path(__file__).resolve().parents[2] / "data" / "turns"
 

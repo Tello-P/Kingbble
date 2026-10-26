@@ -74,9 +74,11 @@ def _step(net: Net, z: np.ndarray, starts: np.ndarray, chosen: np.ndarray, decay
 def fit_temperature(net: Net, val: TurnSet, scaler: Scaler) -> float:
     """T minimizing the val softmax NLL of u / T (golden section on log T)."""
     base = net.temperature
-    chunks = [(scaler(x), s, val.chosen[c])
-              for c in val.chunks(np.flatnonzero(val.inside))
-              for x, s in [val.gather(c)]]
+    chunks = [
+        (scaler(x), s, val.chosen[c])
+        for c in val.chunks(np.flatnonzero(val.inside))
+        for x, s in [val.gather(c)]
+    ]
     net.temperature = 1.0
     raw = [(net.utility(z), s, ch) for z, s, ch in chunks]
 
@@ -101,15 +103,29 @@ def fit_temperature(net: Net, val: TurnSet, scaler: Scaler) -> float:
     return float(np.exp((lo + hi) / 2))
 
 
-def fit(train: TurnSet, val: TurnSet, scaler: Scaler, hidden: int = 32, epochs: int = 10,
-        batch: int = 256, lr: float = 5e-4, decay: float = 1e-3, patience: int = 3,
-        seed: int = 0, skip=None, on_epoch=None) -> Net:
+def fit(
+    train: TurnSet,
+    val: TurnSet,
+    scaler: Scaler,
+    hidden: int = 32,
+    epochs: int = 10,
+    batch: int = 256,
+    lr: float = 5e-4,
+    decay: float = 1e-3,
+    patience: int = 3,
+    seed: int = 0,
+    skip=None,
+    on_epoch=None,
+) -> Net:
     """skip: initial linear weights (standardized features), e.g. the logit's."""
     rng = np.random.default_rng(seed)
     d = len(train.cols)
-    net = Net(w1=rng.normal(0, np.sqrt(2 / d), (hidden, d)), b1=np.zeros(hidden),
-              w2=rng.normal(0, 0.01 / np.sqrt(hidden), hidden),
-              v=np.zeros(d) if skip is None else np.array(skip, dtype=float))
+    net = Net(
+        w1=rng.normal(0, np.sqrt(2 / d), (hidden, d)),
+        b1=np.zeros(hidden),
+        w2=rng.normal(0, 0.01 / np.sqrt(hidden), hidden),
+        v=np.zeros(d) if skip is None else np.array(skip, dtype=float),
+    )
     params = ("w1", "b1", "w2", "v")
     m = {k: np.zeros_like(getattr(net, k)) for k in params}
     s = {k: np.zeros_like(getattr(net, k)) for k in params}

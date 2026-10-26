@@ -25,10 +25,20 @@ def test_ece_is_zero_when_calibrated_and_large_when_not():
 
 def test_summarize_groups_by_model():
     records = [
-        {"model": "a", "truth": "AE", "guess": "EA", "p_true": 0.5,
-         "tile_probs": {"A": 1.0, "E": 1.0, "Z": 0.0}},
-        {"model": "a", "truth": "Z", "guess": "A", "p_true": 0.5,
-         "tile_probs": {"A": 0.9, "Z": 0.1}},
+        {
+            "model": "a",
+            "truth": "AE",
+            "guess": "EA",
+            "p_true": 0.5,
+            "tile_probs": {"A": 1.0, "E": 1.0, "Z": 0.0},
+        },
+        {
+            "model": "a",
+            "truth": "Z",
+            "guess": "A",
+            "p_true": 0.5,
+            "tile_probs": {"A": 0.9, "Z": 0.1},
+        },
         {"model": "b", "truth": "Z", "guess": "Z", "p_true": 1.0, "tile_probs": {"Z": 1.0}},
     ]
     s = summarize(records)
