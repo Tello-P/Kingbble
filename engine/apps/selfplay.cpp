@@ -15,6 +15,16 @@
 // With --results FILE every finished game is appended to FILE and a rerun skips
 // the games already there; --status prints the totals of FILE and exits.
 // Suffixes stack: "sim+peg+eg", "equity+apeg+peg+eg".
+//   kingbble_selfplay ... --a risk --b sim --paired --risk-lambda 1 --risk-shrink 25
+// "risk" and "riskwin" pick among the simulated candidates by mean - lambda *
+// variance or by win % with 7-25 tiles in the bag (RiskParams): --risk-lambda
+// scales the theoretical lambda, --risk-rest-sd sets the spread to come per
+// root of a tile, --risk-shrink the variance shrinkage, --risk-relative uses
+// the variance relative to the best candidate and --risk-iterations multiplies
+// the iterations inside the window. --sim-plies sets both bots' playout depth
+// and --a-plies bot a's alone. Result lines end with each bot's moves and
+// seconds (", a M moves T s, b M moves T s"). --paired plays each deal twice, games 2k-1 and 2k,
+// with the bots swapping seats, so luck of the draw cancels out in each pair.
 
 #include <chrono>
 #include <cstdlib>
@@ -77,7 +87,10 @@ int main(int argc, char** argv) {
   bool progress = false;  // "progress: G/N" on stderr after each game
   std::string results_path;
   bool status_only = false;
+  bool paired = false;
+  int a_plies = 0;  // 0: as b
   SimParams sim;
+  RiskParams risk;
   double endgame_time = 5;
   PegOptions peg;
   peg.params.candidates = 10;
@@ -104,6 +117,12 @@ int main(int argc, char** argv) {
       sim.candidates = std::stoi(value());
     } else if (a == "--sim-iterations") {
       sim.max_iterations = std::stoi(value());
+    } else if (a == "--a-plies") {
+      a_plies = std::stoi(value());
+    } else if (a == "--sim-plies") {
+      sim.plies = std::stoi(value());
+    } else if (a == "--sim-time") {
+      sim.time_limit_s = std::stod(value());
     } else if (a == "--endgame-time") {
       endgame_time = std::stod(value());
     } else if (a == "--peg-bag") {
@@ -134,13 +153,29 @@ int main(int argc, char** argv) {
       results_path = value();
     } else if (a == "--status") {
       status_only = true;
+    } else if (a == "--paired") {
+      paired = true;
+    } else if (a == "--risk-lambda") {
+      risk.lambda_scale = std::stod(value());
+    } else if (a == "--risk-shrink") {
+      risk.shrink = std::stod(value());
+    } else if (a == "--risk-relative") {
+      risk.relative_variance = true;
+    } else if (a == "--risk-iterations") {
+      risk.iterations_factor = std::stoi(value());
+    } else if (a == "--risk-rest-sd") {
+      risk.win.rest_sd_per_sqrt_tile = std::stod(value());
     } else {
       std::cerr << "usage: " << argv[0]
                 << " --lexicon FILE [--leaves KLV] [--a BOT] [--b BOT] [--games N] [--seed S]"
-                   " [--sim-candidates N] [--sim-iterations N] [--threads N] [--endgame-time S]"
+                   " [--sim-candidates N] [--sim-iterations N] [--sim-plies N] [--a-plies N] "
+                   "[--sim-time S]"
+                   " [--threads N] [--endgame-time S]"
                    " [--peg-bag N] [--peg-candidates N] [--peg-time S] [--apeg-candidates N]"
                    " [--apeg-samples N] [--apeg-plies N] [--apeg-time S] [--verbose]"
-                   " [--progress] [--results FILE [--status]]\n";
+                   " [--progress] [--results FILE [--status]] [--paired] [--risk-lambda L]"
+                   " [--risk-rest-sd S] [--risk-shrink K] [--risk-relative]"
+                   " [--risk-iterations F]\n";
       return 2;
     }
   }
@@ -166,8 +201,11 @@ int main(int argc, char** argv) {
     std::cout << "leaves: " << leaves->Size() << "\n";
   }
   sim.seed = seed;
-  std::unique_ptr<Bot> bots[2] = {MakeBot(kind_a, gaddag, leaves.get(), sim, endgame_time, peg),
-                                  MakeBot(kind_b, gaddag, leaves.get(), sim, endgame_time, peg)};
+  SimParams a_sim = sim;
+  if (a_plies > 0) a_sim.plies = a_plies;
+  std::unique_ptr<Bot> bots[2] = {
+      MakeBot(kind_a, gaddag, leaves.get(), a_sim, endgame_time, peg, risk),
+      MakeBot(kind_b, gaddag, leaves.get(), sim, endgame_time, peg, risk)};
 
   long long turns = 0, generated = 0;
   double gen_s = 0;
@@ -180,13 +218,20 @@ int main(int argc, char** argv) {
   report();
   for (int g = 0; g < games; ++g) {
     if (results.Done(g + 1)) continue;
-    Game game(MixSeed(MixSeed(seed) + static_cast<std::uint64_t>(g)));
+    const int deal = paired ? g / 2 : g;
+    Game game(MixSeed(MixSeed(seed) + static_cast<std::uint64_t>(deal)));
     const int seat_a = g % 2;  // seat of bot a in this game
+    int moves[2] = {0, 0};     // by bot: a, b
+    double seconds[2] = {0, 0};
     while (!game.over()) {
-      Bot& bot = *bots[game.to_move() == seat_a ? 0 : 1];
+      const int side = game.to_move() == seat_a ? 0 : 1;
+      Bot& bot = *bots[side];
       auto t = Clock::now();
       Move m = bot.Choose(game);
-      gen_s += std::chrono::duration<double>(Clock::now() - t).count();
+      const double spent = std::chrono::duration<double>(Clock::now() - t).count();
+      gen_s += spent;
+      seconds[side] += spent;
+      ++moves[side];
       generated += static_cast<long long>(bot.last_num_moves());
       ++turns;
       if (verbose) {
@@ -196,8 +241,12 @@ int main(int argc, char** argv) {
       game.Apply(m);
     }
     const int s0 = game.score(0), s1 = game.score(1);
+    char timing[96];
+    std::snprintf(timing, sizeof timing, ", a %d moves %.2f s, b %d moves %.2f s", moves[0],
+                  seconds[0], moves[1], seconds[1]);
     results.Append(g + 1, "game " + std::to_string(g + 1) + ": " + std::to_string(s0) + " - " +
-                              std::to_string(s1) + ", a in seat " + std::to_string(seat_a + 1));
+                              std::to_string(s1) + ", a in seat " + std::to_string(seat_a + 1) +
+                              timing);
     if (verbose) std::cout << "game " << g + 1 << ": " << s0 << " - " << s1 << "\n";
     report();
   }

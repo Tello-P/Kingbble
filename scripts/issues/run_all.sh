@@ -22,6 +22,8 @@ PLAN=(
   "34 1200 issue_34_quackle_and_smp.sh"
   "38 200 issue_38_collect_turns.sh"
   "47 205 issue_47_inference_eval.sh"
+  "54 400 issue_54_risk_eval.sh"
+  "54 270 issue_54_position_bank.sh"
 )
 
 dry=() quick=() more=() status=0 players=${KINGBBLE_PLAYERS:-} only=()
