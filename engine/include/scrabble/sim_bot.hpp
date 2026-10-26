@@ -21,6 +21,13 @@ struct SimParams {
   // Share of opponent racks taken from the rack sampler, if one is set; the
   // rest are uniform draws from the unseen tiles.
   double posterior_share = 0.8;
+  // Moves played after the candidate in each playout, alternating opponent and
+  // us, each the mover's best by static equity (2: the opponent's reply and our
+  // follow-up).
+  int plies = 2;
+  // Seconds per move (0: no limit). Batches stop once it is spent, after
+  // min_iterations, so results then depend on the machine's speed.
+  double time_limit_s = 0;
 };
 
 struct SimResult {
@@ -33,12 +40,12 @@ struct SimResult {
   std::vector<double> values;  // simulated value of each iteration
 };
 
-// Monte Carlo 2-ply simulation (as Quackle and Macondo do): for each of the top
+// Monte Carlo simulation (as Quackle and Macondo do): for each of the top
 // static candidates, deal the opponent a random rack from the unseen tiles,
-// let them reply with their best static move, then play our best static
-// follow-up. A candidate's value is the spread over the three moves plus our
-// final leave. Every candidate sees the same racks and draws in a given
-// iteration, and results do not depend on the number of threads.
+// then play `plies` more moves, opponent and us in turn, each the mover's best
+// static move. A candidate's value is the spread over those moves plus the
+// leave of the last mover, ours counted for us and the opponent's against. Every candidate sees the
+// same racks and draws in a given iteration, and results do not depend on the number of threads.
 class SimBot : public Bot {
  public:
   SimBot(const Gaddag& gaddag, const Leaves& leaves, SimParams params);

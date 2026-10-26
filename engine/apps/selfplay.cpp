@@ -114,6 +114,10 @@ int main(int argc, char** argv) {
       sim.candidates = std::stoi(value());
     } else if (a == "--sim-iterations") {
       sim.max_iterations = std::stoi(value());
+    } else if (a == "--sim-plies") {
+      sim.plies = std::stoi(value());
+    } else if (a == "--sim-time") {
+      sim.time_limit_s = std::stod(value());
     } else if (a == "--endgame-time") {
       endgame_time = std::stod(value());
     } else if (a == "--peg-bag") {
@@ -159,7 +163,8 @@ int main(int argc, char** argv) {
     } else {
       std::cerr << "usage: " << argv[0]
                 << " --lexicon FILE [--leaves KLV] [--a BOT] [--b BOT] [--games N] [--seed S]"
-                   " [--sim-candidates N] [--sim-iterations N] [--threads N] [--endgame-time S]"
+                   " [--sim-candidates N] [--sim-iterations N] [--sim-plies N] [--sim-time S]"
+                   " [--threads N] [--endgame-time S]"
                    " [--peg-bag N] [--peg-candidates N] [--peg-time S] [--apeg-candidates N]"
                    " [--apeg-samples N] [--apeg-plies N] [--apeg-time S] [--verbose]"
                    " [--progress] [--results FILE [--status]] [--paired] [--risk-lambda L]"
