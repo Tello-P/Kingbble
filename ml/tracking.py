@@ -27,8 +27,10 @@ def _mlflow():
         import mlflow
     except ImportError:
         if not _warned:
-            warnings.warn("mlflow is not installed: runs are not logged (pip install -e .[mlflow])",
-                          stacklevel=3)
+            warnings.warn(
+                "mlflow is not installed: runs are not logged (pip install -e .[mlflow])",
+                stacklevel=3,
+            )
             _warned = True
         return None
     # The file store needs no database (mlflow-skinny has no SQL backend); MLflow 3
@@ -52,16 +54,21 @@ def run(name: str, tags: dict | None = None):
 
 
 def _params(config: dict) -> dict:
-    return {k: (json.dumps(v) if isinstance(v, list | tuple | dict) else v)
-            for k, v in config.items() if v is not None and k != "extra"}
+    return {
+        k: (json.dumps(v) if isinstance(v, list | tuple | dict) else v)
+        for k, v in config.items()
+        if v is not None and k != "extra"
+    }
 
 
 def log_training(version: Path) -> None:
     """Logs a version saved by ml.train: config, learning curve and files."""
     config = json.loads((version / "config.json").read_text())
     curve = json.loads((version / "curve.json").read_text())
-    with run(f"train {version.name}", {"step": "train", "version": version.name,
-                                       "level": str(config.get("level"))}) as mlflow:
+    with run(
+        f"train {version.name}",
+        {"step": "train", "version": version.name, "level": str(config.get("level"))},
+    ) as mlflow:
         if mlflow is None:
             return
         mlflow.log_params(_params(config))
@@ -76,15 +83,21 @@ def log_training(version: Path) -> None:
 def log_evaluation(version: Path) -> None:
     """Logs a version's evaluation.json (ml.evaluate)."""
     result = json.loads((version / "evaluation.json").read_text())
-    with run(f"evaluate {version.name}", {"step": "evaluate", "version": version.name,
-                                          "verdict": result["verdict"]}) as mlflow:
+    with run(
+        f"evaluate {version.name}",
+        {"step": "evaluate", "version": version.name, "verdict": result["verdict"]},
+    ) as mlflow:
         if mlflow is None:
             return
-        mlflow.log_params({"previous": result.get("previous") or "none",
-                           "min_gain": result["min_gain"]})
+        mlflow.log_params(
+            {"previous": result.get("previous") or "none", "min_gain": result["min_gain"]}
+        )
         metrics = {f"log_loss_{k}": v for k, v in result["log_loss"].items() if v is not None}
-        metrics |= {f"match_{k}": v for k, v in result["match"].items()
-                    if isinstance(v, int | float) and not isinstance(v, bool)}
+        metrics |= {
+            f"match_{k}": v
+            for k, v in result["match"].items()
+            if isinstance(v, int | float) and not isinstance(v, bool)
+        }
         metrics["seconds"] = result["seconds"]
         mlflow.log_metrics(metrics)
         mlflow.log_artifact(str(version / "evaluation.json"))

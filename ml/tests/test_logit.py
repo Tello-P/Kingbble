@@ -149,8 +149,11 @@ def test_band_mixtures_are_tuned_within_each_band():
 
 
 def test_rating_range_keeps_unrated_turns():
-    info = {("g", 1): (1200, "train", False), ("g", 2): (1800, "train", False),
-            ("g", 3): (None, "train", True)}
+    info = {
+        ("g", 1): (1200, "train", False),
+        ("g", 2): (1800, "train", False),
+        ("g", 3): (None, "train", True),
+    }
     assert set(in_rating_range(info, 1500, None)) == {("g", 2), ("g", 3)}
     assert set(in_rating_range(info, None, 1500)) == {("g", 1), ("g", 3)}
     assert in_rating_range(info, None, None) == info

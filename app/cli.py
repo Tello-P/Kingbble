@@ -59,20 +59,32 @@ def cpu_seconds() -> float:
 
 
 def disk_bytes(path: Path) -> int:
-    return sum(p.stat().st_size for p in path.rglob("*") if p.is_file() and not p.is_symlink()) \
-        if path.exists() else 0
+    return (
+        sum(p.stat().st_size for p in path.rglob("*") if p.is_file() and not p.is_symlink())
+        if path.exists()
+        else 0
+    )
 
 
 class Auto:
     """The Auto loop; train_fn and evaluate_fn are ml.train.train and ml.evaluate.evaluate
     (replaceable in tests), measured against the budget between steps."""
 
-    def __init__(self, cfg: Config, work: Path, limits: Limits, budget_cpu_hours: float,
-                 budget_gb: float, eval_kw: dict | None = None,
-                 train_fn: Callable = train, evaluate_fn: Callable = evaluate,
-                 cpu_fn: Callable[[], float] = cpu_seconds,
-                 disk_fn: Callable[[Path], int] = disk_bytes, log=print,
-                 max_level: int = MAX_LEVEL):
+    def __init__(
+        self,
+        cfg: Config,
+        work: Path,
+        limits: Limits,
+        budget_cpu_hours: float,
+        budget_gb: float,
+        eval_kw: dict | None = None,
+        train_fn: Callable = train,
+        evaluate_fn: Callable = evaluate,
+        cpu_fn: Callable[[], float] = cpu_seconds,
+        disk_fn: Callable[[Path], int] = disk_bytes,
+        log=print,
+        max_level: int = MAX_LEVEL,
+    ):
         self.cfg, self.work, self.limits = cfg, work, limits
         self.budget_cpu = budget_cpu_hours * 3600
         self.budget_disk = budget_gb * 2**30
@@ -86,8 +98,15 @@ class Auto:
     def _load(self) -> dict:
         if self.path.exists():
             return json.loads(self.path.read_text())
-        return {"level": self.cfg.level, "k": self.cfg.top_k, "best": None, "pending": None,
-                "cpu_seconds": 0.0, "history": [], "stopped": None}
+        return {
+            "level": self.cfg.level,
+            "k": self.cfg.top_k,
+            "best": None,
+            "pending": None,
+            "cpu_seconds": 0.0,
+            "history": [],
+            "stopped": None,
+        }
 
     def _save(self) -> None:
         self.work.mkdir(parents=True, exist_ok=True)
@@ -115,8 +134,9 @@ class Auto:
     def run(self) -> dict:
         start_cpu = self.cpu_fn()
         if self.state.get("stopped"):
-            self.log(f"auto: already stopped ({self.state['stopped']}); remove {self.path} "
-                     "to start over")
+            self.log(
+                f"auto: already stopped ({self.state['stopped']}); remove {self.path} to start over"
+            )
             return self.state
         with tracking.run("auto", {"step": "auto"}):
             while True:
@@ -139,13 +159,19 @@ class Auto:
                         return self._stop(reason, start_cpu)
                 version = Path(self.state["pending"])
                 best = Path(self.state["best"]) if self.state["best"] else None
-                result = self.evaluate_fn(version, best, limits=self.limits, log=self.log,
-                                          **self.eval_kw)
+                result = self.evaluate_fn(
+                    version, best, limits=self.limits, log=self.log, **self.eval_kw
+                )
                 curve = json.loads((version / "curve.json").read_text())
                 dropping = still_dropping(curve)
-                self.state["history"].append({"level": level, "version": str(version),
-                                              "verdict": result["verdict"],
-                                              "still_dropping": dropping})
+                self.state["history"].append(
+                    {
+                        "level": level,
+                        "version": str(version),
+                        "verdict": result["verdict"],
+                        "still_dropping": dropping,
+                    }
+                )
                 self.state["pending"] = None
                 self.state["cpu_seconds"] = self._spent(start_cpu)
                 start_cpu = self.cpu_fn()
@@ -167,21 +193,26 @@ class Auto:
 
 def eval_args(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--eval-games", type=int, default=20, help="paired match games")
-    ap.add_argument("--eval-max-turns", type=int, default=2000)
+    ap.add_argument("--eval-max-turns", type=int, default=300)
     ap.add_argument("--eval-sim-candidates", type=int, default=8)
     ap.add_argument("--eval-sim-iterations", type=int, default=50)
     ap.add_argument("--min-gain", type=float, default=0.01)
 
 
 def eval_kw(args) -> dict:
-    return {"games": args.eval_games, "max_turns": args.eval_max_turns,
-            "sim_candidates": args.eval_sim_candidates,
-            "sim_iterations": args.eval_sim_iterations, "min_gain": args.min_gain}
+    return {
+        "games": args.eval_games,
+        "max_turns": args.eval_max_turns,
+        "sim_candidates": args.eval_sim_candidates,
+        "sim_iterations": args.eval_sim_iterations,
+        "min_gain": args.min_gain,
+    }
 
 
 def versions(work: Path) -> list[Path]:
-    return sorted(p for p in (work / "models").glob("v[0-9][0-9][0-9]")
-                  if (p / "model.txt").exists())
+    return sorted(
+        p for p in (work / "models").glob("v[0-9][0-9][0-9]") if (p / "model.txt").exists()
+    )
 
 
 def cmd_train(args) -> int:
@@ -224,8 +255,15 @@ def cmd_improve(args) -> int:
 def cmd_auto(args) -> int:
     cfg, limits = config_from(args)
     cfg = replace(cfg, top_k=args.k)
-    Auto(cfg, args.work, limits, args.budget_cpu_hours, args.budget_gb, eval_kw(args),
-         max_level=args.max_level).run()
+    Auto(
+        cfg,
+        args.work,
+        limits,
+        args.budget_cpu_hours,
+        args.budget_gb,
+        eval_kw(args),
+        max_level=args.max_level,
+    ).run()
     return 0
 
 
@@ -233,8 +271,10 @@ def cmd_status(args) -> int:
     for v in versions(args.work):
         config = json.loads((v / "config.json").read_text())
         curve = json.loads((v / "curve.json").read_text())
-        line = (f"{v.name}: level {config['level']}, {config['games_played']} games, "
-                f"val NLL {curve[-1]['val_nll']:.4f}")
+        line = (
+            f"{v.name}: level {config['level']}, {config['games_played']} games, "
+            f"val NLL {curve[-1]['val_nll']:.4f}"
+        )
         if (v / "evaluation.json").exists():
             e = json.loads((v / "evaluation.json").read_text())
             line += f", {e['verdict']}"
@@ -242,8 +282,10 @@ def cmd_status(args) -> int:
     auto = args.work / "auto.json"
     if auto.exists():
         state = json.loads(auto.read_text())
-        print(f"auto: level {state['level']}, best {state['best']}, "
-              f"{state['cpu_seconds'] / 3600:.2f} CPU hours, stopped: {state['stopped']}")
+        print(
+            f"auto: level {state['level']}, best {state['best']}, "
+            f"{state['cpu_seconds'] / 3600:.2f} CPU hours, stopped: {state['stopped']}"
+        )
     print(f"disk: {disk_bytes(args.work) / 2**30:.2f} GB in {args.work}")
     return 0
 
@@ -266,19 +308,26 @@ def parser() -> argparse.ArgumentParser:
     return ap
 
 
-COMMANDS = {"train": cmd_train, "evaluate": cmd_evaluate, "improve": cmd_improve,
-            "auto": cmd_auto, "status": cmd_status}
+COMMANDS = {
+    "train": cmd_train,
+    "evaluate": cmd_evaluate,
+    "improve": cmd_improve,
+    "auto": cmd_auto,
+    "status": cmd_status,
+}
 
 
 def menu() -> list[str]:
     """Asks for the command and its main options; returns the arguments."""
+
     def ask(prompt: str, default: str) -> str:
         answer = input(f"{prompt} [{default}]: ").strip()
         return answer or default
 
     print("1 train  2 evaluate  3 improve  4 auto  5 status")
-    command = {"1": "train", "2": "evaluate", "3": "improve", "4": "auto",
-               "5": "status"}.get(ask("option", "5"), "status")
+    command = {"1": "train", "2": "evaluate", "3": "improve", "4": "auto", "5": "status"}.get(
+        ask("option", "5"), "status"
+    )
     argv = [command]
     if command in ("train", "auto"):
         level = ask("level: 0 smoke (1,000 games), 1 test (10,000), or a number of games", "0")
@@ -301,8 +350,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command not in ("status",):
         check_busy(args.force)
         for tool in ("kingbble_selfplay", "kingbble_features", "kingbble_inference_eval"):
-            if not (Path(__file__).resolve().parents[1] / "build" / "engine" / tool).exists() \
-                    and not shutil.which(tool):
+            if not (
+                Path(__file__).resolve().parents[1] / "build" / "engine" / tool
+            ).exists() and not shutil.which(tool):
                 raise SystemExit(f"build the engine first (missing build/engine/{tool})")
     return COMMANDS[args.command](args)
 

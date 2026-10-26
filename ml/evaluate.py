@@ -1,7 +1,7 @@
 """Gate between model versions: rack inference log-loss and a paired match.
 
   python -m ml.evaluate --model build/m6/models/v002 [--previous build/m6/models/v001]
-                        [--games 20] [--max-turns 2000] [--sim-candidates 8]
+                        [--games 20] [--max-turns 300] [--sim-candidates 8]
                         [--sim-iterations 50] [--threads 3] [--mem 6G] [--force]
 
 1. Log-loss of the opponent's true leave on the test split of the model's data
@@ -101,7 +101,7 @@ def match_scores(done_file: Path) -> dict[int, tuple[float, float]]:
 
 
 def verdict(log_loss: dict, match: dict, min_gain: float = 0.01) -> str:
-    """"worse", "better" or "not better" (see the module docstring)."""
+    """ "worse", "better" or "not better" (see the module docstring)."""
     if match.get("win") is not None and match.get("pairs", MIN_PAIRS) >= MIN_PAIRS:
         if match["win_hi"] < 50:
             return "worse"
@@ -113,10 +113,18 @@ def verdict(log_loss: dict, match: dict, min_gain: float = 0.01) -> str:
     return "not better"
 
 
-def evaluate(model: Path, previous: Path | None = None, games: int = 20,
-             max_turns: int = 2000, sim_candidates: int = 8, sim_iterations: int = 50,
-             seed: int = 1, min_gain: float = 0.01, limits: Limits | None = None,
-             log=print) -> dict:
+def evaluate(
+    model: Path,
+    previous: Path | None = None,
+    games: int = 20,
+    max_turns: int = 300,
+    sim_candidates: int = 8,
+    sim_iterations: int = 50,
+    seed: int = 1,
+    min_gain: float = 0.01,
+    limits: Limits | None = None,
+    log=print,
+) -> dict:
     limits = limits or Limits()
     start = time.time()
     config = json.loads((model / "config.json").read_text())
@@ -134,38 +142,80 @@ def evaluate(model: Path, previous: Path | None = None, games: int = 20,
     if prev_params:
         runs.append(("oracle_previous", ["--models", "human", "--human-params", prev_params]))
     for name, args in runs:
-        limits.run([EVAL, *lex, "--games", raw, "--turns", turns, "--max-turns", max_turns,
-                    "--records", out / f"{name}.jsonl", *args], stdout=subprocess.DEVNULL)
+        limits.run(
+            [
+                EVAL,
+                *lex,
+                "--games",
+                raw,
+                "--turns",
+                turns,
+                "--max-turns",
+                max_turns,
+                "--records",
+                out / f"{name}.jsonl",
+                *args,
+            ],
+            stdout=subprocess.DEVNULL,
+        )
     new = summarize(records(out / "oracle_new.jsonl"))
-    log_loss = {"none": new.get("none", {}).get("log_loss"),
-                "new": new.get("human", {}).get("log_loss"), "turns": new.get("human", {}).get("n")}
+    log_loss = {
+        "none": new.get("none", {}).get("log_loss"),
+        "new": new.get("human", {}).get("log_loss"),
+        "turns": new.get("human", {}).get("n"),
+    }
     if prev_params:
         prev = summarize(records(out / "oracle_previous.jsonl"))
         log_loss["previous"] = prev.get("human", {}).get("log_loss")
 
     log(f"paired match, {games} games: new vs {'previous' if prev_params else 'uniform racks'}")
-    match_args = ["--games-played", games, "--paired", "--seed", seed, "--a", "human",
-                  "--human-params", new_params, "--sim-candidates", sim_candidates,
-                  "--sim-iterations", sim_iterations, "--threads", limits.threads,
-                  "--records", out / "match.jsonl"]
+    match_args = [
+        "--games-played",
+        games,
+        "--paired",
+        "--seed",
+        seed,
+        "--a",
+        "human",
+        "--human-params",
+        new_params,
+        "--sim-candidates",
+        sim_candidates,
+        "--sim-iterations",
+        sim_iterations,
+        "--threads",
+        limits.threads,
+        "--records",
+        out / "match.jsonl",
+    ]
     match_args += ["--b", "bot", "--bot-params", prev_params] if prev_params else ["--b", "none"]
     if games > 0:
         limits.run([EVAL, *lex, *match_args], stdout=subprocess.DEVNULL)
     match = paired_ci(match_scores(out / "match.jsonl.done"))
     match["opponent"] = str(previous) if previous else "none"
 
-    result = {"model": str(model), "previous": str(previous) if previous else None,
-              "log_loss": log_loss, "beats_uniform": _lt(log_loss["new"], log_loss["none"]),
-              "match": match, "min_gain": min_gain,
-              "verdict": verdict(log_loss, match, min_gain),
-              "seconds": round(time.time() - start, 1)}
+    result = {
+        "model": str(model),
+        "previous": str(previous) if previous else None,
+        "log_loss": log_loss,
+        "beats_uniform": _lt(log_loss["new"], log_loss["none"]),
+        "match": match,
+        "min_gain": min_gain,
+        "verdict": verdict(log_loss, match, min_gain),
+        "seconds": round(time.time() - start, 1),
+    }
     (model / "evaluation.json").write_text(json.dumps(result, indent=1) + "\n")
     tracking.log_evaluation(model)
-    log(f"log-loss new {_fmt(log_loss['new'])}, uniform {_fmt(log_loss['none'])}"
+    log(
+        f"log-loss new {_fmt(log_loss['new'])}, uniform {_fmt(log_loss['none'])}"
         + (f", previous {_fmt(log_loss['previous'])}" if prev_params else "")
-        + (f"; win % {match['win']:.1f} ({match['win_lo']:.1f}-{match['win_hi']:.1f})"
-           if match.get("win") is not None else f"; {match['games']} match games")
-        + f": {result['verdict']}")
+        + (
+            f"; win % {match['win']:.1f} ({match['win_lo']:.1f}-{match['win_hi']:.1f})"
+            if match.get("win") is not None
+            else f"; {match['games']} match games"
+        )
+        + f": {result['verdict']}"
+    )
     return result
 
 
@@ -182,7 +232,7 @@ def main() -> int:
     ap.add_argument("--model", type=Path, required=True)
     ap.add_argument("--previous", type=Path)
     ap.add_argument("--games", type=int, default=20, help="match games (even; 0: none)")
-    ap.add_argument("--max-turns", type=int, default=2000)
+    ap.add_argument("--max-turns", type=int, default=300)
     ap.add_argument("--sim-candidates", type=int, default=8)
     ap.add_argument("--sim-iterations", type=int, default=50)
     ap.add_argument("--seed", type=int, default=1)
@@ -192,8 +242,17 @@ def main() -> int:
     ap.add_argument("--force", action="store_true")
     args = ap.parse_args()
     check_busy(args.force)
-    evaluate(args.model, args.previous, args.games, args.max_turns, args.sim_candidates,
-             args.sim_iterations, args.seed, args.min_gain, Limits(args.threads, args.mem))
+    evaluate(
+        args.model,
+        args.previous,
+        args.games,
+        args.max_turns,
+        args.sim_candidates,
+        args.sim_iterations,
+        args.seed,
+        args.min_gain,
+        Limits(args.threads, args.mem),
+    )
     return 0
 
 

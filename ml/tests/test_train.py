@@ -18,8 +18,11 @@ def test_versions_count_up_and_skip_unfinished(tmp_path):
 
 
 def test_learning_curve_still_dropping():
-    curve = [{"fraction": 0.25, "val_nll": 2.0}, {"fraction": 0.5, "val_nll": 1.9},
-             {"fraction": 1.0, "val_nll": 1.85}]
+    curve = [
+        {"fraction": 0.25, "val_nll": 2.0},
+        {"fraction": 0.5, "val_nll": 1.9},
+        {"fraction": 1.0, "val_nll": 1.85},
+    ]
     assert still_dropping(curve)
     curve[2]["val_nll"] = 1.899
     assert not still_dropping(curve)
