@@ -1,7 +1,9 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <memory>
+#include <random>
 #include <vector>
 
 #include "scrabble/bot.hpp"
@@ -21,6 +23,28 @@ struct SimParams {
   // Share of opponent racks taken from the rack sampler, if one is set; the
   // rest are uniform draws from the unseen tiles.
   double posterior_share = 0.8;
+  // Moves played after the candidate in each playout, alternating opponent and
+  // us, each the mover's best by static equity (2: the opponent's reply and our
+  // follow-up). 3 won 56.5 % of 200 games against 2 on the #57 position bank.
+  int plies = 3;
+  // Seconds per move (0: no limit). Batches stop once it is spent, after
+  // min_iterations, so results then depend on the machine's speed.
+  double time_limit_s = 0;
+  // Replies inside the playouts: with reply_temperature > 0 the mover picks
+  // among their reply_top best static moves with probability proportional to
+  // exp((equity - best) / reply_temperature) instead of always the best. Only
+  // the opponent's replies, unless reply_own.
+  int reply_top = 1;
+  double reply_temperature = 0;
+  bool reply_own = false;
+};
+
+// Picks the move of the player to move inside a playout (e.g. from a model of
+// how opponents play). One per thread.
+class ReplyPolicy {
+ public:
+  virtual ~ReplyPolicy() = default;
+  virtual Move Pick(const Game& game, std::mt19937_64& rng) = 0;
 };
 
 struct SimResult {
@@ -30,14 +54,15 @@ struct SimResult {
   double std_error = 0;  // standard error of the mean
   int iterations = 0;
   bool pruned = false;
+  std::vector<double> values;  // simulated value of each iteration
 };
 
-// Monte Carlo 2-ply simulation (as Quackle and Macondo do): for each of the top
+// Monte Carlo simulation (as Quackle and Macondo do): for each of the top
 // static candidates, deal the opponent a random rack from the unseen tiles,
-// let them reply with their best static move, then play our best static
-// follow-up. A candidate's value is the spread over the three moves plus our
-// final leave. Every candidate sees the same racks and draws in a given
-// iteration, and results do not depend on the number of threads.
+// then play `plies` more moves, opponent and us in turn, each the mover's best
+// static move. A candidate's value is the spread over those moves plus the
+// leave of the last mover, ours counted for us and the opponent's against. Every candidate sees the
+// same racks and draws in a given iteration, and results do not depend on the number of threads.
 class SimBot : public Bot {
  public:
   SimBot(const Gaddag& gaddag, const Leaves& leaves, SimParams params);
@@ -48,14 +73,19 @@ class SimBot : public Bot {
   // Opponent racks inferred from the game so far (e.g. a RackFilter); nullptr
   // for uniform racks only. It must outlive Choose and stay unchanged during it.
   void set_rack_sampler(const RackSampler* sampler) { sampler_ = sampler; }
+  // Replies from `make()` policies (one per thread) instead of the static
+  // ones, for the same plies as reply_top; an empty function goes back.
+  void set_reply_policy(const std::function<std::unique_ptr<ReplyPolicy>()>& make);
 
  private:
-  double Playout(EquityBot& bot, const Game& base, const Move& candidate) const;
+  double Playout(int thread, const Game& base, const Move& candidate, std::uint64_t seed) const;
+  Move Reply(int thread, const Game& game, std::mt19937_64& rng) const;
   Game SamplePosition(const Game& game, std::uint64_t seed) const;
 
   SimParams params_;
   const RackSampler* sampler_ = nullptr;
-  std::vector<std::unique_ptr<EquityBot>> bots_;  // one per thread
+  std::vector<std::unique_ptr<EquityBot>> bots_;        // one per thread
+  std::vector<std::unique_ptr<ReplyPolicy>> policies_;  // one per thread, or none
   std::uint64_t calls_ = 0;
   std::vector<SimResult> results_;
 };

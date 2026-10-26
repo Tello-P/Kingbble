@@ -12,6 +12,8 @@ add_library(scrabble_engine
   src/equity.cpp
   src/equity_bot.cpp
   src/sim_bot.cpp
+  src/win_prob.cpp
+  src/risk_bot.cpp
   src/endgame.cpp
   src/endgame_bot.cpp
   src/preendgame.cpp
@@ -25,6 +27,7 @@ add_library(scrabble_engine
   src/wordprune.cpp
   src/features.cpp
   src/inference.cpp
+  src/human_reply.cpp
 )
 
 add_executable(kingbble_selfplay apps/selfplay.cpp)
@@ -39,6 +42,12 @@ add_executable(kingbble_features apps/features.cpp)
 target_link_libraries(kingbble_features PRIVATE scrabble_engine)
 add_executable(kingbble_inference_eval apps/inference_eval.cpp)
 target_link_libraries(kingbble_inference_eval PRIVATE scrabble_engine)
+add_executable(kingbble_risk_diag apps/risk_diag.cpp)
+target_link_libraries(kingbble_risk_diag PRIVATE scrabble_engine)
+add_executable(kingbble_position_bank apps/position_bank.cpp)
+target_link_libraries(kingbble_position_bank PRIVATE scrabble_engine)
+add_executable(kingbble_macondo_match apps/macondo_match.cpp)
+target_link_libraries(kingbble_macondo_match PRIVATE scrabble_engine)
 find_package(Threads REQUIRED)
 target_link_libraries(scrabble_engine PUBLIC Threads::Threads)
 target_include_directories(scrabble_engine PUBLIC include)
@@ -70,6 +79,9 @@ if(SCRABBLE_BUILD_TESTS)
     tests/leaves_test.cpp
     tests/equity_test.cpp
     tests/sim_bot_test.cpp
+    tests/sim_depth_test.cpp
+    tests/win_prob_test.cpp
+    tests/risk_bot_test.cpp
     tests/endgame_test.cpp
     tests/preendgame_test.cpp
     tests/approx_preendgame_test.cpp
