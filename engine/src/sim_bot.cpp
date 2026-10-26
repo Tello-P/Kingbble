@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <random>
 #include <thread>
@@ -62,11 +63,15 @@ double SimBot::Playout(EquityBot& bot, const Game& base, const Move& candidate) 
   const int me = g.to_move();
   const int before = g.score(me) - g.score(1 - me);
   g.Apply(candidate);
-  if (!g.over()) g.Apply(bot.Choose(g));  // opponent's reply
-  double leave = 0;
-  if (!g.over()) {  // our follow-up
+  double leave = 0;  // of the last mover, from our side
+  for (int ply = 0; ply < params_.plies && !g.over(); ++ply) {
+    const int mover = g.to_move();
     Move m = bot.Choose(g);
-    if (g.bag_size() > 0) leave = bot.leaves().Value(LeaveAfter(g.rack(me), m));
+    leave = 0;
+    if (ply == params_.plies - 1 && g.bag_size() > 0) {
+      leave = bot.leaves().Value(LeaveAfter(g.rack(mover), m));
+      if (mover != me) leave = -leave;
+    }
     g.Apply(m);
     if (g.over()) leave = 0;
   }
@@ -97,8 +102,15 @@ Move SimBot::Choose(const Game& game) {
     return std::make_pair(mean, se);
   };
 
+  const auto start = std::chrono::steady_clock::now();
+  auto out_of_time = [&] {
+    return params_.time_limit_s > 0 &&
+           std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count() >=
+               params_.time_limit_s;
+  };
   int done = 0;
-  while (num_active > 1 && done < max_iterations) {
+  while (num_active > 1 && done < max_iterations &&
+         !(done >= params_.min_iterations && out_of_time())) {
     const int end = std::min(max_iterations, done + params_.batch);
     std::atomic<int> next{done};
     auto work = [&](EquityBot& bot) {
