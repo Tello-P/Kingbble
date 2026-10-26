@@ -37,9 +37,21 @@ def play_counts(lexicon: Path, raw: Path, store: Path, tool: Path = DEFAULT_TOOL
     with tempfile.TemporaryDirectory() as tmp:
         info, out = Path(tmp) / "turn_info.tsv", Path(tmp) / "counts.tsv"
         write_turn_info(store_turns(store), info)
-        subprocess.run([str(tool), "--lexicon", str(lexicon), "--games", str(raw),
-                        "--turn-info", str(info), "--count-words", str(out)],
-                       check=True, stdout=subprocess.DEVNULL)
+        subprocess.run(
+            [
+                str(tool),
+                "--lexicon",
+                str(lexicon),
+                "--games",
+                str(raw),
+                "--turn-info",
+                str(info),
+                "--count-words",
+                str(out),
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+        )
         counts = {}
         for line in out.read_text().splitlines():
             word, n = line.split("\t")

@@ -55,7 +55,12 @@ std::vector<PreEndgameSolver::Draw> Group(const std::vector<PreEndgameSolver::Dr
   if (index) index->clear();
   for (const auto& d : draws) {
     PreEndgameSolver::Draw key = d;
-    std::sort(key.tiles.begin(), key.tiles.begin() + std::min(drawn, d.size));
+    // Insertion sort of at most kRackSize tiles (std::sort here trips GCC 13's
+    // -Wstringop-overflow, which cannot see that the bound is at most 7).
+    const int n = std::clamp(std::min(drawn, d.size), 0, kRackSize);
+    for (int i = 1; i < n; ++i)
+      for (int j = i; j > 0 && key.tiles[j - 1] > key.tiles[j]; --j)
+        std::swap(key.tiles[j - 1], key.tiles[j]);
     auto [it, fresh] =
         seen.emplace(Signature(key.tiles.data(), key.size), static_cast<int>(groups.size()));
     if (fresh) {

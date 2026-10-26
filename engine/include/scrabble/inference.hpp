@@ -41,10 +41,10 @@ struct Observation {
   Board board;  // before the move
   Move move;    // '.' for played-through squares
   int bag_size = 0;
-  Rack own;           // the observer's rack
-  Rack unseen;        // tiles the observer cannot see before the move (bag + opponent rack)
-  int exchanged = 0;  // tiles exchanged, also when move.tiles does not list them
-  int rating = 0;     // the opponent's rating, 0 if unknown
+  Rack own;            // the observer's rack
+  Rack unseen;         // tiles the observer cannot see before the move (bag + opponent rack)
+  int exchanged = 0;   // tiles exchanged, also when move.tiles does not list them
+  int rating = 0;      // the opponent's rating, 0 if unknown
   int score_diff = 0;  // the mover's score minus the observer's
   int turn = 0;        // placements, exchanges and passes before the move
   bool prev_exchange = false;  // the mover exchanged on their previous turn

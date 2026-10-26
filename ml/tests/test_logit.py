@@ -63,8 +63,11 @@ def test_band_of():
 
 
 def test_mixture_matches_the_engine_formula():
-    turns = [Turn("g", 0, 0, "", 80, 10, 1, 0, 4), Turn("g", 1, 0, "", 80, 10, 30, 4, 5),
-             Turn("g", 2, 0, "", 80, 10, -1, 9, 4)]
+    turns = [
+        Turn("g", 0, 0, "", 80, 10, 1, 0, 4),
+        Turn("g", 1, 0, "", 80, 10, 30, 4, 5),
+        Turn("g", 2, 0, "", 80, 10, -1, 9, 4),
+    ]
     rows = np.zeros((13, 2), dtype="<f4")
     info = {("g", i): (None, "train", False) for i in range(3)}
     ts = select(turns, rows, info, "train", 4, (0,))
@@ -87,11 +90,24 @@ def test_log_p_and_write_params(tmp_path):
     lp = log_p(val, scaler, common)
     assert (lp[val.inside] <= 0).all()
     out = tmp_path / "m.txt"
-    write_params(out, ["gap", "score", "opens_tw"], [raw_weights(common, scaler)] * 2, (0, 1500),
-                 4, 0.05, 0.01)
+    write_params(
+        out,
+        ["gap", "score", "opens_tw"],
+        [raw_weights(common, scaler)] * 2,
+        (0, 1500),
+        4,
+        0.05,
+        0.01,
+    )
     lines = out.read_text().splitlines()
-    assert lines[1:7] == ["version 2", "kind logit", "features gap score opens_tw", "top_k 4",
-                          "epsilon 0.05", "residual 0.01"]
+    assert lines[1:7] == [
+        "version 2",
+        "kind logit",
+        "features gap score opens_tw",
+        "top_k 4",
+        "epsilon 0.05",
+        "residual 0.01",
+    ]
     assert lines[7].startswith("band 0 ") and len(lines[8].split()) == 2 + 3
 
 

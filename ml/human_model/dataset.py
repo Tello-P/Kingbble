@@ -17,21 +17,65 @@ from ml.data.split import split_of
 # Feature groups by name, for ablations. "base" is never dropped.
 GROUPS = {
     "base": ("gap", "score", "leave", "log_rank", "tiles", "bingo", "exchange", "pass"),
-    "A": ("word_zipf", "word_plays", "word_unfamiliar", "word_length", "word_alt",
-          "word_log_prob", "rack_anagrams"),
+    "A": (
+        "word_zipf",
+        "word_plays",
+        "word_unfamiliar",
+        "word_length",
+        "word_alt",
+        "word_log_prob",
+        "rack_anagrams",
+    ),
     "B": ("had_bingo", "bingo_count", "bingo_easiest", "bingo_gap", "missed_bingo"),
-    "C": ("leave_size", "leave_vowels", "leave_consonants", "leave_duplicates", "leave_s",
-          "leave_blank", "leave_q_no_u", "leave_synergy", "leave_bingo_prob", "leave_n_blank",
-          *(f"leave_n_{chr(c)}" for c in range(ord("a"), ord("z") + 1))),
-    "D": ("on_dl", "on_tl", "on_dw", "on_tw", "cross_words", "hooks", "through", "center_dist",
-          "vertical"),
+    "C": (
+        "leave_size",
+        "leave_vowels",
+        "leave_consonants",
+        "leave_duplicates",
+        "leave_s",
+        "leave_blank",
+        "leave_q_no_u",
+        "leave_synergy",
+        "leave_bingo_prob",
+        "leave_n_blank",
+        *(f"leave_n_{chr(c)}" for c in range(ord("a"), ord("z") + 1)),
+    ),
+    "D": (
+        "on_dl",
+        "on_tl",
+        "on_dw",
+        "on_tw",
+        "cross_words",
+        "hooks",
+        "through",
+        "center_dist",
+        "vertical",
+    ),
     "E": ("opens_tw", "bingo_lanes"),
     "F": ("score_rank", "equity_z", "second_gap", "non_bingo_gap"),
-    "G": ("score_diff", "bag_tiles", "turn_number", "endgame", "prev_exchange", "rating",
-          "rating_known"),
-    "H": ("gap_x_phase", "score_x_phase", "leave_x_phase", "bingo_x_phase", "exchange_x_phase",
-          "gap_x_rating", "log_rank_x_rating", "missed_bingo_x_rating", "zipf_x_rating",
-          "gap_x_lead", "score_x_lead", "exchange_x_lead"),
+    "G": (
+        "score_diff",
+        "bag_tiles",
+        "turn_number",
+        "endgame",
+        "prev_exchange",
+        "rating",
+        "rating_known",
+    ),
+    "H": (
+        "gap_x_phase",
+        "score_x_phase",
+        "leave_x_phase",
+        "bingo_x_phase",
+        "exchange_x_phase",
+        "gap_x_rating",
+        "log_rank_x_rating",
+        "missed_bingo_x_rating",
+        "zipf_x_rating",
+        "gap_x_lead",
+        "score_x_lead",
+        "exchange_x_lead",
+    ),
 }
 
 
@@ -69,8 +113,14 @@ class TurnSet:
 
     def subset(self, idx) -> TurnSet:
         idx = np.asarray(idx)
-        return replace(self, first=self.first[idx], k=self.k[idx], chosen=self.chosen[idx],
-                       n=self.n[idx], band=self.band[idx])
+        return replace(
+            self,
+            first=self.first[idx],
+            k=self.k[idx],
+            chosen=self.chosen[idx],
+            n=self.n[idx],
+            band=self.band[idx],
+        )
 
     def with_top(self, top_k: int) -> TurnSet:
         """The same turns with at most top_k candidates each."""
@@ -100,8 +150,17 @@ class TurnSet:
             yield idx[i : i + size]
 
 
-def select(turns, options, info: dict, split: str, top_k: int, bands: Sequence[int],
-           movers: str = "human", max_turns: int = 0, seed: int = 0) -> TurnSet:
+def select(
+    turns,
+    options,
+    info: dict,
+    split: str,
+    top_k: int,
+    bands: Sequence[int],
+    movers: str = "human",
+    max_turns: int = 0,
+    seed: int = 0,
+) -> TurnSet:
     """Turns of `split` (info: (game_id, turn) -> (rating, split, is_bot)) played by
     `movers` ("human", "bot" or "all"), at most max_turns of them (a seeded random
     subset, kept in file order) when > 0. A few bot accounts play every bot turn,

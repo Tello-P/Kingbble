@@ -29,6 +29,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from ml.eval.results_log import ResultsLog  # noqa: E402
+
 HELPER = ROOT / "scripts" / "macondo_endgame" / "main.go"
 # Macondo infers the letter distribution from the lexicon name prefix.
 LEX_NAME = "NWL_ENABLE"
@@ -207,7 +208,9 @@ def main() -> int:
             return
         cmd = [str(helper), "-data", str(work / "data"), "-lex", LEX_NAME,
                "-timeout", str(args.time_limit)]  # fmt: skip
-        for i, line in zip(part, stream_lines(cmd, "".join(cgps[i] + "\n" for i in part))):
+        for i, line in zip(
+            part, stream_lines(cmd, "".join(cgps[i] + "\n" for i in part)), strict=False
+        ):
             theirs[i] = value(line)
             log.append({"i": i, "theirs": theirs[i]})
             progress.step()
@@ -223,6 +226,7 @@ def main() -> int:
         macondo_time = time.monotonic() - start
     print(f"ours: {ours_time:.1f} s, macondo: {macondo_time:.1f} s (this run)")
     return summarize(cgps, log, args.time_limit)
+
 
 if __name__ == "__main__":
     sys.exit(main())
