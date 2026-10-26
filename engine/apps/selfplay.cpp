@@ -25,14 +25,22 @@
 // and --a-plies bot a's alone. Result lines end with each bot's moves and
 // seconds (", a M moves T s, b M moves T s"). --paired plays each deal twice, games 2k-1 and 2k,
 // with the bots swapping seats, so luck of the draw cancels out in each pair.
+// --gcg-dir DIR saves game N as DIR/gameN.gcg with both racks (training data).
+// "human" plays moves drawn from the human move model (--human-params, with
+// --word-freq and --alt-lexicon as it was fitted, for a player of --human-rating).
 
+#include <array>
 #include <chrono>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "bot_factory.hpp"
+#include "game_record.hpp"
 #include "results_file.hpp"
 #include "scrabble/gaddag.hpp"
 #include "scrabble/game.hpp"
@@ -85,7 +93,8 @@ int main(int argc, char** argv) {
   std::uint64_t seed = 1;
   bool verbose = false;
   bool progress = false;  // "progress: G/N" on stderr after each game
-  std::string results_path;
+  std::string results_path, gcg_dir, human_path, freq_path, alt_path;
+  int human_rating = 0;
   bool status_only = false;
   bool paired = false;
   int a_plies = 0;  // 0: as b
@@ -151,6 +160,16 @@ int main(int argc, char** argv) {
       progress = true;
     } else if (a == "--results") {
       results_path = value();
+    } else if (a == "--gcg-dir") {
+      gcg_dir = value();
+    } else if (a == "--human-params") {
+      human_path = value();
+    } else if (a == "--human-rating") {
+      human_rating = std::stoi(value());
+    } else if (a == "--word-freq") {
+      freq_path = value();
+    } else if (a == "--alt-lexicon") {
+      alt_path = value();
     } else if (a == "--status") {
       status_only = true;
     } else if (a == "--paired") {
@@ -175,7 +194,8 @@ int main(int argc, char** argv) {
                    " [--apeg-samples N] [--apeg-plies N] [--apeg-time S] [--verbose]"
                    " [--progress] [--results FILE [--status]] [--paired] [--risk-lambda L]"
                    " [--risk-rest-sd S] [--risk-shrink K] [--risk-relative]"
-                   " [--risk-iterations F]\n";
+                   " [--risk-iterations F] [--gcg-dir DIR] [--human-params FILE]"
+                   " [--human-rating R] [--word-freq TSV] [--alt-lexicon FILE]\n";
       return 2;
     }
   }
@@ -203,9 +223,22 @@ int main(int argc, char** argv) {
   sim.seed = seed;
   SimParams a_sim = sim;
   if (a_plies > 0) a_sim.plies = a_plies;
+  HumanModelParams human_params;
+  std::optional<FeatureLexicon> words;  // the human model's word features
+  HumanBotOptions human;
+  human.rating = human_rating;
+  if (!human_path.empty()) {
+    human_params = HumanModelParams::FromFile(human_path);
+    if (human_params.UsesExtendedFeatures())
+      words = FeatureLexicon::Load(lexicon, freq_path, alt_path);
+    human.params = &human_params;
+    human.lexicon = words ? &*words : nullptr;
+  }
   std::unique_ptr<Bot> bots[2] = {
-      MakeBot(kind_a, gaddag, leaves.get(), a_sim, endgame_time, peg, risk),
-      MakeBot(kind_b, gaddag, leaves.get(), sim, endgame_time, peg, risk)};
+      MakeBot(kind_a, gaddag, leaves.get(), a_sim, endgame_time, peg, risk, human),
+      MakeBot(kind_b, gaddag, leaves.get(), sim, endgame_time, peg, risk, human)};
+  if (!gcg_dir.empty()) std::filesystem::create_directories(gcg_dir);
+  const std::string lexicon_name = std::filesystem::path(lexicon).stem().string();
 
   long long turns = 0, generated = 0;
   double gen_s = 0;
@@ -223,6 +256,11 @@ int main(int argc, char** argv) {
     const int seat_a = g % 2;  // seat of bot a in this game
     int moves[2] = {0, 0};     // by bot: a, b
     double seconds[2] = {0, 0};
+    const std::array<std::string, 2> seat_kinds = seat_a == 0
+                                                      ? std::array<std::string, 2>{kind_a, kind_b}
+                                                      : std::array<std::string, 2>{kind_b, kind_a};
+    GameRecord record({"p1", "p2"}, seat_kinds, lexicon_name,
+                      "selfplay seed " + std::to_string(seed) + " game " + std::to_string(g + 1));
     while (!game.over()) {
       const int side = game.to_move() == seat_a ? 0 : 1;
       Bot& bot = *bots[side];
@@ -238,8 +276,12 @@ int main(int argc, char** argv) {
         std::cout << "  p" << game.to_move() + 1 << " " << game.rack(game.to_move()).ToString()
                   << "  " << m.ToString() << "\n";
       }
+      record.Add(game, m);
       game.Apply(m);
     }
+    record.Finish(game);
+    if (!gcg_dir.empty())
+      std::ofstream(gcg_dir + "/game" + std::to_string(g + 1) + ".gcg") << WriteGcg(record.gcg());
     const int s0 = game.score(0), s1 = game.score(1);
     char timing[96];
     std::snprintf(timing, sizeof timing, ", a %d moves %.2f s, b %d moves %.2f s", moves[0],

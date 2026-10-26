@@ -89,6 +89,7 @@ if(SCRABBLE_BUILD_TESTS)
     tests/features_test.cpp
     tests/inference_test.cpp
     tests/journal_test.cpp
+    tests/game_record_test.cpp
   )
   target_compile_definitions(engine_tests PRIVATE
     KINGBBLE_FIXTURES="${PROJECT_SOURCE_DIR}/lexica/fixtures")

@@ -27,6 +27,7 @@
 #include <vector>
 
 #include "bot_factory.hpp"
+#include "game_record.hpp"
 #include "results_file.hpp"
 #include "scrabble/gcg.hpp"
 #include "scrabble/movegen.hpp"
@@ -110,23 +111,6 @@ Move ParseAnswer(const std::string& answer, const Game& game) {
         m.tiles[k] = '.';
   }
   return m;
-}
-
-GcgEvent Event(const Game& before, const Move& m, std::array<int, 2>& cumulative) {
-  GcgEvent ev;
-  ev.player = before.to_move();
-  ev.rack = before.rack(ev.player).ToString();
-  ev.move = m;
-  if (m.kind == Move::Kind::kPlace) {
-    ev.kind = GcgEvent::Kind::kPlace;
-    ev.score = ScoreMove(before.board(), m);
-  } else if (m.kind == Move::Kind::kExchange) {
-    ev.kind = GcgEvent::Kind::kExchange;
-    ev.exchanged = static_cast<int>(m.tiles.size());
-  }
-  cumulative[ev.player] += ev.score;
-  ev.cumulative = cumulative[ev.player];
-  return ev;
 }
 
 // Win % with its 95 % CI and the mean spread over every finished game.
@@ -266,36 +250,23 @@ int main(int argc, char** argv) {
     if (results.Done(g + 1)) continue;
     Game game(MixSeed(MixSeed(seed) + static_cast<std::uint64_t>(g)));
     const int seat = g % 2;  // Kingbble's seat
-    GcgGame record;
-    record.nicknames = seat == 0 ? std::array<std::string, 2>{"kingbble", "quackle"}
-                                 : std::array<std::string, 2>{"quackle", "kingbble"};
-    record.names = seat == 0 ? std::array<std::string, 2>{"Kingbble", "Quackle"}
-                             : std::array<std::string, 2>{"Quackle", "Kingbble"};
-    record.lexicon = quackle_lexicon;
-    record.id = "seed " + std::to_string(seed) + " game " + std::to_string(g + 1);
-    std::array<int, 2> cumulative{};
+    GameRecord record(seat == 0 ? std::array<std::string, 2>{"kingbble", "quackle"}
+                                : std::array<std::string, 2>{"quackle", "kingbble"},
+                      seat == 0 ? std::array<std::string, 2>{"Kingbble", "Quackle"}
+                                : std::array<std::string, 2>{"Quackle", "Kingbble"},
+                      quackle_lexicon,
+                      "seed " + std::to_string(seed) + " game " + std::to_string(g + 1));
     while (!game.over()) {
       const Move m =
           game.to_move() == seat
               ? bot->Choose(game)
-              : ParseAnswer(quackle.Ask(WriteGcg(record), game.rack(game.to_move())), game);
-      record.events.push_back(Event(game, m, cumulative));
+              : ParseAnswer(quackle.Ask(WriteGcg(record.gcg()), game.rack(game.to_move())), game);
+      record.Add(game, m);
       game.Apply(m);  // throws on an illegal move
     }
-    // End-of-game rack points and penalties.
-    for (int p = 0; p < 2; ++p) {
-      const int rest = game.score(p) - cumulative[p];
-      if (rest == 0) continue;
-      GcgEvent ev;
-      ev.player = p;
-      ev.kind = rest > 0 ? GcgEvent::Kind::kEndRackPoints : GcgEvent::Kind::kEndRackPenalty;
-      ev.rack = game.rack(rest > 0 ? 1 - p : p).ToString();
-      ev.score = rest;
-      ev.cumulative = cumulative[p] += rest;
-      record.events.push_back(ev);
-    }
+    record.Finish(game);
     if (!gcg_dir.empty())
-      std::ofstream(gcg_dir + "/game" + std::to_string(g + 1) + ".gcg") << WriteGcg(record);
+      std::ofstream(gcg_dir + "/game" + std::to_string(g + 1) + ".gcg") << WriteGcg(record.gcg());
     const std::string line = "game " + std::to_string(g + 1) + ": kingbble " +
                              std::to_string(game.score(seat)) + " - quackle " +
                              std::to_string(game.score(1 - seat)) +
