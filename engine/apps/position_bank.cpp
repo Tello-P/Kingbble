@@ -10,12 +10,15 @@
 // a time budget per simulated move. Both play "+peg+eg"
 // (pre-endgame with 1 tile in the bag, endgame with none), and each tracks the
 // other's rack from the start of the game with a RackFilter on --model
-// (rangefinder by default; none for uniform racks; human with --human-params).
+// (rangefinder by default; none for uniform racks; human with --human-params,
+// --word-freq and --alt-lexicon as it was fitted), or per side with --a-model /
+// --b-model.
 //   kingbble_position_bank --lexicon lexica/CSW24.txt --leaves lexica/CSW24.klv2
 //       --positions 30 --repeats 1 [--a risk|riskwin|sim] [--risk-lambda 1] [--seed 1]
 //       [--a-candidates N] [--a-iterations N] [--a-plies N] [--sim-plies N] [--sim-time S]
 //       [--sim-candidates 8] [--sim-iterations 50] [--threads 3] [--peg-time 2]
-//       [--endgame-time 1] [--model rangefinder] [--human-params FILE]
+//       [--endgame-time 1] [--model rangefinder] [--a-model M] [--b-model M]
+//       [--human-params FILE] [--word-freq TSV] [--alt-lexicon FILE]
 //       [--results FILE [--status]] [--progress]
 // Results use kingbble_selfplay's format ("game N: S1 - S2, a in seat K", the
 // two games of a pair numbered 2k-1 and 2k), so a rerun skips finished games,
@@ -27,6 +30,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <random>
 #include <string>
 #include <vector>
@@ -35,6 +39,7 @@
 #include "scrabble/endgame_bot.hpp"
 #include "scrabble/equity.hpp"
 #include "scrabble/equity_bot.hpp"
+#include "scrabble/features.hpp"
 #include "scrabble/gaddag.hpp"
 #include "scrabble/game.hpp"
 #include "scrabble/inference.hpp"
@@ -151,6 +156,8 @@ int main(int argc, char** argv) {
   o.sim.candidates = 8;
   o.sim.max_iterations = 50;
   std::string lexicon, leaves_path, model_name = "rangefinder", human_path, results_path;
+  std::string side_model[2];  // per side (a, b); empty: --model
+  std::string freq_path, alt_path;
   bool progress = false, status_only = false;
   for (int i = 1; i < argc; ++i) {
     std::string a = argv[i];
@@ -197,6 +204,14 @@ int main(int argc, char** argv) {
       o.endgame_time = std::stod(value());
     } else if (a == "--model") {
       model_name = value();
+    } else if (a == "--a-model") {
+      side_model[0] = value();
+    } else if (a == "--b-model") {
+      side_model[1] = value();
+    } else if (a == "--word-freq") {
+      freq_path = value();
+    } else if (a == "--alt-lexicon") {
+      alt_path = value();
     } else if (a == "--human-params") {
       human_path = value();
     } else if (a == "--results") {
@@ -214,7 +229,8 @@ int main(int argc, char** argv) {
              "L] [--seed S] "
              "[--sim-candidates N] [--sim-iterations N]"
              " [--threads N] [--peg-time S] [--endgame-time S] [--model NAME]"
-             " [--human-params FILE] [--results FILE [--status]] [--progress]\n";
+             " [--a-model M] [--b-model M] [--human-params FILE] [--word-freq TSV]"
+             " [--alt-lexicon FILE] [--results FILE [--status]] [--progress]\n";
       return 2;
     }
   }
@@ -241,16 +257,29 @@ int main(int argc, char** argv) {
   if (o.a_iterations > 0) a_sim.max_iterations = o.a_iterations;
   if (o.a_plies > 0) a_sim.plies = o.a_plies;
 
+  for (std::string& m : side_model)
+    if (m.empty()) m = model_name;
+  HumanModelParams human;
+  std::optional<FeatureLexicon> words;  // the human model's word features
+  if (side_model[0] == "human" || side_model[1] == "human") {
+    if (human_path.empty()) {
+      std::cerr << "the human model needs --human-params\n";
+      return 2;
+    }
+    human = HumanModelParams::FromFile(human_path);
+    if (human.UsesExtendedFeatures()) words = FeatureLexicon::Load(lexicon, freq_path, alt_path);
+  }
   std::unique_ptr<MoveModel> models[2];
-  for (auto& m : models) {
-    if (model_name == "none") {
-      m = std::make_unique<UniformModel>();
-    } else if (model_name == "rangefinder") {
-      m = std::make_unique<RangeFinderModel>(gaddag, leaves);
-    } else if (model_name == "human" && !human_path.empty()) {
-      m = std::make_unique<HumanMoveModel>(gaddag, leaves, HumanModelParams::FromFile(human_path));
+  for (int k = 0; k < 2; ++k) {
+    if (side_model[k] == "none") {
+      models[k] = std::make_unique<UniformModel>();
+    } else if (side_model[k] == "rangefinder") {
+      models[k] = std::make_unique<RangeFinderModel>(gaddag, leaves);
+    } else if (side_model[k] == "human") {
+      models[k] =
+          std::make_unique<HumanMoveModel>(gaddag, leaves, human, words ? &*words : nullptr);
     } else {
-      std::cerr << "--model is none, rangefinder or human (with --human-params)\n";
+      std::cerr << "models are none, rangefinder or human (with --human-params)\n";
       return 2;
     }
   }
@@ -293,7 +322,7 @@ int main(int argc, char** argv) {
           FilterParams fp;
           fp.seed = MixSeed(pos.game_seed + 10 + k);
           sides[k].filter = std::make_unique<RackFilter>(*models[k], leaves, fp);
-          if (model_name == "none") sides[k].filter.reset();
+          if (side_model[k] == "none") sides[k].filter.reset();
           if (sides[k].risk) sides[k].risk->set_rack_sampler(sides[k].filter.get());
           if (sides[k].sim) sides[k].sim->set_rack_sampler(sides[k].filter.get());
         }
