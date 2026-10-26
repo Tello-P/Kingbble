@@ -7,7 +7,9 @@
 // to move, then b (the sim bot) on it. a is "risk", "riskwin" or "sim", with
 // --a-candidates / --a-iterations / --a-plies overriding its simulation
 // settings; --sim-plies sets both bots' playout depth and --sim-time gives both
-// a time budget per simulated move. Both play "+peg+eg"
+// a time budget per simulated move. --a-reply-top / --a-reply-temperature make
+// a's simulated opponent pick among its best static replies at random, and
+// --a-reply-human draws them from the human model (--human-params). Both play "+peg+eg"
 // (pre-endgame with 1 tile in the bag, endgame with none), and each tracks the
 // other's rack from the start of the game with a RackFilter on --model
 // (rangefinder by default; none for uniform racks; human with --human-params,
@@ -42,6 +44,7 @@
 #include "scrabble/features.hpp"
 #include "scrabble/gaddag.hpp"
 #include "scrabble/game.hpp"
+#include "scrabble/human_reply.hpp"
 #include "scrabble/inference.hpp"
 #include "scrabble/leaves.hpp"
 #include "scrabble/preendgame_bot.hpp"
@@ -71,6 +74,9 @@ struct Options {
   std::string a = "risk";
   SimParams sim;
   int a_candidates = 0, a_iterations = 0, a_plies = 0;  // 0: as b
+  int a_reply_top = 1;
+  double a_reply_temperature = 0;
+  bool a_reply_human = false;
   RiskParams risk;
   double peg_time = 2, endgame_time = 1;
 };
@@ -186,6 +192,12 @@ int main(int argc, char** argv) {
       o.a_iterations = std::stoi(value());
     } else if (a == "--a-plies") {
       o.a_plies = std::stoi(value());
+    } else if (a == "--a-reply-top") {
+      o.a_reply_top = std::stoi(value());
+    } else if (a == "--a-reply-temperature") {
+      o.a_reply_temperature = std::stod(value());
+    } else if (a == "--a-reply-human") {
+      o.a_reply_human = true;
     } else if (a == "--sim-plies") {
       o.sim.plies = std::stoi(value());
     } else if (a == "--sim-time") {
@@ -224,10 +236,9 @@ int main(int argc, char** argv) {
       std::cerr
           << "usage: " << argv[0]
           << " --lexicon FILE --leaves KLV [--positions N] [--repeats N] [--a risk|riskwin|sim]"
-             " [--a-candidates N] [--a-iterations N] [--a-plies N] [--sim-plies N] [--sim-time S] "
-             "[--risk-lambda "
-             "L] [--seed S] "
-             "[--sim-candidates N] [--sim-iterations N]"
+             " [--a-candidates N] [--a-iterations N] [--a-plies N] [--sim-plies N] [--sim-time S]"
+             " [--a-reply-top K] [--a-reply-temperature T] [--a-reply-human]"
+             " [--risk-lambda L] [--seed S] [--sim-candidates N] [--sim-iterations N]"
              " [--threads N] [--peg-time S] [--endgame-time S] [--model NAME]"
              " [--a-model M] [--b-model M] [--human-params FILE] [--word-freq TSV]"
              " [--alt-lexicon FILE] [--results FILE [--status]] [--progress]\n";
@@ -256,12 +267,14 @@ int main(int argc, char** argv) {
   if (o.a_candidates > 0) a_sim.candidates = o.a_candidates;
   if (o.a_iterations > 0) a_sim.max_iterations = o.a_iterations;
   if (o.a_plies > 0) a_sim.plies = o.a_plies;
+  a_sim.reply_top = o.a_reply_top;
+  a_sim.reply_temperature = o.a_reply_temperature;
 
   for (std::string& m : side_model)
     if (m.empty()) m = model_name;
   HumanModelParams human;
   std::optional<FeatureLexicon> words;  // the human model's word features
-  if (side_model[0] == "human" || side_model[1] == "human") {
+  if (side_model[0] == "human" || side_model[1] == "human" || o.a_reply_human) {
     if (human_path.empty()) {
       std::cerr << "the human model needs --human-params\n";
       return 2;
@@ -297,6 +310,11 @@ int main(int argc, char** argv) {
     } else {
       auto sim = std::make_unique<SimBot>(gaddag, leaves, s == 0 ? a_sim : o.sim);
       sides[s].sim = sim.get();
+      if (s == 0 && o.a_reply_human)
+        sim->set_reply_policy([&] {
+          return std::make_unique<HumanReplyPolicy>(gaddag, leaves, human,
+                                                    words ? &*words : nullptr);
+        });
       inner = std::move(sim);
     }
     inner = std::make_unique<PreEndgameBot>(std::move(inner), gaddag, leaves, 1, peg);

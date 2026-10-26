@@ -3,6 +3,7 @@
 #include <string>
 
 #include "scrabble/equity_bot.hpp"
+#include "scrabble/human_reply.hpp"
 #include "scrabble/sim_bot.hpp"
 
 namespace scrabble {
@@ -74,6 +75,50 @@ TEST_F(SimDepthTest, ATimeLimitStopsAfterTheMinimumIterations) {
   SimBot bot(gaddag_, leaves_, p);
   bot.Choose(g);
   for (const SimResult& r : bot.last_results()) EXPECT_EQ(r.iterations, 8);
+}
+
+// Sorted means of the candidates, to compare two runs.
+std::vector<double> Means(const SimBot& bot) {
+  std::vector<double> out;
+  for (const SimResult& r : bot.last_results()) out.push_back(r.mean);
+  return out;
+}
+
+TEST_F(SimDepthTest, RandomRepliesAreReproducibleAcrossThreads) {
+  Game g = MidGame();
+  SimParams p = Params(3);
+  p.prune_z = 1e9;
+  SimBot plain(gaddag_, leaves_, p);
+  p.reply_top = 3;
+  p.reply_temperature = 5;
+  SimBot one(gaddag_, leaves_, p);
+  p.threads = 3;
+  SimBot three(gaddag_, leaves_, p);
+  plain.Choose(g);
+  EXPECT_EQ(one.Choose(g), three.Choose(g));
+  EXPECT_EQ(Means(one), Means(three));
+  EXPECT_NE(Means(one), Means(plain));
+}
+
+TEST_F(SimDepthTest, HumanRepliesAreLegalAndReproducible) {
+  Game g = MidGame();
+  HumanModelParams model;
+  HumanReplyPolicy policy(gaddag_, leaves_, model, nullptr);
+  std::mt19937_64 rng(5);
+  for (int i = 0; i < 20; ++i) {
+    Game copy = g;
+    copy.Apply(policy.Pick(g, rng));  // throws on an illegal move
+  }
+  SimParams p = Params(3);
+  p.prune_z = 1e9;
+  auto make = [&] { return std::make_unique<HumanReplyPolicy>(gaddag_, leaves_, model, nullptr); };
+  SimBot a(gaddag_, leaves_, p), b(gaddag_, leaves_, p), plain(gaddag_, leaves_, p);
+  a.set_reply_policy(make);
+  b.set_reply_policy(make);
+  plain.Choose(g);
+  EXPECT_EQ(a.Choose(g), b.Choose(g));
+  EXPECT_EQ(Means(a), Means(b));
+  EXPECT_NE(Means(a), Means(plain));
 }
 
 }  // namespace scrabble

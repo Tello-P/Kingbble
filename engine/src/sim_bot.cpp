@@ -58,7 +58,29 @@ Game SimBot::SamplePosition(const Game& game, std::uint64_t seed) const {
                             game.scoreless_turns(), MixSeed(seed));
 }
 
-double SimBot::Playout(EquityBot& bot, const Game& base, const Move& candidate) const {
+void SimBot::set_reply_policy(const std::function<std::unique_ptr<ReplyPolicy>()>& make) {
+  policies_.clear();
+  if (make)
+    for (std::size_t t = 0; t < bots_.size(); ++t) policies_.push_back(make());
+}
+
+Move SimBot::Reply(int thread, const Game& game, std::mt19937_64& rng) const {
+  EquityBot& bot = *bots_[thread];
+  if (!policies_.empty()) return policies_[thread]->Pick(game, rng);
+  if (params_.reply_top <= 1 || params_.reply_temperature <= 0) return bot.Choose(game);
+  std::vector<RankedMove> ranked = bot.Rank(game);
+  const std::size_t k = std::min(ranked.size(), static_cast<std::size_t>(params_.reply_top));
+  std::vector<double> weights(k);
+  for (std::size_t i = 0; i < k; ++i)
+    weights[i] = std::exp((ranked[i].equity - ranked[0].equity) / params_.reply_temperature);
+  return ranked[std::discrete_distribution<std::size_t>(weights.begin(), weights.end())(rng)].move;
+}
+
+double SimBot::Playout(int thread, const Game& base, const Move& candidate,
+                       std::uint64_t seed) const {
+  EquityBot& bot = *bots_[thread];
+  // The same stream for every candidate of an iteration.
+  std::mt19937_64 rng(seed);
   Game g = base;
   const int me = g.to_move();
   const int before = g.score(me) - g.score(1 - me);
@@ -66,7 +88,7 @@ double SimBot::Playout(EquityBot& bot, const Game& base, const Move& candidate) 
   double leave = 0;  // of the last mover, from our side
   for (int ply = 0; ply < params_.plies && !g.over(); ++ply) {
     const int mover = g.to_move();
-    Move m = bot.Choose(g);
+    Move m = mover != me || params_.reply_own ? Reply(thread, g, rng) : bot.Choose(g);
     leave = 0;
     if (ply == params_.plies - 1 && g.bag_size() > 0) {
       leave = bot.leaves().Value(LeaveAfter(g.rack(mover), m));
@@ -113,16 +135,18 @@ Move SimBot::Choose(const Game& game) {
          !(done >= params_.min_iterations && out_of_time())) {
     const int end = std::min(max_iterations, done + params_.batch);
     std::atomic<int> next{done};
-    auto work = [&](EquityBot& bot) {
+    auto work = [&](int thread) {
       for (int it; (it = next++) < end;) {
-        Game pos = SamplePosition(game, MixSeed(base_seed + static_cast<std::uint64_t>(it)));
+        const std::uint64_t seed = MixSeed(base_seed + static_cast<std::uint64_t>(it));
+        Game pos = SamplePosition(game, seed);
         for (std::size_t c = 0; c < n; ++c)
-          if (active[c]) values[c][it] = Playout(bot, pos, ranked[c].move);
+          if (active[c])
+            values[c][it] = Playout(thread, pos, ranked[c].move, MixSeed(seed ^ 0x9E9));
       }
     };
     std::vector<std::thread> threads;
-    for (std::size_t t = 1; t < bots_.size(); ++t) threads.emplace_back(work, std::ref(*bots_[t]));
-    work(*bots_[0]);
+    for (std::size_t t = 1; t < bots_.size(); ++t) threads.emplace_back(work, static_cast<int>(t));
+    work(0);
     for (auto& t : threads) t.join();
     for (std::size_t c = 0; c < n; ++c)
       if (active[c]) iterations[c] = end;
