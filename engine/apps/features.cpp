@@ -205,7 +205,12 @@ int main(int argc, char** argv) {
       const int n = std::min(static_cast<int>(options.size()), top);
       const auto t1 = Clock::now();
       const TurnContext ctx{t.bag_size, t.score_diff, t.turn, t.prev_exchange, ti ? ti->rating : 0};
-      computer.Fill(t.board, t.rack, ctx, options, n, chosen);
+      // The --word-freq play counts include this turn when it is one they count
+      // (as --count-words does): leave it out of its own word's count.
+      const bool counted =
+          ti && ti->split == "train" && !ti->is_bot && t.move.kind == Move::Kind::kPlace;
+      computer.Fill(t.board, t.rack, ctx, options, n, chosen,
+                    counted ? MainWord(t.board, t.move) : std::string());
       const auto t2 = Clock::now();
       rank_seconds += std::chrono::duration<double>(t1 - t0).count();
       fill_seconds += std::chrono::duration<double>(t2 - t1).count();
