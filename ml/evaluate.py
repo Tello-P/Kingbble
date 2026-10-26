@@ -26,6 +26,7 @@ import subprocess
 import time
 from pathlib import Path
 
+from ml import tracking
 from ml.eval.metrics import summarize
 from ml.limits import Limits
 from ml.train import ROOT, check_busy
@@ -155,6 +156,7 @@ def evaluate(model: Path, previous: Path | None = None, games: int = 20,
               "verdict": verdict(log_loss, match, min_gain),
               "seconds": round(time.time() - start, 1)}
     (model / "evaluation.json").write_text(json.dumps(result, indent=1) + "\n")
+    tracking.log_evaluation(model)
     log(f"log-loss new {_fmt(log_loss['new'])}, uniform {_fmt(log_loss['none'])}"
         + (f", previous {_fmt(log_loss['previous'])}" if prev_params else "")
         + (f"; win % {match['win']:.1f} ({match['win_lo']:.1f}-{match['win_hi']:.1f})"

@@ -25,6 +25,7 @@ import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+from ml import tracking
 from ml.limits import Limits, busy
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -198,6 +199,7 @@ def train(cfg: Config, work: Path = DEFAULT_WORK, limits: Limits | None = None,
     (tmp / "config.json").write_text(json.dumps(config, indent=1) + "\n")
     tmp.rename(version)
     log(f"saved {version}")
+    tracking.log_training(version)
     return version
 
 
