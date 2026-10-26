@@ -27,6 +27,7 @@ add_library(scrabble_engine
   src/wordprune.cpp
   src/features.cpp
   src/inference.cpp
+  src/human_reply.cpp
 )
 
 add_executable(kingbble_selfplay apps/selfplay.cpp)
