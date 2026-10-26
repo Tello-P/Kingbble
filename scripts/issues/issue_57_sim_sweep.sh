@@ -75,7 +75,7 @@ for s in "${SETTINGS[@]}"; do
     --lexicon lexica/CSW24.txt --leaves lexica/CSW24.klv2 --a sim \
     --a-candidates "$(cands "$s")" --a-iterations "$(iters "$s")" --a-plies "$(plies "$s")" \
     --positions "$POSITIONS" --repeats 1 --seed 1 --sim-candidates "$(cands "$BASE")" \
-    --sim-iterations "$(iters "$BASE")" "${EXTRA[@]}" --peg-time 2 --endgame-time 1 \
+    --sim-iterations "$(iters "$BASE")" --sim-plies "$(plies "$BASE")" "${EXTRA[@]}" --peg-time 2 --endgame-time 1 \
     --threads "$MAX_THREADS" --progress --results "$(results_file "$(run_name "$s")")"
 done
 ((DRY_RUN)) && exit 0

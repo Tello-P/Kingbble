@@ -6,13 +6,14 @@
 // --repeats times (each with its own bag order), twice per repeat: a on the side
 // to move, then b (the sim bot) on it. a is "risk", "riskwin" or "sim", with
 // --a-candidates / --a-iterations / --a-plies overriding its simulation
-// settings; --sim-time gives both bots a time budget per simulated move. Both play "+peg+eg"
+// settings; --sim-plies sets both bots' playout depth and --sim-time gives both
+// a time budget per simulated move. Both play "+peg+eg"
 // (pre-endgame with 1 tile in the bag, endgame with none), and each tracks the
 // other's rack from the start of the game with a RackFilter on --model
 // (rangefinder by default; none for uniform racks; human with --human-params).
 //   kingbble_position_bank --lexicon lexica/CSW24.txt --leaves lexica/CSW24.klv2
 //       --positions 30 --repeats 1 [--a risk|riskwin|sim] [--risk-lambda 1] [--seed 1]
-//       [--a-candidates N] [--a-iterations N] [--a-plies N] [--sim-time S]
+//       [--a-candidates N] [--a-iterations N] [--a-plies N] [--sim-plies N] [--sim-time S]
 //       [--sim-candidates 8] [--sim-iterations 50] [--threads 3] [--peg-time 2]
 //       [--endgame-time 1] [--model rangefinder] [--human-params FILE]
 //       [--results FILE [--status]] [--progress]
@@ -178,6 +179,8 @@ int main(int argc, char** argv) {
       o.a_iterations = std::stoi(value());
     } else if (a == "--a-plies") {
       o.a_plies = std::stoi(value());
+    } else if (a == "--sim-plies") {
+      o.sim.plies = std::stoi(value());
     } else if (a == "--sim-time") {
       o.sim.time_limit_s = std::stod(value());
     } else if (a == "--risk-lambda") {
@@ -206,7 +209,8 @@ int main(int argc, char** argv) {
       std::cerr
           << "usage: " << argv[0]
           << " --lexicon FILE --leaves KLV [--positions N] [--repeats N] [--a risk|riskwin|sim]"
-             " [--a-candidates N] [--a-iterations N] [--a-plies N] [--sim-time S] [--risk-lambda "
+             " [--a-candidates N] [--a-iterations N] [--a-plies N] [--sim-plies N] [--sim-time S] "
+             "[--risk-lambda "
              "L] [--seed S] "
              "[--sim-candidates N] [--sim-iterations N]"
              " [--threads N] [--peg-time S] [--endgame-time S] [--model NAME]"
