@@ -89,7 +89,7 @@ struct Position {
 
 Position FindPosition(const Options& o, EquityBot& equity, int index) {
   std::mt19937_64 rng(MixSeed(o.seed * 7919 + static_cast<std::uint64_t>(index)));
-  for (std::uint64_t attempt = 0;; ++attempt) {
+  for (;;) {
     Position p;
     p.game_seed = MixSeed(rng());
     const int target = std::uniform_int_distribution<int>(o.min_bag, o.max_bag)(rng);
