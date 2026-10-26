@@ -59,6 +59,13 @@ def test_stops_at_the_last_level(tmp_path):
     assert fake.auto().run()["stopped"] == "level 1 is the last one"
 
 
+def test_max_level(tmp_path):
+    fake = Fake(tmp_path, ["better"], [True])
+    auto = fake.auto()
+    auto.max_level = 0
+    assert auto.run()["stopped"] == "level 0 is the last one"
+
+
 def test_cpu_budget_and_resume(tmp_path):
     fake = Fake(tmp_path, ["better", "better"], [True, True], cpu_per_step=1800)
     state = fake.auto(cpu_hours=0.5).run()

@@ -13,7 +13,9 @@
    over the pairs.
 3. The verdict: "worse" when the match is a significant loss, "better" when it
    is a significant win or the log-loss improves by --min-gain without a
-   significant loss, else "not better". Saved as <model>/evaluation.json.
+   significant loss, else "not better". A match of fewer than MIN_PAIRS pairs
+   is reported but left out of the verdict (its CI means little). Saved as
+   <model>/evaluation.json.
 Every step resumes (kingbble_inference_eval's journals) and runs under ml.limits.
 """
 
@@ -32,6 +34,7 @@ from ml.limits import Limits
 from ml.train import ROOT, check_busy
 
 EVAL = ROOT / "build" / "engine" / "kingbble_inference_eval"
+MIN_PAIRS = 5
 
 
 def test_turns(config: dict, path: Path) -> int:
@@ -99,10 +102,11 @@ def match_scores(done_file: Path) -> dict[int, tuple[float, float]]:
 
 def verdict(log_loss: dict, match: dict, min_gain: float = 0.01) -> str:
     """"worse", "better" or "not better" (see the module docstring)."""
-    if match.get("win_hi") is not None and match["win_hi"] < 50:
-        return "worse"
-    if match.get("win_lo") is not None and match["win_lo"] > 50:
-        return "better"
+    if match.get("win") is not None and match.get("pairs", MIN_PAIRS) >= MIN_PAIRS:
+        if match["win_hi"] < 50:
+            return "worse"
+        if match["win_lo"] > 50:
+            return "better"
     base = log_loss.get("previous", log_loss.get("none"))
     if base is not None and log_loss.get("new") is not None and base - log_loss["new"] >= min_gain:
         return "better"

@@ -71,13 +71,15 @@ class Auto:
                  budget_gb: float, eval_kw: dict | None = None,
                  train_fn: Callable = train, evaluate_fn: Callable = evaluate,
                  cpu_fn: Callable[[], float] = cpu_seconds,
-                 disk_fn: Callable[[Path], int] = disk_bytes, log=print):
+                 disk_fn: Callable[[Path], int] = disk_bytes, log=print,
+                 max_level: int = MAX_LEVEL):
         self.cfg, self.work, self.limits = cfg, work, limits
         self.budget_cpu = budget_cpu_hours * 3600
         self.budget_disk = budget_gb * 2**30
         self.eval_kw = eval_kw or {}
         self.train_fn, self.evaluate_fn = train_fn, evaluate_fn
         self.cpu_fn, self.disk_fn, self.log = cpu_fn, disk_fn, log
+        self.max_level = max_level
         self.path = work / "auto.json"
         self.state = self._load()
 
@@ -157,7 +159,7 @@ class Auto:
                     return self._stop(f"{version.name} is not better", start_cpu)
                 if not dropping:
                     return self._stop("the learning curve no longer drops", start_cpu)
-                if level >= MAX_LEVEL:
+                if level >= self.max_level:
                     return self._stop(f"level {level} is the last one", start_cpu)
                 self.state["level"] = level + 1
                 self._save()
@@ -222,7 +224,8 @@ def cmd_improve(args) -> int:
 def cmd_auto(args) -> int:
     cfg, limits = config_from(args)
     cfg = replace(cfg, top_k=args.k)
-    Auto(cfg, args.work, limits, args.budget_cpu_hours, args.budget_gb, eval_kw(args)).run()
+    Auto(cfg, args.work, limits, args.budget_cpu_hours, args.budget_gb, eval_kw(args),
+         max_level=args.max_level).run()
     return 0
 
 
@@ -259,6 +262,7 @@ def parser() -> argparse.ArgumentParser:
         if name == "auto":
             p.add_argument("--budget-cpu-hours", type=float, required=True)
             p.add_argument("--budget-gb", type=float, required=True)
+            p.add_argument("--max-level", type=int, choices=sorted(LEVELS), default=MAX_LEVEL)
     return ap
 
 

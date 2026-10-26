@@ -29,3 +29,9 @@ def test_verdict():
     assert verdict({"new": 3.0, "previous": 3.5}, loss) == "worse"
     assert verdict({"new": 3.0, "previous": 2.9}, gain) == "better"
     assert verdict({"new": None, "none": None}, {"win": None}) == "not better"
+
+
+def test_a_short_match_is_left_out_of_the_verdict():
+    lost = {"pairs": 2, "win": 0.0, "win_lo": 0.0, "win_hi": 0.0}
+    assert verdict({"new": 3.0, "none": 4.0}, lost) == "better"
+    assert verdict({"new": 3.0, "none": 4.0}, lost | {"pairs": 5}) == "worse"
