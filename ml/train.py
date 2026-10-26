@@ -1,17 +1,26 @@
-"""Training at a data level: self-play games, the move model and its learning curve.
+"""Training at a data level: the move model and its learning curve.
 
-  python -m ml.train --level 0 [--games N] [--work build/m6] [--bots equity,equity]
-                     [--human-params FILE] [--min-rating R] [--max-rating R]
-                     [--movers all] [--seed 1] [--threads 3] [--mem 6G] [--force]
+  python -m ml.train --level 0 [--games N] [--source selfplay|human] [--work build/m6]
+                     [--bots equity,equity] [--human-params FILE] [--min-rating R]
+                     [--max-rating R] [--movers all] [--mlp] [--drop A] [--top-k 64,128]
+                     [--l2 1e-2] [--max-train 60000] [--fractions 0.25,0.5,1]
+                     [--seed 1] [--threads 3] [--mem 6G] [--force]
 
-Levels (data scale): 0 smoke = 1,000 self-play games, 1 test = 10,000, both
-fitted with the conditional logit (ml.human_model.logit); --games sets any other
-size. The games are generated only up to the level's size (kingbble_selfplay
-resumes), turned into the turn store and the per-option features, and the
-model is fitted on 25, 50 and 100 % of the train turns, each scored on the same
-val turns: the learning curve. Every run saves a new version under
-<work>/models/vNNN: model.txt (read by HumanModelParams::FromFile), curve.json
-and config.json. Every engine and fitting step runs under ml.limits.
+Levels (data scale): 0 smoke = 1,000 games, 1 test = 10,000, both fitted with
+the conditional logit (ml.human_model.logit); --games sets any other size.
+--source selfplay (the default) generates self-play games up to the level's
+size (kingbble_selfplay resumes) and builds their turn store: the pipeline
+smoke and the bot model, never the human model (a bot is trivially predictable
+and the "human" bot only re-learns itself). --source human takes the first
+games of the downloaded human games on the lexicon (the turn store, split by
+player) and fits human movers only, with the word familiarity table counted on
+their train split. The model is fitted on the --fractions of the train turns
+(at most --max-train), each scored on the same val turns: the learning curve;
+the largest fit also scores the test split against a uniform choice among the
+legal options and, with --mlp, fits the network (kept if better on val). Every
+run saves a new version under <work>/models/vNNN: model.txt (read by
+HumanModelParams::FromFile), curve.json and config.json. Every engine and
+fitting step runs under ml.limits.
 """
 
 from __future__ import annotations
@@ -22,7 +31,7 @@ import shutil
 import subprocess
 import sys
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 
 from ml import tracking
@@ -36,12 +45,20 @@ SELFPLAY = ROOT / "build" / "engine" / "kingbble_selfplay"
 FEATURES = ROOT / "build" / "engine" / "kingbble_features"
 LEVELS = {0: ("smoke", 1000), 1: ("test", 10000)}
 FRACTIONS = (0.25, 0.5, 1.0)
+HUMAN_RAW = ROOT / "data" / "raw" / "woogles"
+HUMAN_STORE = ROOT / "data" / "turns"
+ALT_LEXICON = ROOT / "lexica" / "ENABLE.txt"
 
 
 @dataclass
 class Config:
     level: int = 0
     games: int = 0  # 0: the level's size
+    # "selfplay": games played here (the pipeline smoke, the bot model);
+    # "human": downloaded human games (the human move model, human movers only).
+    source: str = "selfplay"
+    human_raw: str = str(HUMAN_RAW)
+    human_store: str = str(HUMAN_STORE)
     lexicon: str = str(DEFAULT_LEXICON)
     leaves: str = str(DEFAULT_LEAVES)
     bots: tuple[str, str] = ("equity", "equity")
@@ -55,6 +72,9 @@ class Config:
     # One penalty per fit (as #42's quick mode): the full 3 x 3 grid costs 9 fits.
     l2: str = "1e-2"
     l1: str = "0"
+    max_train: int = 60000  # turns of the largest fit; the fractions are of this
+    mlp: bool = False  # also fit the network on the largest fit, kept if better on val
+    drop: str = ""  # feature groups to leave out, e.g. "A"
     fractions: tuple[float, ...] = FRACTIONS
     extra: dict = field(default_factory=dict)
 
@@ -63,8 +83,88 @@ class Config:
 
 
 def data_dir(work: Path, cfg: Config) -> Path:
-    """One directory per way of generating games; larger levels extend it."""
+    """One directory per way of getting games; larger levels extend it."""
+    if cfg.source == "human":
+        return work / "data" / f"human_{Path(cfg.lexicon).stem}"
     return work / "data" / f"{cfg.bots[0]}_vs_{cfg.bots[1]}_s{cfg.seed}"
+
+
+def human_games(cfg: Config) -> list[str]:
+    """Ids of the downloaded human games on cfg's lexicon (the turn store's view), sorted."""
+    import duckdb
+
+    con = duckdb.connect()
+    pattern = str(Path(cfg.human_store) / "**" / "*.parquet")
+    con.read_parquet(pattern, hive_partitioning=True).create_view("turns")
+    rows = con.execute(
+        "SELECT DISTINCT game_id FROM turns WHERE lexicon = ? ORDER BY game_id",
+        [Path(cfg.lexicon).stem],
+    ).fetchall()
+    return [g for (g,) in rows if (Path(cfg.human_raw) / f"{g}.gcg").exists()]
+
+
+def prepare_human(cfg: Config, data: Path, limits: Limits) -> tuple[Path, Path, int]:
+    """Features of the first cfg.size() human games (all of them if there are fewer), with
+    the word familiarity table counted on their train split; (features, raw, games)."""
+    from ml.data.features import store_turns, write_turn_info
+    from ml.data.word_freq import play_counts, read_words, table, write
+
+    ids = human_games(cfg)[: cfg.size()]
+    feats, raw = data / f"features_{len(ids)}", data / f"raw_{len(ids)}"
+    if (feats / "turns.tsv").exists():
+        return feats, raw, len(ids)
+    if raw.exists():
+        shutil.rmtree(raw)
+    raw.mkdir(parents=True)
+    for g in ids:
+        (raw / f"{g}.gcg").symlink_to((Path(cfg.human_raw) / f"{g}.gcg").resolve())
+    store = Path(cfg.human_store)
+    word_freq = data / f"word_freq_{len(ids)}.tsv"
+    try:
+        from wordfreq import zipf_frequency
+
+        def zipf(w):
+            return zipf_frequency(w.lower(), "en")
+    except ImportError:  # the "freq" extra: without it only the play counts
+
+        def zipf(w):
+            return 0.0
+
+    counts = play_counts(Path(cfg.lexicon), raw, store, FEATURES)
+    write(table(read_words(Path(cfg.lexicon)), counts, zipf), word_freq)
+    tmp = feats.with_name(feats.name + ".tmp")
+    if tmp.exists():
+        shutil.rmtree(tmp)
+    write_turn_info(store_turns(store), tmp / "turn_info.tsv")
+    cmd = [FEATURES, "--lexicon", cfg.lexicon, "--leaves", cfg.leaves, "--games", raw,
+           "--out", tmp, "--top", "256", "--turn-info", tmp / "turn_info.tsv",
+           "--word-freq", word_freq]  # fmt: skip
+    if ALT_LEXICON.exists():
+        cmd += ["--alt-lexicon", ALT_LEXICON]
+    limits.run(cmd, stdout=subprocess.DEVNULL)
+    tmp.rename(feats)
+    return feats, raw, len(ids)
+
+
+def uniform_test_nll(feats: Path, store: Path, cfg: Config) -> float | None:
+    """NLL of a uniform choice among all legal options on the fit's test turns."""
+    import math
+
+    from ml.data.features import load, ratings
+    from ml.human_model.logit import in_rating_range
+
+    info = in_rating_range(ratings(feats, store), cfg.min_rating, cfg.max_rating)
+    turns, _ = load(feats)
+    logs = []
+    for t in turns:
+        rating, split, bot = info.get((t.game_id, t.turn), (None, "", False))
+        if split == "test" and _mover_ok(cfg.movers, bot):
+            logs.append(math.log(t.options))
+    return sum(logs) / len(logs) if logs else None
+
+
+def _mover_ok(movers: str, bot: bool) -> bool:
+    return movers == "all" or (movers == "bot") == bot
 
 
 def generate(cfg: Config, data: Path, limits: Limits) -> int:
@@ -156,14 +256,21 @@ def train_turns(feats: Path, store: Path, cfg: Config) -> int:
 
     info = in_rating_range(ratings(feats, store), cfg.min_rating, cfg.max_rating)
     return sum(
-        1
-        for rating, split, bot in info.values()
-        if split == "train" and (cfg.movers == "all" or (cfg.movers == "bot") == bot)
+        1 for rating, split, bot in info.values() if split == "train" and _mover_ok(cfg.movers, bot)
     )
 
 
-def fit(cfg: Config, feats: Path, store: Path, out: Path, n_train: int, limits: Limits) -> dict:
-    """Fits the logit on n_train turns; its report (val_nll_logit and the rest)."""
+def fit(
+    cfg: Config,
+    feats: Path,
+    store: Path,
+    out: Path,
+    n_train: int,
+    limits: Limits,
+    final: bool = False,
+) -> dict:
+    """Fits the logit on n_train turns; its report (val_nll_logit and the rest). The final
+    fit also scores the test split and, with cfg.mlp, fits the network."""
     model, report = out.with_suffix(".txt"), out.with_suffix(".json")
     cmd = [
         sys.executable,
@@ -192,6 +299,10 @@ def fit(cfg: Config, feats: Path, store: Path, out: Path, n_train: int, limits: 
         "--l1",
         cfg.l1,
     ]
+    if cfg.drop:
+        cmd += ["--drop", cfg.drop]
+    if final:
+        cmd += ["--test"] + (["--mlp"] if cfg.mlp else [])
     if cfg.min_rating is not None:
         cmd += ["--min-rating", cfg.min_rating]
     if cfg.max_rating is not None:
@@ -222,14 +333,20 @@ def train(cfg: Config, work: Path = DEFAULT_WORK, limits: Limits | None = None, 
     """Generates, prepares and fits; returns the new version's directory."""
     limits = limits or Limits()
     start = time.time()
+    if cfg.source == "human":
+        cfg = replace(cfg, movers="human")
     data = data_dir(work, cfg)
-    log(f"level {cfg.level}: {cfg.size()} games in {data}")
-    games = generate(cfg, data, limits)
-    if games < cfg.size():
-        raise RuntimeError(f"only {games} of {cfg.size()} games were played")
-    feats = prepare(cfg, data, limits)
-    store = data / f"store_{cfg.size()}"
-    n = train_turns(feats, store, cfg)
+    log(f"level {cfg.level}: {cfg.size()} {cfg.source} games in {data}")
+    if cfg.source == "human":
+        feats, raw, games = prepare_human(cfg, data, limits)
+        store = Path(cfg.human_store)
+    else:
+        games = generate(cfg, data, limits)
+        if games < cfg.size():
+            raise RuntimeError(f"only {games} of {cfg.size()} games were played")
+        feats = prepare(cfg, data, limits)
+        store, raw = data / f"store_{cfg.size()}", data / f"raw_{cfg.size()}"
+    n = min(train_turns(feats, store, cfg), cfg.max_train)
     if n == 0:
         raise RuntimeError("no train turns")
     version = next_version(work / "models")
@@ -240,7 +357,9 @@ def train(cfg: Config, work: Path = DEFAULT_WORK, limits: Limits | None = None, 
     curve = []
     for fraction in cfg.fractions:
         size = max(1, round(n * fraction))
-        report = fit(cfg, feats, store, tmp / f"fit_{round(100 * fraction)}", size, limits)
+        final = fraction == cfg.fractions[-1]
+        name = tmp / f"fit_{round(100 * fraction)}"
+        report = fit(cfg, feats, store, name, size, limits, final=final)
         curve.append(
             {
                 "fraction": fraction,
@@ -255,17 +374,29 @@ def train(cfg: Config, work: Path = DEFAULT_WORK, limits: Limits | None = None, 
         )
     shutil.copy(tmp / f"fit_{round(100 * cfg.fractions[-1])}.txt", tmp / "model.txt")
     (tmp / "curve.json").write_text(json.dumps(curve, indent=1) + "\n")
-    config = asdict(cfg) | {
-        "games_played": games,
-        "data": str(data),
-        "features": str(feats),
-        "raw": str(data / f"raw_{cfg.size()}"),
-        "store": str(store),
-        "train_turns": n,
-        "commit": _commit(),
-        "seconds": round(time.time() - start, 1),
-        "still_dropping": still_dropping(curve),
-    }
+    test = {k: v for k, v in report.items() if k.startswith(("test_", "val_nll_mlp", "kind"))}
+    test["test_nll_uniform"] = uniform_test_nll(feats, store, cfg)
+    if test.get("test_nll_logit") is not None:
+        log(
+            f"  test NLL: logit {test['test_nll_logit']:.4f}"
+            + (f", mlp {test['test_nll_mlp']:.4f}" if "test_nll_mlp" in test else "")
+            + f", uniform {test['test_nll_uniform']:.4f} ({report['kind']} kept)"
+        )
+    config = (
+        asdict(cfg)
+        | test
+        | {
+            "games_played": games,
+            "data": str(data),
+            "features": str(feats),
+            "raw": str(raw),
+            "store": str(store),
+            "train_turns": n,
+            "commit": _commit(),
+            "seconds": round(time.time() - start, 1),
+            "still_dropping": still_dropping(curve),
+        }
+    )
     (tmp / "config.json").write_text(json.dumps(config, indent=1) + "\n")
     tmp.rename(version)
     log(f"saved {version}")
@@ -288,7 +419,23 @@ def config_args(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--leaves", default=str(DEFAULT_LEAVES))
     ap.add_argument("--bots", default="equity,equity", help="the two self-play bots")
     ap.add_argument("--human-params", default="", help="model of the 'human' bot")
+    ap.add_argument(
+        "--source",
+        default="selfplay",
+        choices=("selfplay", "human"),
+        help="self-play games, or the downloaded human games (human movers)",
+    )
     ap.add_argument("--movers", default="all", choices=("all", "human", "bot"))
+    ap.add_argument("--top-k", default="64,128", help="top_k values the fit tries on val")
+    ap.add_argument("--l2", default="1e-2", help="L2 strengths the fit tries")
+    ap.add_argument("--max-train", type=int, default=60000, help="turns of the largest fit")
+    ap.add_argument(
+        "--fractions",
+        default="0.25,0.5,1",
+        help="shares of --max-train fitted (the learning curve)",
+    )
+    ap.add_argument("--mlp", action="store_true", help="also fit the network, kept if better")
+    ap.add_argument("--drop", default="", help="feature groups to leave out, e.g. A")
     ap.add_argument("--min-rating", type=int)
     ap.add_argument("--max-rating", type=int)
     ap.add_argument("--seed", type=int, default=1)
@@ -309,7 +456,14 @@ def config_from(args) -> tuple[Config, Limits]:
         leaves=args.leaves,
         bots=bots,
         human_params=args.human_params,
+        source=args.source,
         movers=args.movers,
+        top_k=args.top_k,
+        l2=args.l2,
+        max_train=args.max_train,
+        fractions=tuple(float(f) for f in args.fractions.split(",")),
+        mlp=args.mlp,
+        drop=args.drop,
         min_rating=args.min_rating,
         max_rating=args.max_rating,
         seed=args.seed,
