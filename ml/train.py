@@ -191,6 +191,7 @@ def train(cfg: Config, work: Path = DEFAULT_WORK, limits: Limits | None = None,
     shutil.copy(tmp / f"fit_{round(100 * cfg.fractions[-1])}.txt", tmp / "model.txt")
     (tmp / "curve.json").write_text(json.dumps(curve, indent=1) + "\n")
     config = asdict(cfg) | {"games_played": games, "data": str(data), "features": str(feats),
+                            "raw": str(data / f"raw_{cfg.size()}"),
                             "store": str(store), "train_turns": n, "commit": _commit(),
                             "seconds": round(time.time() - start, 1),
                             "still_dropping": still_dropping(curve)}
