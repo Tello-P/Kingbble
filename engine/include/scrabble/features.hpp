@@ -175,9 +175,12 @@ class FeatureComputer {
   FeatureComputer(const Leaves& leaves, const FeatureLexicon* lexicon);
 
   // `options` as returned by RankOptions for `rack` on `board`; fills options
-  // [0, k) and `extra` (when it is a valid index).
+  // [0, k) and `extra` (when it is a valid index). `own_play`: the main word
+  // this turn played when the lexicon's play counts include the turn itself
+  // (train turns); its count is taken as one less (leave-one-out), so the
+  // played option does not get its own play as familiarity.
   void Fill(const Board& board, const Rack& rack, const TurnContext& ctx,
-            std::vector<Option>& options, int k, int extra = -1);
+            std::vector<Option>& options, int k, int extra = -1, const std::string& own_play = "");
   // FeatureLexicon::LeaveBingoProbability, 0 without a lexicon.
   double LeaveBingoProbability(const Rack& leave) const;
 
