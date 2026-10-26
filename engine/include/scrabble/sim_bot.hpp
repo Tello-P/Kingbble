@@ -6,6 +6,7 @@
 
 #include "scrabble/bot.hpp"
 #include "scrabble/equity_bot.hpp"
+#include "scrabble/inference.hpp"
 
 namespace scrabble {
 
@@ -17,6 +18,9 @@ struct SimParams {
   double prune_z = 2.58;     // drop candidates this many standard errors behind
   int threads = 1;
   std::uint64_t seed = 1;
+  // Share of opponent racks taken from the rack sampler, if one is set; the
+  // rest are uniform draws from the unseen tiles.
+  double posterior_share = 0.8;
 };
 
 struct SimResult {
@@ -41,12 +45,16 @@ class SimBot : public Bot {
   Move Choose(const Game& game) override;
   // Candidates after the last Choose, best first.
   const std::vector<SimResult>& last_results() const { return results_; }
+  // Opponent racks inferred from the game so far (e.g. a RackFilter); nullptr
+  // for uniform racks only. It must outlive Choose and stay unchanged during it.
+  void set_rack_sampler(const RackSampler* sampler) { sampler_ = sampler; }
 
  private:
   double Playout(EquityBot& bot, const Game& base, const Move& candidate) const;
   Game SamplePosition(const Game& game, std::uint64_t seed) const;
 
   SimParams params_;
+  const RackSampler* sampler_ = nullptr;
   std::vector<std::unique_ptr<EquityBot>> bots_;  // one per thread
   std::uint64_t calls_ = 0;
   std::vector<SimResult> results_;
