@@ -112,6 +112,12 @@ bool ParseMoveLine(std::string_view body, GcgEvent& ev, std::string& why) {
     ev.rack = std::string(tok[0].substr(1, tok[0].size() - 2));
     return true;
   }
+  // After going out, Woogles writes time penalties and challenge bonuses with an
+  // empty rack (">p:  (time) -10 339").
+  if (tok.size() == 1 && (tok[0] == "(time)" || tok[0] == "(challenge)")) {
+    ev.kind = tok[0] == "(time)" ? GcgEvent::Kind::kTimePenalty : GcgEvent::Kind::kChallengeBonus;
+    return true;
+  }
   if (!IsRack(tok[0])) {
     why = "bad rack";
     return false;
