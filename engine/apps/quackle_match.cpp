@@ -11,7 +11,8 @@
 // the games already there (stop it any time and run the same command again);
 // --status prints the summary of FILE and exits. Bot options as kingbble_selfplay: --threads,
 // --endgame-time, --peg-bag,
-// --peg-candidates, --peg-time, --apeg-*, --sim-*.
+// --peg-candidates, --peg-time, --apeg-*, --sim-* (--sim-time S: seconds per
+// simulated move, with --sim-iterations as a cap).
 
 #include <sys/wait.h>
 #include <unistd.h>
@@ -191,6 +192,8 @@ int main(int argc, char** argv) {
       sim.candidates = std::stoi(value());
     } else if (a == "--sim-iterations") {
       sim.max_iterations = std::stoi(value());
+    } else if (a == "--sim-time") {
+      sim.time_limit_s = std::stod(value());
     } else if (a == "--endgame-time") {
       endgame_time = std::stod(value());
     } else if (a == "--peg-bag") {
