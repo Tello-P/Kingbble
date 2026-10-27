@@ -18,6 +18,7 @@ reports).
 from __future__ import annotations
 
 import argparse
+import queue
 import shutil
 import subprocess
 import sys
@@ -215,14 +216,33 @@ def main() -> int:
             log.append({"i": i, "theirs": theirs[i]})
             progress.step()
 
+    def drain(pool: ThreadPoolExecutor, job, todo: list[int]) -> None:
+        """Each of the jobs takes the next position left, one process per position, so
+        a few slow positions do not leave the other jobs idle at the end."""
+        left = queue.SimpleQueue()
+        for i in todo:
+            left.put(i)
+
+        def worker(_: int) -> None:
+            while True:
+                try:
+                    i = left.get_nowait()
+                except queue.Empty:
+                    return
+                job([i])
+
+        list(pool.map(worker, range(args.jobs)))
+
     with ThreadPoolExecutor(args.jobs) as pool:
         start = time.monotonic()
-        todo = [i for i in range(len(cgps)) if i not in ours]
-        list(pool.map(ours_job, [todo[j :: args.jobs] for j in range(args.jobs)]))
+        drain(pool, ours_job, [i for i in range(len(cgps)) if i not in ours])
         ours_time = time.monotonic() - start
         start = time.monotonic()
-        todo = [i for i in range(len(cgps)) if ours[i] is not None and i not in theirs]
-        list(pool.map(macondo_job, [todo[j :: args.jobs] for j in range(args.jobs)]))
+        drain(
+            pool,
+            macondo_job,
+            [i for i in range(len(cgps)) if ours[i] is not None and i not in theirs],
+        )
         macondo_time = time.monotonic() - start
     print(f"ours: {ours_time:.1f} s, macondo: {macondo_time:.1f} s (this run)")
     return summarize(cgps, log, args.time_limit)
