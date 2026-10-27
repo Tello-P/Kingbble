@@ -77,6 +77,38 @@ TEST_F(SimDepthTest, ATimeLimitStopsAfterTheMinimumIterations) {
   for (const SimResult& r : bot.last_results()) EXPECT_EQ(r.iterations, 8);
 }
 
+// #56: a time budget that is not reached changes nothing, and a candidate
+// clearly ahead of the rest ends the simulation before the budget or the
+// iteration cap (the confidence stop: every other candidate is pruned).
+TEST_F(SimDepthTest, AnUnreachedTimeLimitChangesNothing) {
+  Game g = MidGame();
+  SimBot plain(gaddag_, leaves_, Params(2));
+  SimParams p = Params(2);
+  p.time_limit_s = 1000;
+  SimBot timed(gaddag_, leaves_, p);
+  EXPECT_EQ(plain.Choose(g), timed.Choose(g));
+  ASSERT_EQ(plain.last_results().size(), timed.last_results().size());
+  for (std::size_t i = 0; i < plain.last_results().size(); ++i) {
+    EXPECT_EQ(plain.last_results()[i].mean, timed.last_results()[i].mean);
+    EXPECT_EQ(plain.last_results()[i].iterations, timed.last_results()[i].iterations);
+  }
+}
+
+TEST_F(SimDepthTest, AClearBestStopsBeforeTheBudget) {
+  Game g = MidGame();
+  SimParams p = Params(2);
+  p.prune_z = 0.5;
+  p.max_iterations = 100000;
+  p.time_limit_s = 60;
+  SimBot bot(gaddag_, leaves_, p);
+  bot.Choose(g);
+  const auto& r = bot.last_results();
+  ASSERT_GT(r.size(), 1u);
+  EXPECT_FALSE(r.front().pruned);
+  EXPECT_LT(r.front().iterations, p.max_iterations);
+  for (std::size_t i = 1; i < r.size(); ++i) EXPECT_TRUE(r[i].pruned);
+}
+
 // Sorted means of the candidates, to compare two runs.
 std::vector<double> Means(const SimBot& bot) {
   std::vector<double> out;
