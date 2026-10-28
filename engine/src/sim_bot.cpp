@@ -25,8 +25,10 @@ std::uint64_t MixSeed(std::uint64_t x) {
 SimBot::SimBot(const Gaddag& gaddag, const Leaves& leaves, SimParams params) : params_(params) {
   params_.threads = std::max(1, params_.threads);
   params_.batch = std::max(1, params_.batch);
-  for (int i = 0; i < params_.threads; ++i)
+  for (int i = 0; i < params_.threads; ++i) {
     bots_.push_back(std::make_unique<EquityBot>(gaddag, leaves));
+    bots_.back()->set_late_bag(params_.late_bag);
+  }
 }
 
 Game SimBot::SamplePosition(const Game& game, std::uint64_t seed) const {
@@ -76,8 +78,8 @@ Move SimBot::Reply(int thread, const Game& game, std::mt19937_64& rng) const {
   return ranked[std::discrete_distribution<std::size_t>(weights.begin(), weights.end())(rng)].move;
 }
 
-double SimBot::Playout(int thread, const Game& base, const Move& candidate,
-                       std::uint64_t seed) const {
+double SimBot::Playout(int thread, const Game& base, const Move& candidate, std::uint64_t seed,
+                       int plies) const {
   EquityBot& bot = *bots_[thread];
   // The same stream for every candidate of an iteration.
   std::mt19937_64 rng(seed);
@@ -86,12 +88,13 @@ double SimBot::Playout(int thread, const Game& base, const Move& candidate,
   const int before = g.score(me) - g.score(1 - me);
   g.Apply(candidate);
   double leave = 0;  // of the last mover, from our side
-  for (int ply = 0; ply < params_.plies && !g.over(); ++ply) {
+  for (int ply = 0; ply < plies && !g.over(); ++ply) {
     const int mover = g.to_move();
     Move m = mover != me || params_.reply_own ? Reply(thread, g, rng) : bot.Choose(g);
     leave = 0;
-    if (ply == params_.plies - 1 && g.bag_size() > 0) {
-      leave = bot.leaves().Value(LeaveAfter(g.rack(mover), m));
+    if (ply == plies - 1 && g.bag_size() > 0) {
+      leave =
+          LeaveValue(LeaveAfter(g.rack(mover), m), g.bag_size(), bot.leaves(), params_.late_bag);
       if (mover != me) leave = -leave;
     }
     g.Apply(m);
@@ -108,6 +111,11 @@ Move SimBot::Choose(const Game& game) {
   const std::uint64_t base_seed = MixSeed(MixSeed(params_.seed) + calls_++);
   // With an empty bag the opponent's rack is known: one playout is exact.
   const int max_iterations = game.bag_size() == 0 ? 1 : std::max(1, params_.max_iterations);
+  // Near the end, play every playout out: no game lasts this many more moves.
+  const bool to_end =
+      params_.end_unseen > 0 &&
+      UnseenTiles(game.board(), game.rack(game.to_move())).Size() <= params_.end_unseen;
+  const int plies = to_end ? 1000 : params_.plies;
 
   std::vector<std::vector<double>> values(n, std::vector<double>(max_iterations));
   std::vector<int> iterations(n, 0);
@@ -141,7 +149,7 @@ Move SimBot::Choose(const Game& game) {
         Game pos = SamplePosition(game, seed);
         for (std::size_t c = 0; c < n; ++c)
           if (active[c])
-            values[c][it] = Playout(thread, pos, ranked[c].move, MixSeed(seed ^ 0x9E9));
+            values[c][it] = Playout(thread, pos, ranked[c].move, MixSeed(seed ^ 0x9E9), plies);
       }
     };
     std::vector<std::thread> threads;
