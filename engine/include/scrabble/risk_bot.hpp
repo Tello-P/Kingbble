@@ -75,6 +75,10 @@ class RiskBot : public Bot {
     sim_.set_rack_sampler(sampler);
     risk_sim_.set_rack_sampler(sampler);
   }
+  void Reseed(std::uint64_t seed) {
+    sim_.Reseed(seed);
+    risk_sim_.Reseed(seed);
+  }
 
  private:
   static SimParams RiskSimParams(SimParams sim, const RiskParams& risk);

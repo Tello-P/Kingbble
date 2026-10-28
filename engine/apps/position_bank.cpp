@@ -335,15 +335,6 @@ int main(int argc, char** argv) {
       for (int s = 0; s < 2; ++s) {
         const int number = 2 * (i * o.repeats + r) + s + 1;
         if (results.Done(number)) continue;
-        // Fresh trackers, fed the whole game from its start.
-        for (int k = 0; k < 2; ++k) {
-          FilterParams fp;
-          fp.seed = MixSeed(pos.game_seed + 10 + k);
-          sides[k].filter = std::make_unique<RackFilter>(*models[k], leaves, fp);
-          if (side_model[k] == "none") sides[k].filter.reset();
-          if (sides[k].risk) sides[k].risk->set_rack_sampler(sides[k].filter.get());
-          if (sides[k].sim) sides[k].sim->set_rack_sampler(sides[k].filter.get());
-        }
         Game game(pos.game_seed);
         const int to_move_at = [&] {
           Game g(pos.game_seed);
@@ -352,6 +343,25 @@ int main(int argc, char** argv) {
         }();
         // a on the side to move first, then b.
         const int seat_a = s == 0 ? to_move_at : 1 - to_move_at;
+        // Fresh trackers, fed the whole game from its start. Random streams go
+        // with the seat, not the bot: in both games of a pair the side to move
+        // draws the same numbers, so identical bots play the same game twice.
+        for (int k = 0; k < 2; ++k) {
+          const int seat = k == 0 ? seat_a : 1 - seat_a;
+          FilterParams fp;
+          fp.seed = MixSeed(pos.game_seed + 10 + seat);
+          sides[k].filter = std::make_unique<RackFilter>(*models[k], leaves, fp);
+          if (side_model[k] == "none") sides[k].filter.reset();
+          const std::uint64_t sim_seed = MixSeed(pos.game_seed + 20 + seat + 2 * r);
+          if (sides[k].risk) {
+            sides[k].risk->set_rack_sampler(sides[k].filter.get());
+            sides[k].risk->Reseed(sim_seed);
+          }
+          if (sides[k].sim) {
+            sides[k].sim->set_rack_sampler(sides[k].filter.get());
+            sides[k].sim->Reseed(sim_seed);
+          }
+        }
         Side* seats[2] = {&sides[seat_a == 0 ? 0 : 1], &sides[seat_a == 0 ? 1 : 0]};
         Table table(seats);
         table.Start(game);
