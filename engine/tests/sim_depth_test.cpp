@@ -171,4 +171,17 @@ TEST_F(SimDepthTest, LateLeaveValuesOnlyActNearTheEnd) {
   EXPECT_EQ(Means(plain), Means(blended));
 }
 
+TEST_F(SimDepthTest, ReseedingRestartsTheRandomStreams) {
+  Game g = MidGame();
+  SimParams p = Params(3);
+  SimBot used(gaddag_, leaves_, p);
+  used.Choose(g);
+  used.Choose(g);
+  p.seed = 99;
+  SimBot fresh(gaddag_, leaves_, p);
+  used.Reseed(99);
+  EXPECT_EQ(used.Choose(g), fresh.Choose(g));
+  EXPECT_EQ(Means(used), Means(fresh));
+}
+
 }  // namespace scrabble
