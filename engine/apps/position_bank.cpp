@@ -11,15 +11,18 @@
 // a's simulated opponent pick among its best static replies at random, and
 // --a-reply-human draws them from the human model (--human-params);
 // --a-end-unseen N plays a's playouts to the end of the game with at most N
-// tiles unseen. --min-bag / --max-bag / --max-lead set the positions (10, 25, 80). Both play
-// "+peg+eg" (pre-endgame with 1 tile in the bag, endgame with none), and each tracks the other's
-// rack from the start of the game with a RackFilter on --model (rangefinder by default; none for
-// uniform racks; human with --human-params,
-// --word-freq and --alt-lexicon as it was fitted), or per side with --a-model /
-// --b-model.
+// tiles unseen and --a-late-bag N gives a late leave values with 1..N tiles in
+// the bag. --min-bag / --max-bag / --max-lead set the positions (10, 25, 80).
+// Both play "+peg+eg" (pre-endgame with 1 tile in the bag, endgame with none),
+// and each tracks the other's rack from the start of the game with a
+// RackFilter on --model (rangefinder by default; none for uniform racks; human
+// with --human-params, --word-freq and --alt-lexicon as it was fitted), or per
+// side with --a-model / --b-model.
 //   kingbble_position_bank --lexicon lexica/CSW24.txt --leaves lexica/CSW24.klv2
 //       --positions 30 --repeats 1 [--a risk|riskwin|sim] [--risk-lambda 1] [--seed 1]
 //       [--a-candidates N] [--a-iterations N] [--a-plies N] [--sim-plies N] [--sim-time S]
+//       [--a-reply-top K --a-reply-temperature T] [--a-reply-human] [--a-end-unseen N]
+//       [--a-late-bag N] [--min-bag N] [--max-bag N] [--max-lead N]
 //       [--sim-candidates 8] [--sim-iterations 50] [--threads 3] [--peg-time 2]
 //       [--endgame-time 1] [--model rangefinder] [--a-model M] [--b-model M]
 //       [--human-params FILE] [--word-freq TSV] [--alt-lexicon FILE]
@@ -80,6 +83,7 @@ struct Options {
   double a_reply_temperature = 0;
   bool a_reply_human = false;
   int a_end_unseen = 0;
+  int a_late_bag = 0;
   RiskParams risk;
   double peg_time = 2, endgame_time = 1;
 };
@@ -203,6 +207,8 @@ int main(int argc, char** argv) {
       o.a_reply_human = true;
     } else if (a == "--a-end-unseen") {
       o.a_end_unseen = std::stoi(value());
+    } else if (a == "--a-late-bag") {
+      o.a_late_bag = std::stoi(value());
     } else if (a == "--min-bag") {
       o.min_bag = std::stoi(value());
     } else if (a == "--max-bag") {
@@ -249,7 +255,7 @@ int main(int argc, char** argv) {
           << " --lexicon FILE --leaves KLV [--positions N] [--repeats N] [--a risk|riskwin|sim]"
              " [--a-candidates N] [--a-iterations N] [--a-plies N] [--sim-plies N] [--sim-time S]"
              " [--a-reply-top K] [--a-reply-temperature T] [--a-reply-human] [--a-end-unseen N]"
-             " [--min-bag N] [--max-bag N] [--max-lead N]"
+             " [--a-late-bag N] [--min-bag N] [--max-bag N] [--max-lead N]"
              " [--risk-lambda L] [--seed S] [--sim-candidates N] [--sim-iterations N]"
              " [--threads N] [--peg-time S] [--endgame-time S] [--model NAME]"
              " [--a-model M] [--b-model M] [--human-params FILE] [--word-freq TSV]"
@@ -282,6 +288,7 @@ int main(int argc, char** argv) {
   a_sim.reply_top = o.a_reply_top;
   a_sim.reply_temperature = o.a_reply_temperature;
   a_sim.end_unseen = o.a_end_unseen;
+  a_sim.late_bag = o.a_late_bag;
 
   for (std::string& m : side_model)
     if (m.empty()) m = model_name;
