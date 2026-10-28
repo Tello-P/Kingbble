@@ -25,8 +25,9 @@ struct SimParams {
   double posterior_share = 0.8;
   // Moves played after the candidate in each playout, alternating opponent and
   // us, each the mover's best by static equity (2: the opponent's reply and our
-  // follow-up). 3 won 56.5 % of 200 games against 2 on the #57 position bank.
-  int plies = 3;
+  // follow-up). 3 tied with 2 on the position bank once its random streams
+  // went with the seat (51.0 % of 200 games), at more time per move.
+  int plies = 2;
   // Seconds per move (0: no limit). Batches stop once it is spent, after
   // min_iterations, so results then depend on the machine's speed.
   double time_limit_s = 0;
@@ -73,6 +74,12 @@ class SimBot : public Bot {
   // Opponent racks inferred from the game so far (e.g. a RackFilter); nullptr
   // for uniform racks only. It must outlive Choose and stay unchanged during it.
   void set_rack_sampler(const RackSampler* sampler) { sampler_ = sampler; }
+  // Restarts the random streams from `seed`, as if just constructed with it
+  // (e.g. so two bots get the same streams in the same seat of a paired game).
+  void Reseed(std::uint64_t seed) {
+    params_.seed = seed;
+    calls_ = 0;
+  }
   // Replies from `make()` policies (one per thread) instead of the static
   // ones, for the same plies as reply_top; an empty function goes back.
   void set_reply_policy(const std::function<std::unique_ptr<ReplyPolicy>()>& make);
