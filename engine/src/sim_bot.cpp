@@ -25,8 +25,10 @@ std::uint64_t MixSeed(std::uint64_t x) {
 SimBot::SimBot(const Gaddag& gaddag, const Leaves& leaves, SimParams params) : params_(params) {
   params_.threads = std::max(1, params_.threads);
   params_.batch = std::max(1, params_.batch);
-  for (int i = 0; i < params_.threads; ++i)
+  for (int i = 0; i < params_.threads; ++i) {
     bots_.push_back(std::make_unique<EquityBot>(gaddag, leaves));
+    bots_.back()->set_late_bag(params_.late_bag);
+  }
 }
 
 Game SimBot::SamplePosition(const Game& game, std::uint64_t seed) const {
@@ -91,7 +93,8 @@ double SimBot::Playout(int thread, const Game& base, const Move& candidate, std:
     Move m = mover != me || params_.reply_own ? Reply(thread, g, rng) : bot.Choose(g);
     leave = 0;
     if (ply == plies - 1 && g.bag_size() > 0) {
-      leave = bot.leaves().Value(LeaveAfter(g.rack(mover), m));
+      leave =
+          LeaveValue(LeaveAfter(g.rack(mover), m), g.bag_size(), bot.leaves(), params_.late_bag);
       if (mover != me) leave = -leave;
     }
     g.Apply(m);

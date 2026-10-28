@@ -42,6 +42,9 @@ struct SimParams {
   // Macondo does with 9-14 unseen: near the end the leave values no longer
   // say how the game will finish. 0: off.
   int end_unseen = 0;
+  // Late leave values (LeaveValue) with 1..late_bag tiles in the bag, for the
+  // candidates, the moves inside the playouts and the leave at their end. 0: off.
+  int late_bag = 0;
 };
 
 // Picks the move of the player to move inside a playout (e.g. from a model of
