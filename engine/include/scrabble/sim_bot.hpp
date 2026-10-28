@@ -37,6 +37,11 @@ struct SimParams {
   int reply_top = 1;
   double reply_temperature = 0;
   bool reply_own = false;
+  // With at most this many tiles unseen (bag and opponent's rack), playouts go
+  // on to the end of the game instead of stopping after `plies` moves, as
+  // Macondo does with 9-14 unseen: near the end the leave values no longer
+  // say how the game will finish. 0: off.
+  int end_unseen = 0;
 };
 
 // Picks the move of the player to move inside a playout (e.g. from a model of
@@ -78,7 +83,8 @@ class SimBot : public Bot {
   void set_reply_policy(const std::function<std::unique_ptr<ReplyPolicy>()>& make);
 
  private:
-  double Playout(int thread, const Game& base, const Move& candidate, std::uint64_t seed) const;
+  double Playout(int thread, const Game& base, const Move& candidate, std::uint64_t seed,
+                 int plies) const;
   Move Reply(int thread, const Game& game, std::mt19937_64& rng) const;
   Game SamplePosition(const Game& game, std::uint64_t seed) const;
 
