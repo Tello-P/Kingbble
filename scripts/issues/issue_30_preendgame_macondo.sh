@@ -6,12 +6,13 @@
 # capped at LIMIT s per side (default 90; slower ones are skipped and listed;
 # another LIMIT keeps its results apart, e.g. LIMIT=600 ...).
 # Every finished game/position is kept: stop the script any time and run it again
-# to go on (--fresh starts over, --status reports).
+# to go on (--fresh starts over, --status reports). JOBS (default MAX_THREADS) sets
+# the parallel jobs, which also pick the positions: resume with the same JOBS.
 #   scripts/issues/issue_30_preendgame_macondo.sh [--dry-run] [--quick] [--fresh] [--status]
 source "$(dirname "$0")/lib.sh"
 
 quick_args "$@"
-COUNT=4 JOBS=$MAX_THREADS BAGS="1 2" LIMIT=${LIMIT:-90}
+COUNT=4 JOBS=${JOBS:-$MAX_THREADS} BAGS="1 2" LIMIT=${LIMIT:-90}
 ((QUICK)) && COUNT=2 BAGS=1
 RUN_UNITS=$((2 * COUNT * JOBS))  # each position is solved by us and by Macondo
 issue_init 30 $((RUN_UNITS * $(wc -w <<<"$BAGS"))) "$@"
