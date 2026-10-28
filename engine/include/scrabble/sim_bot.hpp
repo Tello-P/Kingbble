@@ -25,8 +25,9 @@ struct SimParams {
   double posterior_share = 0.8;
   // Moves played after the candidate in each playout, alternating opponent and
   // us, each the mover's best by static equity (2: the opponent's reply and our
-  // follow-up). 3 won 56.5 % of 200 games against 2 on the #57 position bank.
-  int plies = 3;
+  // follow-up). 3 tied with 2 on the position bank once its random streams
+  // went with the seat (51.0 % of 200 games), at more time per move.
+  int plies = 2;
   // Seconds per move (0: no limit). Batches stop once it is spent, after
   // min_iterations, so results then depend on the machine's speed.
   double time_limit_s = 0;
