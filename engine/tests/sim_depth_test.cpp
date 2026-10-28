@@ -152,4 +152,23 @@ TEST_F(SimDepthTest, PlayoutsGoToTheEndWithFewTilesUnseen) {
   EXPECT_EQ(Means(plain), Means(gated));
 }
 
+TEST_F(SimDepthTest, LateLeaveValuesOnlyActNearTheEnd) {
+  Game late(3);
+  EquityBot equity(gaddag_, leaves_);
+  while (!late.over() && late.bag_size() > 5) late.Apply(equity.Choose(late));
+  ASSERT_FALSE(late.over());
+  SimParams p = Params(3);
+  p.prune_z = 1e9;
+  SimBot plain(gaddag_, leaves_, p);
+  p.late_bag = 7;
+  SimBot blended(gaddag_, leaves_, p);
+  plain.Choose(late);
+  blended.Choose(late);
+  EXPECT_NE(Means(plain), Means(blended));
+  Game g = MidGame();  // a full bag: nothing changes
+  ASSERT_GT(g.bag_size(), 7 + 7 * 3);
+  EXPECT_EQ(plain.Choose(g), blended.Choose(g));
+  EXPECT_EQ(Means(plain), Means(blended));
+}
+
 }  // namespace scrabble

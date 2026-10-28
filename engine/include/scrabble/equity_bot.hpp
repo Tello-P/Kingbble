@@ -24,12 +24,16 @@ class EquityBot : public Bot {
   std::vector<RankedMove> Rank(const Game& game);
 
   const Leaves& leaves() const { return leaves_; }
+  // Late leave values with 1..n tiles in the bag (see LeaveValue); 0: off.
+  void set_late_bag(int n) { late_bag_ = n; }
+  int late_bag() const { return late_bag_; }
 
  private:
   std::vector<Move> Options(const Game& game);
 
   MoveGenerator gen_;
   const Leaves& leaves_;
+  int late_bag_ = 0;
 };
 
 }  // namespace scrabble
