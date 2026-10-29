@@ -48,6 +48,7 @@ def test_human_games_take_the_lexicon_and_files_on_disk(tmp_path):
 
 
 def test_uniform_test_nll_averages_log_options(monkeypatch):
+    pytest.importorskip("numpy")
     import math
 
     import ml.data.features as features
