@@ -4,6 +4,7 @@
                      [--bots equity,equity] [--human-params FILE] [--min-rating R]
                      [--max-rating R] [--movers all] [--mlp] [--drop A] [--top-k 64,128]
                      [--l2 1e-2] [--max-train 60000] [--fractions 0.25,0.5,1]
+                     [--mix P --mix-raw DIR]
                      [--seed 1] [--threads 3] [--mem 6G] [--force]
 
 Levels (data scale): 0 smoke = 1,000 games, 1 test = 10,000, both fitted with
@@ -14,10 +15,12 @@ smoke and the bot model, never the human model (a bot is trivially predictable
 and the "human" bot only re-learns itself). --source human takes the first
 games of the downloaded human games on the lexicon (the turn store, split by
 player) and fits human movers only, with the word familiarity table counted on
-their train split. The model is fitted on the --fractions of the train turns
-(at most --max-train), each scored on the same val turns: the learning curve;
-the largest fit also scores the test split against a uniform choice among the
-legal options and, with --mlp, fits the network (kept if better on val). Every
+their train split; --mix P adds the self-play games of --mix-raw as P of the
+train turns (val and test stay human). The model is fitted on the --fractions
+of the train turns (at most --max-train), each scored on the same val turns:
+the learning curve; the largest fit also scores the test split against a
+uniform choice among the legal options and, with --mlp, fits the network (kept
+if better on val). Every
 run saves a new version under <work>/models/vNNN: model.txt (read by
 HumanModelParams::FromFile), curve.json and config.json. Every engine and
 fitting step runs under ml.limits.
@@ -59,6 +62,10 @@ class Config:
     source: str = "selfplay"
     human_raw: str = str(HUMAN_RAW)
     human_store: str = str(HUMAN_STORE)
+    # With source "human": self-play GCG games (e.g. kingbble_selfplay --gcg-dir)
+    # whose turns make `mix` of the train turns; val and test stay human.
+    mix: float = 0.0
+    mix_raw: str = ""
     lexicon: str = str(DEFAULT_LEXICON)
     leaves: str = str(DEFAULT_LEAVES)
     bots: tuple[str, str] = ("equity", "equity")
@@ -110,7 +117,9 @@ def prepare_human(cfg: Config, data: Path, limits: Limits) -> tuple[Path, Path, 
     from ml.data.word_freq import play_counts, read_words, table, write
 
     ids = human_games(cfg)[: cfg.size()]
-    feats, raw = data / f"features_{len(ids)}", data / f"raw_{len(ids)}"
+    mixed = sorted(Path(cfg.mix_raw).glob("*.gcg")) if cfg.mix > 0 and cfg.mix_raw else []
+    tag = f"{len(ids)}" + (f"_mix{len(mixed)}" if mixed else "")
+    feats, raw = data / f"features_{tag}", data / f"raw_{tag}"
     if (feats / "turns.tsv").exists():
         return feats, raw, len(ids)
     if raw.exists():
@@ -119,6 +128,18 @@ def prepare_human(cfg: Config, data: Path, limits: Limits) -> tuple[Path, Path, 
     for g in ids:
         (raw / f"{g}.gcg").symlink_to((Path(cfg.human_raw) / f"{g}.gcg").resolve())
     store = Path(cfg.human_store)
+    if mixed:
+        # Self-play games as sp_<name>, with their own turn store (split by game).
+        from ml.data.store import build as build_store
+
+        sp_raw = data / f"mix_raw_{len(mixed)}"
+        if sp_raw.exists():
+            shutil.rmtree(sp_raw)
+        sp_raw.mkdir(parents=True)
+        for path in mixed:
+            (sp_raw / f"sp_{path.name}").symlink_to(path.resolve())
+            (raw / f"sp_{path.name}").symlink_to(path.resolve())
+        build_store(sp_raw, mix_store(data, len(mixed)), salt="selfplay", source="selfplay")
     word_freq = data / f"word_freq_{len(ids)}.tsv"
     try:
         from wordfreq import zipf_frequency
@@ -135,7 +156,10 @@ def prepare_human(cfg: Config, data: Path, limits: Limits) -> tuple[Path, Path, 
     tmp = feats.with_name(feats.name + ".tmp")
     if tmp.exists():
         shutil.rmtree(tmp)
-    write_turn_info(store_turns(store), tmp / "turn_info.tsv")
+    info = store_turns(store)
+    if mixed:
+        info |= store_turns(mix_store(data, len(mixed)))
+    write_turn_info(info, tmp / "turn_info.tsv")
     cmd = [FEATURES, "--lexicon", cfg.lexicon, "--leaves", cfg.leaves, "--games", raw,
            "--out", tmp, "--top", "256", "--turn-info", tmp / "turn_info.tsv",
            "--word-freq", word_freq]  # fmt: skip
@@ -144,6 +168,11 @@ def prepare_human(cfg: Config, data: Path, limits: Limits) -> tuple[Path, Path, 
     limits.run(cmd, stdout=subprocess.DEVNULL)
     tmp.rename(feats)
     return feats, raw, len(ids)
+
+
+def mix_store(data: Path, games: int) -> Path:
+    """The turn store of the self-play games mixed into a human fit."""
+    return data / f"mix_store_{games}"
 
 
 def uniform_test_nll(feats: Path, store: Path, cfg: Config) -> float | None:
@@ -303,6 +332,9 @@ def fit(
         cmd += ["--drop", cfg.drop]
     if final:
         cmd += ["--test"] + (["--mlp"] if cfg.mlp else [])
+    mixed = len(list(Path(cfg.mix_raw).glob("*.gcg"))) if cfg.mix > 0 and cfg.mix_raw else 0
+    if mixed and cfg.source == "human":
+        cmd += ["--mix-store", mix_store(feats.parent, mixed), "--mix", cfg.mix]
     if cfg.min_rating is not None:
         cmd += ["--min-rating", cfg.min_rating]
     if cfg.max_rating is not None:
@@ -436,6 +468,13 @@ def config_args(ap: argparse.ArgumentParser) -> None:
     )
     ap.add_argument("--mlp", action="store_true", help="also fit the network, kept if better")
     ap.add_argument("--drop", default="", help="feature groups to leave out, e.g. A")
+    ap.add_argument(
+        "--mix",
+        type=float,
+        default=0.0,
+        help="with --source human: share of self-play train turns (0-1)",
+    )
+    ap.add_argument("--mix-raw", default="", help="the self-play GCG games to mix in")
     ap.add_argument("--min-rating", type=int)
     ap.add_argument("--max-rating", type=int)
     ap.add_argument("--seed", type=int, default=1)
@@ -464,6 +503,8 @@ def config_from(args) -> tuple[Config, Limits]:
         fractions=tuple(float(f) for f in args.fractions.split(",")),
         mlp=args.mlp,
         drop=args.drop,
+        mix=args.mix,
+        mix_raw=args.mix_raw,
         min_rating=args.min_rating,
         max_rating=args.max_rating,
         seed=args.seed,
