@@ -189,13 +189,18 @@ int PreEndgameSolver::EndgameValue(const State& s, int alpha, int beta) {
     std::lock_guard<std::mutex> lock(shared_->mutex);
     if (auto it = shared_->endgames.find(key); it != shared_->endgames.end()) {
       const EndgameBounds& b = it->second;
-      if (b.lo >= beta || b.hi <= alpha || b.lo == b.hi) return b.lo >= beta ? b.lo : b.hi;
+      if (b.lo >= beta || b.hi <= alpha || b.lo == b.hi) {
+        ++endgame_cache_hits_;
+        return b.lo >= beta ? b.lo : b.hi;
+      }
     }
   }
   ++endgames_;
+  const double started = Now();
   // Game counts scoreless turns up to 6; the endgame solver maps 5 to "one left".
   Game g = Game::FromPosition(s.board, s.racks, {0, 0}, s.to_move, Rack{}, s.scoreless ? 5 : 0, 0);
   const int v = endgame_.SolveWindow(g, alpha, beta, params_.endgame_plies, TimeLeft());
+  endgame_seconds_ += Now() - started;
   if (endgame_.aborted()) {
     aborted_ = true;
     return 0;
@@ -274,9 +279,13 @@ PegOutcome PreEndgameSolver::Nested(const State& s, int nested) {
   {
     std::lock_guard<std::mutex> lock(shared_->mutex);
     if (auto it = shared_->nested.find(key); it != shared_->nested.end()) {
-      if (auto v = it->second.find(actual); v != it->second.end()) return v->second;
+      if (auto v = it->second.find(actual); v != it->second.end()) {
+        ++nested_cache_hits_;
+        return v->second;
+      }
     }
   }
+  ++nested_solved_;
 
   const std::vector<Draw> draws = Permutations(unseen, k);
   const Rack& rack = s.racks[me_];
@@ -354,7 +363,7 @@ std::vector<PreEndgameSolver*> PreEndgameSolver::Workers(int threads, const Gadd
     PreEndgameSolver& w = *helpers_[i - 1];
     w.params_ = params_;
     w.me_ = me_;
-    w.endgames_ = 0;
+    w.ResetStats();
     w.deadline_ = deadline_;
     w.aborted_ = false;
     w.shared_ = shared_;
@@ -390,7 +399,7 @@ PreEndgameResult PreEndgameSolver::Solve(const Game& game, const PreEndgameParam
     throw std::logic_error("pre-endgame needs 1 to 6 tiles in the bag");
   params_ = params;
   me_ = game.to_move();
-  endgames_ = 0;
+  ResetStats();
   aborted_ = false;
   deadline_ = params.time_limit_s > 0 ? Now() + params.time_limit_s : 0;
   shared_->nested.clear();
@@ -570,7 +579,13 @@ PreEndgameResult PreEndgameSolver::Solve(const Game& game, const PreEndgameParam
       }
     }
   }
-  for (const PreEndgameSolver* w : workers) result.endgames += w->endgames_;
+  for (const PreEndgameSolver* w : workers) {
+    result.endgames += w->endgames_;
+    result.endgame_cache_hits += w->endgame_cache_hits_;
+    result.nested_solved += w->nested_solved_;
+    result.nested_cache_hits += w->nested_cache_hits_;
+    result.endgame_seconds += w->endgame_seconds_;
+  }
   return result;
 }
 
