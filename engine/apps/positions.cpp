@@ -20,7 +20,8 @@
 //
 // With --preendgame N only the first position of each game with 1..N tiles in
 // the bag is written; --solve follows it with a JSON line holding our
-// pre-endgame solution: {"permutations", "endgames", "seconds", "plays": [{"move",
+// pre-endgame solution: {"permutations", "endgames", "endgame_cache_hits",
+// "nested_solved", "nested_cache_hits", "endgame_seconds", "seconds", "plays": [{"move",
 // "wins", "spread"}]} with the analysed plays, best first ("spread" is null
 // without a tiebreak). --candidates N analyses only the N best plays by static
 // equity (and passing, with --pass); --exhaustive analyses every candidate fully
@@ -54,6 +55,10 @@ namespace {
 std::string PreEndgameJson(const PreEndgameResult& r, double seconds) {
   std::string out = "{\"permutations\": " + std::to_string(static_cast<long long>(r.permutations)) +
                     ", \"endgames\": " + std::to_string(r.endgames) +
+                    ", \"endgame_cache_hits\": " + std::to_string(r.endgame_cache_hits) +
+                    ", \"nested_solved\": " + std::to_string(r.nested_solved) +
+                    ", \"nested_cache_hits\": " + std::to_string(r.nested_cache_hits) +
+                    ", \"endgame_seconds\": " + std::to_string(r.endgame_seconds) +
                     ", \"seconds\": " + std::to_string(seconds) + ", \"plays\": [";
   bool first = true;
   for (const PreEndgamePlay& p : r.plays) {
