@@ -68,3 +68,31 @@ def test_uniform_test_nll_averages_log_options(monkeypatch):
     assert uniform_test_nll(None, None, Config(movers="bot")) == pytest.approx(math.log(16))
     rated = Config(movers="human", min_rating=1400)
     assert uniform_test_nll(None, None, rated) == pytest.approx((math.log(4) + math.log(8)) / 2)
+
+
+def test_choose_k_takes_the_smallest_k_close_to_the_best(tmp_path):
+    from ml.train import choose_k
+
+    nll = {10: 3.80, 20: 3.735, 50: 3.73, 100: 3.729}
+    calls = []
+
+    def fake_fit(cfg, feats, store, out, n, limits):
+        calls.append((int(cfg.top_k), cfg.mlp, n))
+        return {"val_nll_logit": nll[int(cfg.top_k)], "train_turns": n}
+
+    cfg = Config(mlp=True, k_search_train=500)
+    k, rows = choose_k(cfg, None, None, tmp_path, 900, None, fit_fn=fake_fit, log=lambda *a: None)
+    assert k == 20
+    assert [r["k"] for r in rows] == [10, 20, 50, 100]
+    assert all(not mlp and n == 500 for _, mlp, n in calls)
+    k, _ = choose_k(
+        Config(k_threshold=0.0),
+        None,
+        None,
+        tmp_path,
+        900,
+        None,
+        fit_fn=fake_fit,
+        log=lambda *a: None,
+    )
+    assert k == 100
