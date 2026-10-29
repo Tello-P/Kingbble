@@ -102,15 +102,20 @@ Leaves Leaves::FromCsv(std::string_view text) {
     };
     if (comma == std::string::npos) throw bad();
     const auto leave = Rack::FromString(line.substr(0, comma));
-    if (!leave || leave->Empty() || leave->Size() > kMaxKeyTiles) {
-      if (number == 1) continue;  // a header line
-      throw bad();
-    }
+    float value = 0;
+    bool number_ok = true;
     try {
-      rows.emplace_back(Key(*leave), std::stof(line.substr(comma + 1)));
+      std::size_t used = 0;
+      value = std::stof(line.substr(comma + 1), &used);
+      number_ok = used > 0;
     } catch (const std::exception&) {
+      number_ok = false;
+    }
+    if (!leave || leave->Empty() || leave->Size() > kMaxKeyTiles || !number_ok) {
+      if (number == 1) continue;  // a header line such as "leave,value"
       throw bad();
     }
+    rows.emplace_back(Key(*leave), value);
   }
   std::sort(rows.begin(), rows.end());
   Leaves l;
