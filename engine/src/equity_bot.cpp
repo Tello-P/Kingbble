@@ -25,7 +25,7 @@ Move EquityBot::Choose(const Game& game) {
   const Move* best = nullptr;
   double best_equity = 0;
   for (const Move& m : moves) {
-    double e = StaticEquity(m, rack, game.bag_size(), unseen, leaves_);
+    double e = StaticEquity(m, rack, game.bag_size(), unseen, leaves_, late_bag_);
     if (!best || e > best_equity || (e == best_equity && TiebreaksBetter(m, *best))) {
       best = &m;
       best_equity = e;
@@ -39,7 +39,7 @@ std::vector<RankedMove> EquityBot::Rank(const Game& game) {
   Rack unseen = UnseenTiles(game.board(), rack);
   std::vector<RankedMove> ranked;
   for (Move& m : Options(game)) {
-    double e = StaticEquity(m, rack, game.bag_size(), unseen, leaves_);
+    double e = StaticEquity(m, rack, game.bag_size(), unseen, leaves_, late_bag_);
     ranked.push_back({std::move(m), e});
   }
   std::sort(ranked.begin(), ranked.end(), [](const RankedMove& a, const RankedMove& b) {
