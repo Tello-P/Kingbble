@@ -97,7 +97,9 @@ int main(int argc, char** argv) {
   int human_rating = 0;
   bool status_only = false;
   bool paired = false;
-  int a_plies = 0;  // 0: as b
+  bool endgame_fallback = false;  // "+eg" bots play the inner move when not solved exactly
+  bool endgame_stats = false;     // per "+eg" bot: solves, exact ones, moves changed vs inner
+  int a_plies = 0;                // 0: as b
   SimParams sim;
   RiskParams risk;
   double endgame_time = 5;
@@ -172,6 +174,10 @@ int main(int argc, char** argv) {
       alt_path = value();
     } else if (a == "--status") {
       status_only = true;
+    } else if (a == "--endgame-stats") {
+      endgame_stats = true;
+    } else if (a == "--endgame-fallback") {
+      endgame_fallback = true;
     } else if (a == "--paired") {
       paired = true;
     } else if (a == "--risk-lambda") {
@@ -194,7 +200,8 @@ int main(int argc, char** argv) {
                    " [--apeg-samples N] [--apeg-plies N] [--apeg-time S] [--verbose]"
                    " [--progress] [--results FILE [--status]] [--paired] [--risk-lambda L]"
                    " [--risk-rest-sd S] [--risk-shrink K] [--risk-relative]"
-                   " [--risk-iterations F] [--gcg-dir DIR] [--human-params FILE]"
+                   " [--risk-iterations F] [--endgame-stats] [--endgame-fallback] [--gcg-dir DIR] "
+                   "[--human-params FILE]"
                    " [--human-rating R] [--word-freq TSV] [--alt-lexicon FILE]\n";
       return 2;
     }
@@ -237,6 +244,12 @@ int main(int argc, char** argv) {
   std::unique_ptr<Bot> bots[2] = {
       MakeBot(kind_a, gaddag, leaves.get(), a_sim, endgame_time, peg, risk, human),
       MakeBot(kind_b, gaddag, leaves.get(), sim, endgame_time, peg, risk, human)};
+  if (endgame_stats)
+    for (auto& b : bots)
+      if (auto* eg = dynamic_cast<EndgameBot*>(b.get())) eg->set_compare_inner(true);
+  if (endgame_fallback)
+    for (auto& b : bots)
+      if (auto* eg = dynamic_cast<EndgameBot*>(b.get())) eg->set_inexact_fallback(true);
   if (!gcg_dir.empty()) std::filesystem::create_directories(gcg_dir);
   const std::string lexicon_name = std::filesystem::path(lexicon).stem().string();
 
@@ -293,6 +306,14 @@ int main(int argc, char** argv) {
     report();
   }
   PrintSummary(results, games, kind_a, kind_b);
+  for (int side = 0; side < 2 && endgame_stats; ++side)
+    if (auto* eg = dynamic_cast<EndgameBot*>(bots[side].get())) {
+      const EndgameBot::Stats& st = eg->stats();
+      std::cout << (side == 0 ? "a" : "b") << " endgames: " << st.solves << " solved, " << st.exact
+                << " exact, avg depth " << (st.solves ? double(st.depth_sum) / st.solves : 0)
+                << ", move differs from the inner bot in " << st.changed << " of " << st.compared
+                << "\n";
+    }
   std::cout << "turns: " << turns
             << ", avg moves per turn: " << (turns ? double(generated) / turns : 0)
             << ", positions/s: " << (gen_s > 0 ? turns / gen_s : 0)
