@@ -30,10 +30,11 @@
 //
 // --draws "MOVE" (with --preendgame, e.g. --draws "M5 BLADE") follows each
 // position instead with one line per draw of the bag for that play, when it
-// empties the bag: {"draw", "ways", "value", "final"}: the tiles drawn, the
-// ordered draws it stands for, the endgame value for the opponent to move and
-// our final spread; then {"move", "permutations", "spread"} with the sum of
-// ways x final, the pre-endgame tiebreak spread (to compare it draw by draw).
+// empties the bag: {"draw", "ways", "value", "final", "cgp"}: the tiles drawn,
+// the ordered draws it stands for, the endgame value for the opponent to move,
+// our final spread and the endgame position (for another solver); then {"move", "permutations",
+// "spread"} with the sum of ways x final, the pre-endgame tiebreak spread (to compare it draw by
+// draw).
 //
 // --time-limit S caps each solve at S seconds; a position not solved exactly
 // within it prints "skip" (endgame) or {"skip": true} (pre-endgame).
@@ -79,8 +80,8 @@ std::string PreEndgameJson(const PreEndgameResult& r, double seconds) {
 // Per-draw final spreads of `play` (which empties the bag) in `game`, as
 // PreEndgameSolver's tiebreak sums them: the bag tiles from the unseen ones in
 // every combination, the opponent holding the rest, then the endgame solved.
-void PrintDraws(const Game& game, const Gaddag& gaddag, const std::string& play,
-                double time_limit) {
+void PrintDraws(const Game& game, const Gaddag& gaddag, const std::string& play, double time_limit,
+                const std::string& lexicon_name) {
   const int me = game.to_move();
   MoveGenerator gen(gaddag);
   const Move* found = nullptr;
@@ -115,7 +116,8 @@ void PrintDraws(const Game& game, const Gaddag& gaddag, const std::string& play,
       permutations += ways;
       spread += ways * final;
       std::cout << "{\"draw\": \"" << bag.ToString() << "\", \"ways\": " << ways
-                << ", \"value\": " << value << ", \"final\": " << final << "}" << std::endl;
+                << ", \"value\": " << value << ", \"final\": " << final << ", \"cgp\": \""
+                << GameToCgp(g, lexicon_name) << "\"}" << std::endl;
       return;
     }
     for (int t = from; t < kNumTileTypes; ++t) {
@@ -243,7 +245,7 @@ int main(int argc, char** argv) {
       }
       std::cout << GameToCgp(game, lexicon_name) << "\n";
       if (!draws.empty()) {
-        PrintDraws(game, gaddag, draws, time_limit);
+        PrintDraws(game, gaddag, draws, time_limit, lexicon_name);
       } else if (solve) {
         const auto start = std::chrono::steady_clock::now();
         PreEndgameParams params = peg_params;
