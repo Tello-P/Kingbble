@@ -12,10 +12,13 @@ namespace scrabble {
 // Leave values in the KLV format of wolges and Macondo: a KWG whose words are
 // leaves (tiles in ascending order, 0 = blank), its arc count first, then the
 // number of values and one value per leave in word order (f32 points in KLV2,
-// i16 in 1/256 points in the older KLV).
+// i16 in 1/256 points in the older KLV). A ".csv" file holds "LEAVE,value"
+// lines instead (as wolges' buildlex reads them; '?' for a blank), e.g. a
+// table fitted by ml.rl.leave_fit.
 class Leaves {
  public:
   static Leaves FromBytes(std::string_view bytes);
+  static Leaves FromCsv(std::string_view text);
   static Leaves FromFile(const std::string& path);
 
   // Value in points of keeping `leave`; 0 for the empty leave or one the table lacks.
