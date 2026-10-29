@@ -11,6 +11,7 @@ data = ["duckdb>=1.0", "pyarrow>=15"]
 ml = ["numpy>=1.26"]
 freq = ["wordfreq>=3"]
 mlflow = ["mlflow-skinny>=2.10"]
+lgbm = ["lightgbm>=4", "numpy>=1.26"]
 
 [tool.setuptools.packages.find]
 include = ["ml*", "app*"]
