@@ -87,11 +87,48 @@ Leaves Leaves::FromBytes(std::string_view bytes) {
   return l;
 }
 
+Leaves Leaves::FromCsv(std::string_view text) {
+  std::vector<std::pair<std::uint64_t, float>> rows;
+  std::istringstream in{std::string(text)};
+  std::string line;
+  int number = 0;
+  while (std::getline(in, line)) {
+    ++number;
+    if (!line.empty() && line.back() == '\r') line.pop_back();
+    if (line.empty() || line[0] == '#') continue;
+    const auto comma = line.find(',');
+    const auto bad = [&] {
+      return std::runtime_error("malformed leave CSV, line " + std::to_string(number));
+    };
+    if (comma == std::string::npos) throw bad();
+    const auto leave = Rack::FromString(line.substr(0, comma));
+    if (!leave || leave->Empty() || leave->Size() > kMaxKeyTiles) {
+      if (number == 1) continue;  // a header line
+      throw bad();
+    }
+    try {
+      rows.emplace_back(Key(*leave), std::stof(line.substr(comma + 1)));
+    } catch (const std::exception&) {
+      throw bad();
+    }
+  }
+  std::sort(rows.begin(), rows.end());
+  Leaves l;
+  for (const auto& [key, value] : rows) {
+    if (!l.keys_.empty() && l.keys_.back() == key)
+      throw std::runtime_error("duplicate leave in CSV");
+    l.keys_.push_back(key);
+    l.values_.push_back(value);
+  }
+  return l;
+}
+
 Leaves Leaves::FromFile(const std::string& path) {
   std::ifstream in(path, std::ios::binary);
   if (!in) throw std::runtime_error("cannot open KLV: " + path);
   std::stringstream ss;
   ss << in.rdbuf();
+  if (path.size() >= 4 && path.compare(path.size() - 4, 4, ".csv") == 0) return FromCsv(ss.str());
   return FromBytes(ss.str());
 }
 
