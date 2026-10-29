@@ -68,3 +68,19 @@ def test_uniform_test_nll_averages_log_options(monkeypatch):
     assert uniform_test_nll(None, None, Config(movers="bot")) == pytest.approx(math.log(16))
     rated = Config(movers="human", min_rating=1400)
     assert uniform_test_nll(None, None, rated) == pytest.approx((math.log(4) + math.log(8)) / 2)
+
+
+def test_levels_2_and_3_fit_the_network_and_estimates_grow():
+    from ml.train import LEVELS, estimate
+
+    assert LEVELS[2][1] == 100000 and LEVELS[3][1] == 1000000
+    base = Config(level=2).with_level_model()
+    assert base.mlp and base.mlp_hidden == 32 and base.max_train == 300000
+    assert Config(level=3).with_level_model().mlp_hidden == 64
+    assert not Config(level=0).with_level_model().mlp
+    assert Config(level=1, max_train=5000).with_level_model().max_train == 5000
+    e = [estimate(Config(level=lv)) for lv in range(4)]
+    assert all(
+        a["hours"] < b["hours"] and a["gb"] < b["gb"] for a, b in zip(e, e[1:], strict=False)
+    )
+    assert estimate(Config(level=0, source="human"))["gb"] > estimate(Config(level=0))["gb"]

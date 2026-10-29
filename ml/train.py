@@ -6,8 +6,10 @@
                      [--l2 1e-2] [--max-train 60000] [--fractions 0.25,0.5,1]
                      [--seed 1] [--threads 3] [--mem 6G] [--force]
 
-Levels (data scale): 0 smoke = 1,000 games, 1 test = 10,000, both fitted with
-the conditional logit (ml.human_model.logit); --games sets any other size.
+Levels (data scale): 0 smoke = 1,000 games, 1 test = 10,000 (the conditional
+logit, ml.human_model.logit), 2 base = 100,000 (and a small network), 3 full =
+1,000,000 (and a bigger network); --games sets any other size. Every run logs
+its rough time and disk first (--estimate prints them and exits).
 --source selfplay (the default) generates self-play games up to the level's
 size (kingbble_selfplay resumes) and builds their turn store: the pipeline
 smoke and the bot model, never the human model (a bot is trivially predictable
@@ -43,7 +45,18 @@ DEFAULT_LEXICON = ROOT / "lexica" / "CSW24.txt"
 DEFAULT_LEAVES = ROOT / "lexica" / "CSW24.klv2"
 SELFPLAY = ROOT / "build" / "engine" / "kingbble_selfplay"
 FEATURES = ROOT / "build" / "engine" / "kingbble_features"
-LEVELS = {0: ("smoke", 1000), 1: ("test", 10000)}
+LEVELS = {0: ("smoke", 1000), 1: ("test", 10000), 2: ("base", 100000), 3: ("full", 1000000)}
+# Per level: train turns of the largest fit and the network (hidden units, 0 = logit
+# only). Levels 2 and 3 always fit the network; the RL step of level 3 is #53's.
+LEVEL_MODEL = {0: (60000, 0), 1: (60000, 0), 2: (300000, 32), 3: (1000000, 64)}
+# Rough costs on 2 cores, measured on the M6a and #67 runs: equity self-play games
+# per hour, feature extraction seconds per game, fit seconds per 1,000 train turns
+# (logit, network), feature bytes per game (self-play, human).
+GAMES_PER_HOUR = 25000
+FEATURE_SECONDS_PER_GAME = 0.07
+FIT_SECONDS_PER_1000 = (15.0, 15.0)
+FEATURE_BYTES_PER_GAME = {"selfplay": 1.0e6, "human": 2.2e6}
+TURNS_PER_GAME = 22
 FRACTIONS = (0.25, 0.5, 1.0)
 HUMAN_RAW = ROOT / "data" / "raw" / "woogles"
 HUMAN_STORE = ROOT / "data" / "turns"
@@ -72,14 +85,41 @@ class Config:
     # One penalty per fit (as #42's quick mode): the full 3 x 3 grid costs 9 fits.
     l2: str = "1e-2"
     l1: str = "0"
-    max_train: int = 60000  # turns of the largest fit; the fractions are of this
+    max_train: int = 0  # turns of the largest fit (0: the level's); the fractions are of this
     mlp: bool = False  # also fit the network on the largest fit, kept if better on val
+    mlp_hidden: int = 0  # the network's hidden units (0: the level's, else 32)
     drop: str = ""  # feature groups to leave out, e.g. "A"
     fractions: tuple[float, ...] = FRACTIONS
     extra: dict = field(default_factory=dict)
 
     def size(self) -> int:
         return self.games or LEVELS[self.level][1]
+
+    def with_level_model(self) -> Config:
+        """The level's largest fit and network where they are left to the level."""
+        turns, hidden = LEVEL_MODEL.get(self.level, LEVEL_MODEL[max(LEVEL_MODEL)])
+        return replace(
+            self,
+            max_train=self.max_train or turns,
+            mlp=self.mlp or hidden > 0,
+            mlp_hidden=self.mlp_hidden or hidden or 32,
+        )
+
+
+def estimate(cfg: Config) -> dict:
+    """Rough wall hours (on 2 cores) and disk GB of a level's run, before it starts."""
+    cfg = cfg.with_level_model()
+    games = cfg.size()
+    hours = games * FEATURE_SECONDS_PER_GAME / 3600
+    if cfg.source == "selfplay":
+        hours += games / GAMES_PER_HOUR
+    turns = min(games * TURNS_PER_GAME, cfg.max_train)
+    fit_s = sum(f * turns / 1000 for f in cfg.fractions) * FIT_SECONDS_PER_1000[0]
+    if cfg.mlp:
+        fit_s += turns / 1000 * FIT_SECONDS_PER_1000[1] * cfg.mlp_hidden / 32
+    hours += fit_s / 3600
+    gb = games * FEATURE_BYTES_PER_GAME.get(cfg.source, 1.0e6) / 2**30
+    return {"games": games, "hours": round(hours, 1), "gb": round(gb, 1)}
 
 
 def data_dir(work: Path, cfg: Config) -> Path:
@@ -302,7 +342,7 @@ def fit(
     if cfg.drop:
         cmd += ["--drop", cfg.drop]
     if final:
-        cmd += ["--test"] + (["--mlp"] if cfg.mlp else [])
+        cmd += ["--test"] + (["--mlp", "--mlp-hidden", cfg.mlp_hidden or 32] if cfg.mlp else [])
     if cfg.min_rating is not None:
         cmd += ["--min-rating", cfg.min_rating]
     if cfg.max_rating is not None:
@@ -336,7 +376,12 @@ def train(cfg: Config, work: Path = DEFAULT_WORK, limits: Limits | None = None, 
     if cfg.source == "human":
         cfg = replace(cfg, movers="human")
     data = data_dir(work, cfg)
-    log(f"level {cfg.level}: {cfg.size()} {cfg.source} games in {data}")
+    cfg = cfg.with_level_model()
+    est = estimate(cfg)
+    log(
+        f"level {cfg.level}: {cfg.size()} {cfg.source} games in {data} "
+        f"(about {est['hours']} h on 2 cores, {est['gb']} GB)"
+    )
     if cfg.source == "human":
         feats, raw, games = prepare_human(cfg, data, limits)
         store = Path(cfg.human_store)
@@ -428,7 +473,10 @@ def config_args(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--movers", default="all", choices=("all", "human", "bot"))
     ap.add_argument("--top-k", default="64,128", help="top_k values the fit tries on val")
     ap.add_argument("--l2", default="1e-2", help="L2 strengths the fit tries")
-    ap.add_argument("--max-train", type=int, default=60000, help="turns of the largest fit")
+    ap.add_argument(
+        "--max-train", type=int, default=0, help="turns of the largest fit (0: the level's)"
+    )
+    ap.add_argument("--estimate", action="store_true", help="print the run's estimate and exit")
     ap.add_argument(
         "--fractions",
         default="0.25,0.5,1",
@@ -483,8 +531,11 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     config_args(ap)
     args = ap.parse_args()
-    check_busy(args.force)
     cfg, limits = config_from(args)
+    if args.estimate:
+        print(json.dumps(estimate(cfg)))
+        return 0
+    check_busy(args.force)
     train(cfg, args.work, limits)
     return 0
 

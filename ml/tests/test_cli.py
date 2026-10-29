@@ -45,6 +45,7 @@ class Fake:
             cpu_fn=lambda: self.cpu,
             disk_fn=lambda p: 0,
             log=lambda *a: None,
+            max_level=1,
         )
 
 
@@ -118,3 +119,13 @@ def test_custom_size_grows_with_the_level(tmp_path):
     auto.cfg = Config(level=0, games=30, top_k="64")
     auto.run()
     assert [games for _, _, games in fake.trained] == [30, 300]
+
+
+def test_a_level_over_the_budget_left_is_not_started(tmp_path):
+    fake = Fake(tmp_path, ["better"], [True])
+    auto = fake.auto(cpu_hours=0.5)
+    auto.max_level = 3
+    state = auto.run()
+    # Level 0 (about 0.1 h) runs; level 1 (about 1 h) does not fit in 0.5 CPU hours.
+    assert len(fake.trained) == 1
+    assert state["stopped"].startswith("level 1 needs about")
