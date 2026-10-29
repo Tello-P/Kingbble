@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # #58: match against Macondo on CSW24 at equal time per move and equal threads.
-# Kingbble's sim+peg+eg (3-ply simulation, rack posterior off) plays Macondo's
+# Kingbble's sim+peg+eg (2-ply simulation, rack posterior off) plays Macondo's
 # simulating bot (simulation, pre-endgame and endgame solvers); each side gets
 # --time seconds per move (our simulation, pre-endgame and endgame each stop at
 # it; Macondo's whole decision does) and the same threads (Go is capped with
