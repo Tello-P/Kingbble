@@ -63,6 +63,13 @@ struct PreEndgameResult {
   double permutations = 0;            // ordered draws of the bag from the unseen tiles
   long long endgames = 0;
   bool complete = true;  // false if the time limit stopped the search
+  // Where the time goes (#79): endgame searches answered by the shared cache,
+  // nested pre-endgames solved and answered by the cache, and the seconds the
+  // workers spent in endgame searches (summed over workers).
+  long long endgame_cache_hits = 0;
+  long long nested_solved = 0;
+  long long nested_cache_hits = 0;
+  double endgame_seconds = 0;
 };
 
 // Exhaustive pre-endgame solver (1 to 6 tiles in the bag), following Macondo's.
@@ -136,6 +143,14 @@ class PreEndgameSolver {
   PreEndgameParams params_;
   int me_ = 0;
   long long endgames_ = 0;
+  long long endgame_cache_hits_ = 0;
+  long long nested_solved_ = 0;
+  long long nested_cache_hits_ = 0;
+  double endgame_seconds_ = 0;
+  void ResetStats() {
+    endgames_ = endgame_cache_hits_ = nested_solved_ = nested_cache_hits_ = 0;
+    endgame_seconds_ = 0;
+  }
   double deadline_ = 0;
   bool aborted_ = false;
 
