@@ -61,10 +61,16 @@ std::vector<Move> GenerateExchanges(const Rack& rack) {
   return out;
 }
 
+double LeaveValue(const Rack& leave, int bag_size, const Leaves& leaves, int late_bag) {
+  if (late_bag <= 0 || bag_size <= 0 || bag_size > late_bag) return leaves.Value(leave);
+  const double w = static_cast<double>(bag_size) / (late_bag + 1);
+  return w * leaves.Value(leave) - (1 - w) * RackValue(leave);
+}
+
 double StaticEquity(const Move& move, const Rack& rack, int bag_size, const Rack& unseen,
-                    const Leaves& leaves) {
+                    const Leaves& leaves, int late_bag) {
   Rack leave = LeaveAfter(rack, move);
-  if (bag_size > 0) return move.score + leaves.Value(leave);
+  if (bag_size > 0) return move.score + LeaveValue(leave, bag_size, leaves, late_bag);
   if (leave.Empty()) return move.score + 2 * RackValue(unseen);
   return move.score - 2 * RackValue(leave) - 10;
 }
