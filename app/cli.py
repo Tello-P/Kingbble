@@ -41,6 +41,7 @@ from ml.train import (
     check_busy,
     config_args,
     config_from,
+    estimate,
     latest_version,
     still_dropping,
     train,
@@ -149,6 +150,17 @@ class Auto:
                     games = self.cfg.games * 10 ** (level - self.cfg.level) if self.cfg.games else 0
                     cfg = replace(self.cfg, level=level, games=games, top_k=self.state["k"])
                     self.log(f"auto: level {level} ({LEVELS[level][0]}), k {self.state['k']}")
+                    est = estimate(cfg)
+                    need_cpu = est["hours"] * 3600 * self.limits.threads
+                    if (
+                        self._spent(start_cpu) + need_cpu > self.budget_cpu
+                        or self.disk_fn(self.work) + est["gb"] * 2**30 > self.budget_disk
+                    ):
+                        return self._stop(
+                            f"level {level} needs about {est['hours']} h and {est['gb']} GB, "
+                            "more than the budget left",
+                            start_cpu,
+                        )
                     version = self.train_fn(cfg, self.work, self.limits, log=self.log)
                     self.state["pending"] = str(version)
                     self.state["cpu_seconds"] = self._spent(start_cpu)
