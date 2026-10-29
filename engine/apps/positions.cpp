@@ -29,11 +29,20 @@
 // pre-endgames too); --endgame-plies sets the endgame depth; --threads the
 // number of solver threads.
 //
+// --draws "MOVE" (with --preendgame, e.g. --draws "M5 BLADE") follows each
+// position instead with one line per draw of the bag for that play, when it
+// empties the bag: {"draw", "ways", "value", "final", "cgp"}: the tiles drawn,
+// the ordered draws it stands for, the endgame value for the opponent to move,
+// our final spread and the endgame position (for another solver); then {"move", "permutations",
+// "spread"} with the sum of ways x final, the pre-endgame tiebreak spread (to compare it draw by
+// draw).
+//
 // --time-limit S caps each solve at S seconds; a position not solved exactly
 // within it prints "skip" (endgame) or {"skip": true} (pre-endgame).
 
 #include <chrono>
 #include <cstdlib>
+#include <functional>
 #include <iostream>
 #include <set>
 #include <sstream>
@@ -41,6 +50,7 @@
 
 #include "scrabble/cgp.hpp"
 #include "scrabble/endgame.hpp"
+#include "scrabble/equity.hpp"
 #include "scrabble/gaddag.hpp"
 #include "scrabble/game.hpp"
 #include "scrabble/greedy_bot.hpp"
@@ -72,6 +82,69 @@ std::string PreEndgameJson(const PreEndgameResult& r, double seconds) {
   return out + "]}";
 }
 
+// Per-draw final spreads of `play` (which empties the bag) in `game`, as
+// PreEndgameSolver's tiebreak sums them: the bag tiles from the unseen ones in
+// every combination, the opponent holding the rest, then the endgame solved.
+void PrintDraws(const Game& game, const Gaddag& gaddag, const std::string& play, double time_limit,
+                const std::string& lexicon_name) {
+  const int me = game.to_move();
+  MoveGenerator gen(gaddag);
+  const Move* found = nullptr;
+  const auto moves = gen.Generate(game.board(), game.rack(me));
+  for (const Move& m : moves)
+    if (m.ToString().rfind(play + " ", 0) == 0) found = &m;
+  const int k = game.bag_size();
+  if (!found || found->TilesPlayed() < k) {
+    std::cout << "{\"move\": \"" << play << "\", \"error\": \"not a play that empties the bag\"}"
+              << std::endl;
+    return;
+  }
+  const Rack unseen = UnseenTiles(game.board(), game.rack(me));
+  EndgameSolver solver(gaddag);
+  double permutations = 0, spread = 0;
+  // Multisets of k tiles from the unseen ones, each with its ordered draws.
+  std::function<void(int, Rack, Rack, double, int)> rec = [&](int from, Rack pool, Rack bag,
+                                                              double ways, int left) {
+    if (left == 0) {
+      std::array<Rack, 2> racks;
+      racks[me] = game.rack(me);
+      racks[1 - me] = pool;
+      const std::array<int, 2> scores{game.score(0), game.score(1)};
+      Game g = Game::FromPosition(game.board(), racks, scores, me, bag, game.scoreless_turns(), 1);
+      g.Apply(*found);
+      int value = 0, final = g.score(me) - g.score(1 - me);
+      if (!g.over()) {
+        const EndgameResult r = solver.Solve(g, 25, time_limit);
+        value = r.value;
+        final -= value;
+      }
+      permutations += ways;
+      spread += ways * final;
+      std::cout << "{\"draw\": \"" << bag.ToString() << "\", \"ways\": " << ways
+                << ", \"value\": " << value << ", \"final\": " << final << ", \"cgp\": \""
+                << GameToCgp(g, lexicon_name) << "\"}" << std::endl;
+      return;
+    }
+    for (int t = from; t < kNumTileTypes; ++t) {
+      int n = pool.Count(Tile(t));
+      if (n == 0) continue;
+      // Taking c tiles of this letter: n * (n-1) * ... ordered choices, placed
+      // among the draws already made.
+      Rack p = pool, b = bag;
+      double w = ways;
+      for (int c = 1; c <= std::min(n, left); ++c) {
+        p.Remove(Tile(t));
+        b.Add(Tile(t));
+        w *= double(n - c + 1) * (k - left + c) / c;
+        rec(t + 1, p, b, w, left - c);
+      }
+    }
+  };
+  rec(0, unseen, Rack(), 1, k);
+  std::cout << "{\"move\": \"" << found->ToString() << "\", \"permutations\": " << permutations
+            << ", \"spread\": " << static_cast<long long>(spread) << "}" << std::endl;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -85,6 +158,7 @@ int main(int argc, char** argv) {
   std::set<int> only;  // with --only, the indices of the positions to write
   double time_limit = 0;
   bool with_moves = false, endgame = false, solve = false;
+  std::string draws;  // with --draws, the play whose per-draw spreads are printed
   for (int i = 1; i < argc; ++i) {
     std::string a = argv[i];
     auto value = [&]() -> std::string {
@@ -121,6 +195,8 @@ int main(int argc, char** argv) {
       }
       shard = std::stoi(v.substr(0, slash));
       shards = std::stoi(v.substr(slash + 1));
+    } else if (a == "--draws") {
+      draws = value();
     } else if (a == "--time-limit") {
       time_limit = std::stod(value());
     } else if (a == "--threads") {
@@ -146,7 +222,8 @@ int main(int argc, char** argv) {
                 << " --lexicon FILE [--name LEX] [--count N] [--seed S] [--moves]"
                    " [--endgame [--max-tiles N] [--solve] [--shard J/N]] [--only I,J,...]"
                    " [--leaves FILE --preendgame N [--solve] [--candidates N] [--pass]"
-                   " [--exhaustive] [--endgame-plies N] [--threads N]] [--time-limit S]\n";
+                   " [--exhaustive] [--endgame-plies N] [--threads N] [--draws MOVE]]"
+                   " [--time-limit S]\n";
       return 2;
     }
   }
@@ -172,7 +249,9 @@ int main(int argc, char** argv) {
         continue;
       }
       std::cout << GameToCgp(game, lexicon_name) << "\n";
-      if (solve) {
+      if (!draws.empty()) {
+        PrintDraws(game, gaddag, draws, time_limit, lexicon_name);
+      } else if (solve) {
         const auto start = std::chrono::steady_clock::now();
         PreEndgameParams params = peg_params;
         params.time_limit_s = time_limit;
