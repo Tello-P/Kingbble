@@ -83,6 +83,19 @@ TEST(Equity, StaticEquityAddsLeaveWhileTheBagHasTiles) {
   EXPECT_DOUBLE_EQ(StaticEquity(Exchange("?ADGOS"), rack, 50, unseen, l), -7.75);
 }
 
+TEST(Equity, LateLeaveValuesBlendTowardsTheTilesFaceValue) {
+  Leaves l = Leaves::FromFile(kFixtures + "/leaves_small.klv2");
+  Rack qs = *Rack::FromString("?S");  // table value 30, face value 1
+  EXPECT_DOUBLE_EQ(LeaveValue(qs, 3, l), 30);
+  EXPECT_DOUBLE_EQ(LeaveValue(qs, 8, l, 7), 30);
+  EXPECT_DOUBLE_EQ(LeaveValue(qs, 7, l, 7), 7.0 / 8 * 30 - 1.0 / 8 * 1);
+  EXPECT_DOUBLE_EQ(LeaveValue(qs, 3, l, 7), 3.0 / 8 * 30 - 5.0 / 8 * 1);
+  Rack rack = *Rack::FromString("?ADGOQS");
+  Move dogaq = Place(7, 7, Direction::kHorizontal, "DOGAQ", 30);
+  EXPECT_DOUBLE_EQ(StaticEquity(dogaq, rack, 3, Rack(), l, 7), 30 + 3.0 / 8 * 30 - 5.0 / 8 * 1);
+  EXPECT_DOUBLE_EQ(StaticEquity(dogaq, rack, 3, Rack(), l), 30 + 30);
+}
+
 TEST(Equity, StaticEquityWithEmptyBag) {
   Leaves l = Leaves::FromFile(kFixtures + "/leaves_small.klv2");
   Rack rack = *Rack::FromString("DOGQ");
