@@ -296,7 +296,11 @@ def parser() -> argparse.ArgumentParser:
     for name in ("train", "evaluate", "improve", "auto", "status"):
         p = sub.add_parser(name)
         config_args(p)
-        p.add_argument("--k", default="64", help="the move model's candidate cap (top_k)")
+        p.add_argument(
+            "--k",
+            default="64",
+            help="the move model's candidate cap (top_k), or auto: chosen on val per level",
+        )
         eval_args(p)
         if name == "evaluate":
             p.add_argument("--model", type=Path)
