@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 
+#include <fstream>
 #include <string>
 
 #include "scrabble/equity.hpp"
@@ -68,6 +69,31 @@ TEST(RiskLambdaTest, FollowsTheExpectedMarginAndTheBag) {
   EXPECT_DOUBLE_EQ(RiskLambda(50, 0, p), 0);
   p.lambda_scale = 2;
   EXPECT_DOUBLE_EQ(RiskLambda(50, 20, p), 50.0 / 2000);
+}
+
+TEST(RiskPolicyTest, FirstMatchingRuleSetsTheScale) {
+  RiskParams p;
+  p.lambda_scale = 0.5;
+  p.policy = {{7, 12, 0, 1e9, 2.0}, {7, 25, -1e9, 1e9, 1.5}};
+  EXPECT_DOUBLE_EQ(PolicyScale(p, 10, 30), 2.0);
+  EXPECT_DOUBLE_EQ(PolicyScale(p, 10, -30), 1.5);
+  EXPECT_DOUBLE_EQ(PolicyScale(p, 20, 30), 1.5);
+  EXPECT_DOUBLE_EQ(PolicyScale(p, 30, 30), 0.5);
+  p.win.rest_sd0 = 0;
+  p.win.rest_sd_per_sqrt_tile = 10;
+  EXPECT_DOUBLE_EQ(RiskLambda(50, 10, p, 30), 2.0 * 50 / (2 * 1000));
+}
+
+TEST(RiskPolicyTest, ReadsRulesAndRejectsBadLines) {
+  const std::string path = ::testing::TempDir() + "/risk_policy.txt";
+  std::ofstream(path)
+      << "# bag_lo bag_hi lead_lo lead_hi scale\n7 12 0 1e9 2\n\n13 25 -1e9 1e9 0.5\n";
+  const std::vector<LambdaRule> rules = LoadRiskPolicy(path);
+  ASSERT_EQ(rules.size(), 2u);
+  EXPECT_EQ(rules[1].bag_lo, 13);
+  EXPECT_DOUBLE_EQ(rules[1].scale, 0.5);
+  std::ofstream(path) << "7 12 0\n";
+  EXPECT_THROW(LoadRiskPolicy(path), std::runtime_error);
 }
 
 TEST(ScoreRiskTest, ShrinksVariancesTowardTheirMean) {
