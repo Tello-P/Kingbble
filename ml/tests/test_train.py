@@ -80,10 +80,24 @@ def test_levels_2_and_3_fit_the_network_and_estimates_grow():
     assert not Config(level=0).with_level_model().mlp
     assert Config(level=1, max_train=5000).with_level_model().max_train == 5000
     e = [estimate(Config(level=lv)) for lv in range(4)]
-    assert all(
-        a["hours"] < b["hours"] and a["gb"] < b["gb"] for a, b in zip(e, e[1:], strict=False)
-    )
+    assert all(a["hours"] < b["hours"] for a, b in zip(e, e[1:], strict=False))
     assert estimate(Config(level=0, source="human"))["gb"] > estimate(Config(level=0))["gb"]
+    # Levels 2 and 3 keep about 1/20 of the rows (#81): level 3 fits on the disk.
+    assert e[2]["gb"] < e[1]["gb"] and e[3]["gb"] < 60
+    full = estimate(Config(level=3, feature_top=128, feature_half=False, sample_turns=1))
+    assert full["gb"] > 15 * e[3]["gb"]
+
+
+def test_feature_options_by_level():
+    small = Config(level=2).with_level_model()
+    assert small.feature_args() == ["--top", 64, "--half", "--sample-turns", 5]
+    assert small.feature_tag() == "_t64hs5"
+    zero = Config(level=0).with_level_model()
+    assert zero.feature_args() == ["--top", 128] and zero.feature_tag() == ""
+    human = Config(level=1, source="human").with_level_model()
+    assert human.feature_args() == ["--top", 256] and human.feature_tag() == ""
+    custom = Config(level=2, feature_half=False, sample_turns=1).with_level_model()
+    assert custom.feature_args() == ["--top", 64] and custom.feature_tag() == "_t64s1"
 
 
 def test_choose_k_takes_the_smallest_k_close_to_the_best(tmp_path):
@@ -112,3 +126,20 @@ def test_choose_k_takes_the_smallest_k_close_to_the_best(tmp_path):
         log=lambda *a: None,
     )
     assert k == 100
+
+
+def test_auto_sample_and_feature_deletion_by_level():
+    from ml.train import estimate
+
+    two, three = Config(level=2).with_level_model(), Config(level=3).with_level_model()
+    assert two.sample_turns == 5 and three.sample_turns == 16
+    assert not two.keep_features and not three.keep_features
+    assert Config(level=0).with_level_model().keep_features
+    assert Config(level=3, keep_features=True).with_level_model().keep_features
+    assert Config(level=3, sample_turns=2).with_level_model().sample_turns == 2
+    # Enough train turns for the largest fit are still extracted.
+    turns = three.size() * 22 / three.sample_turns * 0.8
+    assert turns >= three.max_train
+    e = estimate(Config(level=3))
+    assert e["gb"] < 20 and e["kept_gb"] == 0
+    assert estimate(Config(level=1))["kept_gb"] == estimate(Config(level=1))["gb"]

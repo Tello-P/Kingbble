@@ -36,6 +36,11 @@ def test_load_reads_turns_and_rows(tmp_path):
     assert header(tmp_path / "options.bin") == (("gap", "opens_tw"), 2, 16 + len(names))
     _, options = load(tmp_path)
     assert options.shape == (8, 2) and options[1, 1] == 3
+    # Version 3 (--half): float16 rows.
+    head = b"KBFT" + struct.pack("<III", 3, 2, len(names)) + names
+    (tmp_path / "options.bin").write_bytes(head + rows.astype("<f2").tobytes())
+    _, options = load(tmp_path)
+    assert options.dtype == np.float16 and options.shape == (8, 2) and options[1, 1] == 3
 
 
 @pytest.mark.skipif(not DEFAULT_TOOL.exists(), reason="engine not built")
