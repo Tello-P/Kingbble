@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string>
 #include <vector>
 
 #include "scrabble/bot.hpp"
@@ -11,6 +12,14 @@ namespace scrabble {
 enum class RiskMode {
   kMeanVariance,  // mean - lambda * variance of the simulated spread
   kWinProb,       // estimated probability of winning
+};
+
+// One rule of a learned risk policy (#53): within these bag sizes and leads
+// (the player to move's score minus the opponent's) lambda_scale is `scale`.
+struct LambdaRule {
+  int bag_lo = 0, bag_hi = 100;
+  double lead_lo = -1e9, lead_hi = 1e9;
+  double scale = 1.0;
 };
 
 struct RiskParams {
@@ -34,7 +43,17 @@ struct RiskParams {
   // Iterations per candidate inside the window, as a multiple of SimParams'.
   int iterations_factor = 1;
   WinParams win;
+  // Learned policy: the first rule matching the bag and the lead sets the
+  // scale; lambda_scale applies when none matches (or there are none).
+  std::vector<LambdaRule> policy;
 };
+
+// The lambda_scale `params` give for this bag and lead.
+double PolicyScale(const RiskParams& params, int bag_size, double lead);
+
+// Reads a policy: one rule per line, "bag_lo bag_hi lead_lo lead_hi scale"
+// ('#' comments and blank lines allowed). Throws std::runtime_error.
+std::vector<LambdaRule> LoadRiskPolicy(const std::string& path);
 
 struct RiskResult {
   SimResult sim;
@@ -45,8 +64,9 @@ struct RiskResult {
 };
 
 // Lambda of the mean-variance utility for an expected margin `lead_plus_mean`
-// of the player to move after the playouts.
-double RiskLambda(double lead_plus_mean, int bag_size, const RiskParams& params);
+// of the player to move after the playouts; `lead` (the margin now) picks the
+// policy rule.
+double RiskLambda(double lead_plus_mean, int bag_size, const RiskParams& params, double lead = 0);
 
 // True when the risk-aware utility applies to this position (bag window only;
 // the decided check needs the simulation).
