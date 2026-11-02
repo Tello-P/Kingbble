@@ -25,6 +25,8 @@
 // and --a-plies bot a's alone. Result lines end with each bot's moves and
 // seconds (", a M moves T s, b M moves T s"). --paired plays each deal twice, games 2k-1 and 2k,
 // with the bots swapping seats, so luck of the draw cancels out in each pair.
+// --risk-policy FILE sets lambda_scale per bag and lead bucket (a policy learned
+// by ml.rl.risk_policy, "bag_lo bag_hi lead_lo lead_hi scale" lines).
 // --gcg-dir DIR saves game N as DIR/gameN.gcg with both racks (training data).
 // --a-leaves FILE gives bot a its own leave table (KLV2 or CSV), e.g. a fitted
 // one against the published table with --paired.
@@ -184,6 +186,8 @@ int main(int argc, char** argv) {
       endgame_fallback = true;
     } else if (a == "--paired") {
       paired = true;
+    } else if (a == "--risk-policy") {
+      risk.policy = LoadRiskPolicy(value());
     } else if (a == "--risk-lambda") {
       risk.lambda_scale = std::stod(value());
     } else if (a == "--risk-shrink") {
@@ -203,7 +207,8 @@ int main(int argc, char** argv) {
                    " [--threads N] [--endgame-time S]"
                    " [--peg-bag N] [--peg-candidates N] [--peg-time S] [--apeg-candidates N]"
                    " [--apeg-samples N] [--apeg-plies N] [--apeg-time S] [--verbose]"
-                   " [--progress] [--results FILE [--status]] [--paired] [--risk-lambda L]"
+                   " [--progress] [--results FILE [--status]] [--paired] [--risk-lambda L] "
+                   "[--risk-policy FILE]"
                    " [--risk-rest-sd S] [--risk-shrink K] [--risk-relative]"
                    " [--risk-iterations F] [--endgame-stats] [--endgame-fallback] [--gcg-dir DIR] "
                    "[--human-params FILE]"
