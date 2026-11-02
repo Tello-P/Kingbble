@@ -4,6 +4,7 @@
                      [--bots equity,equity] [--human-params FILE] [--min-rating R]
                      [--max-rating R] [--movers all] [--mlp] [--drop A] [--top-k 64,128]
                      [--l2 1e-2] [--max-train 60000] [--fractions 0.25,0.5,1]
+                     [--mix P --mix-raw DIR]
                      [--seed 1] [--threads 3] [--mem 6G] [--force]
 
 Levels (data scale): 0 smoke = 1,000 games, 1 test = 10,000 (the conditional
@@ -16,9 +17,12 @@ smoke and the bot model, never the human model (a bot is trivially predictable
 and the "human" bot only re-learns itself). --source human takes the first
 games of the downloaded human games on the lexicon (the turn store, split by
 player) and fits human movers only, with the word familiarity table counted on
-their train split. The model is fitted on the --fractions of the train turns
-(at most --max-train), each scored on the same val turns: the learning curve;
-the largest fit also scores the test split against a uniform choice among the
+their train split; --mix P adds the self-play games of --mix-raw as P of the
+train turns (val and test stay human). The model is fitted on the --fractions
+of the train turns (at most --max-train), each scored on the same val turns:
+the learning curve; --top-k auto first picks the candidate cap k on val
+(choose_k: the smallest of 10, 20, 50, 100 within 0.01 of the best val NLL).
+The largest fit also scores the test split against a uniform choice among the
 legal options and, with --mlp, fits the network (kept if better on val). Every
 run saves a new version under <work>/models/vNNN: model.txt (read by
 HumanModelParams::FromFile), curve.json and config.json. Every engine and
@@ -72,6 +76,10 @@ class Config:
     source: str = "selfplay"
     human_raw: str = str(HUMAN_RAW)
     human_store: str = str(HUMAN_STORE)
+    # With source "human": self-play GCG games (e.g. kingbble_selfplay --gcg-dir)
+    # whose turns make `mix` of the train turns; val and test stay human.
+    mix: float = 0.0
+    mix_raw: str = ""
     lexicon: str = str(DEFAULT_LEXICON)
     leaves: str = str(DEFAULT_LEAVES)
     bots: tuple[str, str] = ("equity", "equity")
@@ -86,6 +94,9 @@ class Config:
     l2: str = "1e-2"
     l1: str = "0"
     max_train: int = 0  # turns of the largest fit (0: the level's); the fractions are of this
+    # top_k "auto": the k of K_CANDIDATES chosen on val before the fits (choose_k).
+    k_search_train: int = 20000
+    k_threshold: float = 0.01
     mlp: bool = False  # also fit the network on the largest fit, kept if better on val
     mlp_hidden: int = 0  # the network's hidden units (0: the level's, else 32)
     drop: str = ""  # feature groups to leave out, e.g. "A"
@@ -150,7 +161,9 @@ def prepare_human(cfg: Config, data: Path, limits: Limits) -> tuple[Path, Path, 
     from ml.data.word_freq import play_counts, read_words, table, write
 
     ids = human_games(cfg)[: cfg.size()]
-    feats, raw = data / f"features_{len(ids)}", data / f"raw_{len(ids)}"
+    mixed = sorted(Path(cfg.mix_raw).glob("*.gcg")) if cfg.mix > 0 and cfg.mix_raw else []
+    tag = f"{len(ids)}" + (f"_mix{len(mixed)}" if mixed else "")
+    feats, raw = data / f"features_{tag}", data / f"raw_{tag}"
     if (feats / "turns.tsv").exists():
         return feats, raw, len(ids)
     if raw.exists():
@@ -159,6 +172,18 @@ def prepare_human(cfg: Config, data: Path, limits: Limits) -> tuple[Path, Path, 
     for g in ids:
         (raw / f"{g}.gcg").symlink_to((Path(cfg.human_raw) / f"{g}.gcg").resolve())
     store = Path(cfg.human_store)
+    if mixed:
+        # Self-play games as sp_<name>, with their own turn store (split by game).
+        from ml.data.store import build as build_store
+
+        sp_raw = data / f"mix_raw_{len(mixed)}"
+        if sp_raw.exists():
+            shutil.rmtree(sp_raw)
+        sp_raw.mkdir(parents=True)
+        for path in mixed:
+            (sp_raw / f"sp_{path.name}").symlink_to(path.resolve())
+            (raw / f"sp_{path.name}").symlink_to(path.resolve())
+        build_store(sp_raw, mix_store(data, len(mixed)), salt="selfplay", source="selfplay")
     word_freq = data / f"word_freq_{len(ids)}.tsv"
     try:
         from wordfreq import zipf_frequency
@@ -175,7 +200,10 @@ def prepare_human(cfg: Config, data: Path, limits: Limits) -> tuple[Path, Path, 
     tmp = feats.with_name(feats.name + ".tmp")
     if tmp.exists():
         shutil.rmtree(tmp)
-    write_turn_info(store_turns(store), tmp / "turn_info.tsv")
+    info = store_turns(store)
+    if mixed:
+        info |= store_turns(mix_store(data, len(mixed)))
+    write_turn_info(info, tmp / "turn_info.tsv")
     cmd = [FEATURES, "--lexicon", cfg.lexicon, "--leaves", cfg.leaves, "--games", raw,
            "--out", tmp, "--top", "256", "--turn-info", tmp / "turn_info.tsv",
            "--word-freq", word_freq]  # fmt: skip
@@ -184,6 +212,11 @@ def prepare_human(cfg: Config, data: Path, limits: Limits) -> tuple[Path, Path, 
     limits.run(cmd, stdout=subprocess.DEVNULL)
     tmp.rename(feats)
     return feats, raw, len(ids)
+
+
+def mix_store(data: Path, games: int) -> Path:
+    """The turn store of the self-play games mixed into a human fit."""
+    return data / f"mix_store_{games}"
 
 
 def uniform_test_nll(feats: Path, store: Path, cfg: Config) -> float | None:
@@ -343,12 +376,48 @@ def fit(
         cmd += ["--drop", cfg.drop]
     if final:
         cmd += ["--test"] + (["--mlp", "--mlp-hidden", cfg.mlp_hidden or 32] if cfg.mlp else [])
+    mixed = len(list(Path(cfg.mix_raw).glob("*.gcg"))) if cfg.mix > 0 and cfg.mix_raw else 0
+    if mixed and cfg.source == "human":
+        cmd += ["--mix-store", mix_store(feats.parent, mixed), "--mix", cfg.mix]
     if cfg.min_rating is not None:
         cmd += ["--min-rating", cfg.min_rating]
     if cfg.max_rating is not None:
         cmd += ["--max-rating", cfg.max_rating]
     limits.run(cmd, stdout=subprocess.DEVNULL, cwd=ROOT)
     return json.loads(report.read_text())
+
+
+K_CANDIDATES = (10, 20, 50, 100)
+
+
+def choose_k(
+    cfg: Config,
+    feats: Path,
+    store: Path,
+    out: Path,
+    n_train: int,
+    limits: Limits,
+    ks=K_CANDIDATES,
+    fit_fn=None,
+    log=print,
+) -> tuple[int, list[dict]]:
+    """The smallest candidate cap k (the move model's top_k) whose val NLL is within
+    cfg.k_threshold of the best k's, each fitted on at most cfg.k_search_train turns
+    without the network. Returns k and one row per candidate."""
+    fit_fn = fit_fn or fit
+    rows = []
+    for k in ks:
+        trial = replace(cfg, top_k=str(k), mlp=False)
+        report = fit_fn(
+            trial, feats, store, out / f"k_{k}", min(n_train, cfg.k_search_train), limits
+        )
+        rows.append(
+            {"k": k, "val_nll": report["val_nll_logit"], "train_turns": report["train_turns"]}
+        )
+        log(f"  k {k}: val NLL {report['val_nll_logit']:.4f}")
+    best = min(r["val_nll"] for r in rows)
+    chosen = min(r["k"] for r in rows if r["val_nll"] <= best + cfg.k_threshold)
+    return chosen, rows
 
 
 def next_version(models: Path) -> Path:
@@ -399,6 +468,11 @@ def train(cfg: Config, work: Path = DEFAULT_WORK, limits: Limits | None = None, 
     if tmp.exists():
         shutil.rmtree(tmp)
     tmp.mkdir(parents=True)
+    k_search = None
+    if cfg.top_k == "auto":
+        k, k_search = choose_k(cfg, feats, store, tmp / "k_search", n, limits, log=log)
+        log(f"  k chosen: {k}")
+        cfg = replace(cfg, top_k=str(k))
     curve = []
     for fraction in cfg.fractions:
         size = max(1, round(n * fraction))
@@ -440,6 +514,7 @@ def train(cfg: Config, work: Path = DEFAULT_WORK, limits: Limits | None = None, 
             "commit": _commit(),
             "seconds": round(time.time() - start, 1),
             "still_dropping": still_dropping(curve),
+            "k_search": k_search,
         }
     )
     (tmp / "config.json").write_text(json.dumps(config, indent=1) + "\n")
@@ -471,7 +546,9 @@ def config_args(ap: argparse.ArgumentParser) -> None:
         help="self-play games, or the downloaded human games (human movers)",
     )
     ap.add_argument("--movers", default="all", choices=("all", "human", "bot"))
-    ap.add_argument("--top-k", default="64,128", help="top_k values the fit tries on val")
+    ap.add_argument(
+        "--top-k", default="64,128", help="top_k values the fit tries on val, or auto (choose_k)"
+    )
     ap.add_argument("--l2", default="1e-2", help="L2 strengths the fit tries")
     ap.add_argument(
         "--max-train", type=int, default=0, help="turns of the largest fit (0: the level's)"
@@ -484,6 +561,13 @@ def config_args(ap: argparse.ArgumentParser) -> None:
     )
     ap.add_argument("--mlp", action="store_true", help="also fit the network, kept if better")
     ap.add_argument("--drop", default="", help="feature groups to leave out, e.g. A")
+    ap.add_argument(
+        "--mix",
+        type=float,
+        default=0.0,
+        help="with --source human: share of self-play train turns (0-1)",
+    )
+    ap.add_argument("--mix-raw", default="", help="the self-play GCG games to mix in")
     ap.add_argument("--min-rating", type=int)
     ap.add_argument("--max-rating", type=int)
     ap.add_argument("--seed", type=int, default=1)
@@ -512,6 +596,8 @@ def config_from(args) -> tuple[Config, Limits]:
         fractions=tuple(float(f) for f in args.fractions.split(",")),
         mlp=args.mlp,
         drop=args.drop,
+        mix=args.mix,
+        mix_raw=args.mix_raw,
         min_rating=args.min_rating,
         max_rating=args.max_rating,
         seed=args.seed,

@@ -219,6 +219,8 @@ int main(int argc, char** argv) {
       o.sim.plies = std::stoi(value());
     } else if (a == "--sim-time") {
       o.sim.time_limit_s = std::stod(value());
+    } else if (a == "--risk-policy") {
+      o.risk.policy = LoadRiskPolicy(value());
     } else if (a == "--risk-lambda") {
       o.risk.lambda_scale = std::stod(value());
     } else if (a == "--sim-candidates") {
@@ -256,7 +258,8 @@ int main(int argc, char** argv) {
              " [--a-candidates N] [--a-iterations N] [--a-plies N] [--sim-plies N] [--sim-time S]"
              " [--a-reply-top K] [--a-reply-temperature T] [--a-reply-human] [--a-end-unseen N]"
              " [--a-late-bag N] [--min-bag N] [--max-bag N] [--max-lead N]"
-             " [--risk-lambda L] [--seed S] [--sim-candidates N] [--sim-iterations N]"
+             " [--risk-lambda L] [--risk-policy FILE] [--seed S] [--sim-candidates N] "
+             "[--sim-iterations N]"
              " [--threads N] [--peg-time S] [--endgame-time S] [--model NAME]"
              " [--a-model M] [--b-model M] [--human-params FILE] [--word-freq TSV]"
              " [--alt-lexicon FILE] [--results FILE [--status]] [--progress]\n";
