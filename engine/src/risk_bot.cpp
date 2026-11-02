@@ -1,6 +1,9 @@
 #include "scrabble/risk_bot.hpp"
 
 #include <algorithm>
+#include <fstream>
+#include <sstream>
+#include <stdexcept>
 
 namespace scrabble {
 
@@ -21,10 +24,36 @@ double Variance(const std::vector<double>& a, const std::vector<double>* b, std:
 
 }  // namespace
 
-double RiskLambda(double lead_plus_mean, int bag_size, const RiskParams& params) {
+double PolicyScale(const RiskParams& params, int bag_size, double lead) {
+  for (const LambdaRule& r : params.policy)
+    if (bag_size >= r.bag_lo && bag_size <= r.bag_hi && lead >= r.lead_lo && lead <= r.lead_hi)
+      return r.scale;
+  return params.lambda_scale;
+}
+
+std::vector<LambdaRule> LoadRiskPolicy(const std::string& path) {
+  std::ifstream in(path);
+  if (!in) throw std::runtime_error("cannot open risk policy: " + path);
+  std::vector<LambdaRule> rules;
+  std::string line;
+  int number = 0;
+  while (std::getline(in, line)) {
+    ++number;
+    if (const auto hash = line.find('#'); hash != std::string::npos) line.erase(hash);
+    std::istringstream ss(line);
+    LambdaRule r;
+    if (!(ss >> r.bag_lo)) continue;  // blank or comment
+    if (!(ss >> r.bag_hi >> r.lead_lo >> r.lead_hi >> r.scale))
+      throw std::runtime_error("malformed risk policy, line " + std::to_string(number));
+    rules.push_back(r);
+  }
+  return rules;
+}
+
+double RiskLambda(double lead_plus_mean, int bag_size, const RiskParams& params, double lead) {
   const double sd = RestSpreadSd(bag_size, params.win);
   if (sd <= 0) return 0;
-  return params.lambda_scale * lead_plus_mean / (2 * sd * sd);
+  return PolicyScale(params, bag_size, lead) * lead_plus_mean / (2 * sd * sd);
 }
 
 bool InRiskWindow(const Game& game, const RiskParams& params) {
@@ -67,7 +96,7 @@ std::vector<RiskResult> ScoreRisk(const Game& game, const std::vector<SimResult>
     if (on && params.mode == RiskMode::kWinProb) {
       r.utility = r.win.win;
     } else if (on) {
-      r.lambda = RiskLambda(lead + s.mean, game.bag_size(), params);
+      r.lambda = RiskLambda(lead + s.mean, game.bag_size(), params, lead);
       r.utility = s.mean - r.lambda * r.variance;
     }
     out.push_back(std::move(r));
