@@ -12,6 +12,7 @@ the logit on val; the logit weights stay in the file as the fallback.
                                  [--out models/human_model.txt] [--bands 0,1400,1700,2000]
                                  [--top-k 64,96,128] [--drop A,B] [--mlp] [--test]
                                  [--report report.json] [--min-rating R] [--max-rating R]
+                                 [--mix-store DIR --mix P]
 
 The output is read by HumanModelParams::FromFile in the engine.
 """
@@ -43,7 +44,7 @@ from ml.human_model.dataset import (
 
 DEFAULT_MODEL = Path(__file__).resolve().parents[2] / "models" / "human_model.txt"
 DEFAULT_BANDS = (0, 1400, 1700, 2000)
-__all__ = ["band_of", "fit", "fit_bands", "in_rating_range", "log_p", "write_params"]
+__all__ = ["band_of", "fit", "fit_bands", "in_rating_range", "log_p", "mix_info", "write_params"]
 
 
 def _objective(ts: TurnSet, scaler: Scaler, w: np.ndarray, hessian: bool):
@@ -174,6 +175,23 @@ def in_rating_range(info: dict, low: int | None, high: int | None) -> dict:
     }
 
 
+def mix_info(info: dict, extra: dict, share: float, seed: int = 3) -> dict:
+    """info with train turns from `extra` (e.g. self-play, from another turn store)
+    added so they make `share` of the human train turns plus them; they count as
+    human movers so the fit takes them, and only their train split is used, so val
+    and test stay as in info."""
+    if share <= 0 or not extra:
+        return info
+    human = sum(1 for _, split, bot in info.values() if split == "train" and not bot)
+    keys = sorted(k for k, (_, split, _) in extra.items() if split == "train")
+    want = min(len(keys), round(share / (1 - share) * human)) if share < 1 else len(keys)
+    pick = np.random.default_rng(seed).choice(len(keys), want, replace=False) if want else []
+    out = dict(info)
+    for i in sorted(pick):
+        out[keys[i]] = (extra[keys[i]][0], "train", False)
+    return out
+
+
 def raw_weights(w: np.ndarray, scaler: Scaler) -> np.ndarray:
     """Weights on the unstandardized features (the mean shift cancels in a softmax)."""
     return w / scaler.scale
@@ -230,6 +248,8 @@ def main() -> int:
     )
     ap.add_argument("--drop", default="", help="feature groups to leave out, e.g. A,B")
     ap.add_argument("--min-rating", type=int, help="leave out turns rated below this")
+    ap.add_argument("--mix-store", type=Path, help="turn store of extra (self-play) train turns")
+    ap.add_argument("--mix", type=float, default=0.0, help="their share of the train turns")
     ap.add_argument("--max-rating", type=int, help="leave out turns rated above this")
     ap.add_argument("--max-train", type=int, default=60000)
     ap.add_argument("--max-val", type=int, default=20000)
@@ -256,6 +276,8 @@ def main() -> int:
     kept = [names[i] for i in cols]
     turns, options = load(args.features)
     info = in_rating_range(ratings(args.features, args.store), args.min_rating, args.max_rating)
+    if args.mix_store is not None and args.mix > 0:
+        info = mix_info(info, ratings(args.features, args.mix_store), args.mix)
     steps = 2 + len(args.l2.split(",")) * len(args.l1.split(",")) + 2 * bool(args.mlp)
     done = 0
 
