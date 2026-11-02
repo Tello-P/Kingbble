@@ -7,7 +7,8 @@
 <out>/options.bin holds a header (b"KBFT", uint32 version, feature count and
 names length, then the space-separated feature names) and float32 rows (the
 turn's top options by static equity, then the played option if it ranks
-lower); files without the header are version 1, BASE_FEATURES only.
+lower); files without the header are version 1, BASE_FEATURES only, version 2
+has float32 rows and version 3 (kingbble_features --half) float16 rows.
 <out>/turns.tsv has one line per turn: game_id, turn, player, rack, bag,
 options (all legal options), chosen (rank of the played option, -1 if we do
 not generate it), first_row and rows. <out>/turn_info.tsv is what the engine
@@ -91,12 +92,15 @@ def load(path: Path = DEFAULT_OUT):
             )
             for r in csv.DictReader(f, delimiter="\t")
         ]
-    names, _, offset = header(path / "options.bin")
-    rows = ((path / "options.bin").stat().st_size - offset) // (4 * len(names))
+    names, version, offset = header(path / "options.bin")
+    dtype = "<f2" if version >= 3 else "<f4"  # version 3: float16 rows (--half)
+    rows = ((path / "options.bin").stat().st_size - offset) // (
+        np.dtype(dtype).itemsize * len(names)
+    )
     if rows == 0:
-        return turns, np.zeros((0, len(names)), dtype="<f4")
+        return turns, np.zeros((0, len(names)), dtype=dtype)
     options = np.memmap(
-        path / "options.bin", dtype="<f4", mode="r", offset=offset, shape=(rows, len(names))
+        path / "options.bin", dtype=dtype, mode="r", offset=offset, shape=(rows, len(names))
     )
     return turns, options
 
