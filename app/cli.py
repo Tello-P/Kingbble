@@ -6,6 +6,7 @@
   python -m app.cli improve ...           # next level if the learning curve still drops
   python -m app.cli auto --budget-cpu-hours H --budget-gb G [--k 64] ...
   python -m app.cli status
+  python -m app.cli revert vNNN           # make an earlier version the active one
 
 Train generates the missing self-play games of the level, fits the move model
 with its learning curve and saves a new version (ml.train); evaluate gates it
@@ -13,12 +14,13 @@ against the previous version (ml.evaluate); both are logged to MLflow
 (ml.tracking). The Auto loop repeats train and evaluate from the given level:
 with k (the move model's candidate cap, fixed here) it trains, evaluates the
 new version against the best so far, keeps it unless it loses, and goes up a
-level while the learning curve still drops and the new version is better. It
-stops when the CPU or disk budget is spent, when it cannot go further, or when
-a new version loses (the best one is kept). Its state is saved after every
-step in <work>/auto.json, so the same command resumes it. Every heavy step runs
-under ml.limits and refuses to start while another heavy run is active, unless
---force.
+level while the learning curve still drops. It stops when the CPU or disk
+budget is spent, when it cannot go further, when no level improves on the best
+two levels in a row, or when a new version loses; the best version stays the
+active model (<work>/models/active_model.txt, its name in ACTIVE). Its state is
+saved after every step in <work>/auto.json, so the same command resumes it.
+Every heavy step runs under ml.limits and refuses to start while another heavy
+run is active, unless --force.
 """
 
 from __future__ import annotations
@@ -84,6 +86,7 @@ class Auto:
         disk_fn: Callable[[Path], int] = disk_bytes,
         log=print,
         max_level: int = MAX_LEVEL,
+        max_stalls: int = 2,
     ):
         self.cfg, self.work, self.limits = cfg, work, limits
         self.budget_cpu = budget_cpu_hours * 3600
@@ -91,7 +94,7 @@ class Auto:
         self.eval_kw = eval_kw or {}
         self.train_fn, self.evaluate_fn = train_fn, evaluate_fn
         self.cpu_fn, self.disk_fn, self.log = cpu_fn, disk_fn, log
-        self.max_level = max_level
+        self.max_level, self.max_stalls = max_level, max_stalls
         self.path = work / "auto.json"
         self.state = self._load()
 
@@ -106,6 +109,7 @@ class Auto:
             "cpu_seconds": 0.0,
             "history": [],
             "stopped": None,
+            "stalls": 0,
         }
 
     def _save(self) -> None:
@@ -128,6 +132,7 @@ class Auto:
         self._save()
         self.log(f"auto: stopped ({reason}); best version: {self.state['best']}")
         if self.state["best"]:
+            activate(Path(self.state["best"]), self.work)
             tracking.tag_best(Path(self.state["best"]))
         return self.state
 
@@ -148,7 +153,8 @@ class Auto:
                     # A custom size (e.g. a quick run) grows tenfold per level, as the levels do.
                     games = self.cfg.games * 10 ** (level - self.cfg.level) if self.cfg.games else 0
                     cfg = replace(self.cfg, level=level, games=games, top_k=self.state["k"])
-                    self.log(f"auto: level {level} ({LEVELS[level][0]}), k {self.state['k']}")
+                    name = LEVELS.get(level, ("custom",))[0]
+                    self.log(f"auto: level {level} ({name}), k {self.state['k']}")
                     version = self.train_fn(cfg, self.work, self.limits, log=self.log)
                     self.state["pending"] = str(version)
                     self.state["cpu_seconds"] = self._spent(start_cpu)
@@ -180,15 +186,36 @@ class Auto:
                     return self._stop(f"{version.name} loses to the best version", start_cpu)
                 if best is None or result["verdict"] == "better":
                     self.state["best"] = str(version)
+                    self.state["stalls"] = 0
+                    activate(version, self.work)
+                else:
+                    # Not better than the best: the next level may still help, but
+                    # not two levels in a row.
+                    self.state["stalls"] = self.state.get("stalls", 0) + 1
                 self._save()
-                if result["verdict"] != "better" and best is not None:
-                    return self._stop(f"{version.name} is not better", start_cpu)
+                if self.state["stalls"] >= self.max_stalls:
+                    return self._stop(
+                        f"no improvement {self.state['stalls']} levels in a row", start_cpu
+                    )
                 if not dropping:
                     return self._stop("the learning curve no longer drops", start_cpu)
                 if level >= self.max_level:
                     return self._stop(f"level {level} is the last one", start_cpu)
                 self.state["level"] = level + 1
                 self._save()
+
+
+def activate(version: Path, work: Path) -> Path:
+    """Makes `version` the active model: its model.txt is copied to
+    <work>/models/active_model.txt and its name written to <work>/models/ACTIVE.
+    Returns the active model's path."""
+    models = work / "models"
+    models.mkdir(parents=True, exist_ok=True)
+    active = models / "active_model.txt"
+    if (version / "model.txt").exists():
+        shutil.copy(version / "model.txt", active)
+    (models / "ACTIVE").write_text(version.name + "\n")
+    return active
 
 
 def eval_args(ap: argparse.ArgumentParser) -> None:
@@ -267,6 +294,22 @@ def cmd_auto(args) -> int:
     return 0
 
 
+def cmd_revert(args) -> int:
+    """Makes an earlier version the active and best one (e.g. after a bad level)."""
+    version = args.version if args.version.is_absolute() else args.work / "models" / args.version
+    if not (version / "model.txt").exists():
+        raise SystemExit(f"no trained version at {version}")
+    activate(version, args.work)
+    auto = args.work / "auto.json"
+    if auto.exists():
+        state = json.loads(auto.read_text())
+        state["best"] = str(version)
+        auto.write_text(json.dumps(state, indent=1) + "\n")
+    tracking.tag_best(version)
+    print(f"active model: {version.name}")
+    return 0
+
+
 def cmd_status(args) -> int:
     for v in versions(args.work):
         config = json.loads((v / "config.json").read_text())
@@ -293,7 +336,7 @@ def cmd_status(args) -> int:
 def parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="command")
-    for name in ("train", "evaluate", "improve", "auto", "status"):
+    for name in ("train", "evaluate", "improve", "auto", "status", "revert"):
         p = sub.add_parser(name)
         config_args(p)
         p.add_argument("--k", default="64", help="the move model's candidate cap (top_k)")
@@ -301,6 +344,8 @@ def parser() -> argparse.ArgumentParser:
         if name == "evaluate":
             p.add_argument("--model", type=Path)
             p.add_argument("--previous", type=Path)
+        if name == "revert":
+            p.add_argument("version", type=Path, help="vNNN (under <work>/models) or a path")
         if name == "auto":
             p.add_argument("--budget-cpu-hours", type=float, required=True)
             p.add_argument("--budget-gb", type=float, required=True)
@@ -314,6 +359,7 @@ COMMANDS = {
     "improve": cmd_improve,
     "auto": cmd_auto,
     "status": cmd_status,
+    "revert": cmd_revert,
 }
 
 
@@ -347,7 +393,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command is None:
         parser().print_help()
         return 2
-    if args.command not in ("status",):
+    if args.command not in ("status", "revert"):
         check_busy(args.force)
         for tool in ("kingbble_selfplay", "kingbble_features", "kingbble_inference_eval"):
             if not (

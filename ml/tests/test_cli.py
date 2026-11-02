@@ -26,6 +26,7 @@ class Fake:
         drop = self.dropping.pop(0)
         curve = [{"fraction": 0.5, "val_nll": 2.0}, {"fraction": 1.0, "val_nll": 2.0 - 0.1 * drop}]
         (v / "curve.json").write_text(json.dumps(curve))
+        (v / "model.txt").write_text(f"model {v.name}\n")
         self.trained.append((cfg.level, cfg.top_k, cfg.games))
         return v
 
@@ -118,3 +119,27 @@ def test_custom_size_grows_with_the_level(tmp_path):
     auto.cfg = Config(level=0, games=30, top_k="64")
     auto.run()
     assert [games for _, _, games in fake.trained] == [30, 300]
+
+
+def test_two_levels_without_improvement_stop_and_the_best_stays_active(tmp_path):
+    fake = Fake(tmp_path, ["better", "not better", "not better"], [True, True, True])
+    auto = fake.auto()
+    auto.max_level = 5
+    state = auto.run()
+    assert len(fake.trained) == 3
+    assert state["stopped"] == "no improvement 2 levels in a row"
+    assert state["best"].endswith("v001")
+    models = tmp_path / "models"
+    assert (models / "ACTIVE").read_text().strip() == "v001"
+    assert (models / "active_model.txt").read_text() == "model v001\n"
+
+
+def test_revert_makes_an_earlier_version_active(tmp_path, capsys):
+    fake = Fake(tmp_path, ["better", "better"], [True, True])
+    fake.auto().run()
+    assert (tmp_path / "models" / "ACTIVE").read_text().strip() == "v002"
+    assert main(["revert", "v001", "--work", str(tmp_path)]) == 0
+    assert (tmp_path / "models" / "ACTIVE").read_text().strip() == "v001"
+    assert json.loads((tmp_path / "auto.json").read_text())["best"].endswith("v001")
+    with pytest.raises(SystemExit):
+        main(["revert", "v009", "--work", str(tmp_path)])
