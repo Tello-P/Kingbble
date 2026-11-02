@@ -126,3 +126,20 @@ def test_choose_k_takes_the_smallest_k_close_to_the_best(tmp_path):
         log=lambda *a: None,
     )
     assert k == 100
+
+
+def test_auto_sample_and_feature_deletion_by_level():
+    from ml.train import estimate
+
+    two, three = Config(level=2).with_level_model(), Config(level=3).with_level_model()
+    assert two.sample_turns == 5 and three.sample_turns == 16
+    assert not two.keep_features and not three.keep_features
+    assert Config(level=0).with_level_model().keep_features
+    assert Config(level=3, keep_features=True).with_level_model().keep_features
+    assert Config(level=3, sample_turns=2).with_level_model().sample_turns == 2
+    # Enough train turns for the largest fit are still extracted.
+    turns = three.size() * 22 / three.sample_turns * 0.8
+    assert turns >= three.max_train
+    e = estimate(Config(level=3))
+    assert e["gb"] < 20 and e["kept_gb"] == 0
+    assert estimate(Config(level=1))["kept_gb"] == estimate(Config(level=1))["gb"]
