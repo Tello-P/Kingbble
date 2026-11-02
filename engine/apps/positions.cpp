@@ -38,7 +38,9 @@
 // draw).
 //
 // --time-limit S caps each solve at S seconds; a position not solved exactly
-// within it prints "skip" (endgame) or {"skip": true} (pre-endgame).
+// within it prints "skip" (endgame) or {"skip": true, ...} (pre-endgame, followed
+// by what the unfinished solve did: the same fields as a solved one, so the slow
+// positions can be profiled, #79).
 
 #include <chrono>
 #include <cstdlib>
@@ -261,7 +263,7 @@ int main(int argc, char** argv) {
         if (r.complete)
           std::cout << PreEndgameJson(r, secs) << std::endl;
         else
-          std::cout << "{\"skip\": true}" << std::endl;
+          std::cout << "{\"skip\": true, " << PreEndgameJson(r, secs).substr(1) << std::endl;
       }
       ++written;
       continue;
