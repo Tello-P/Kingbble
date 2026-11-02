@@ -31,6 +31,18 @@ TEST(Leaves, LoadsKlv2) {
   EXPECT_DOUBLE_EQ(V(l, "EEEEEE"), -30);
 }
 
+// The CSV the KLV2 fixture was built from gives the same table.
+TEST(Leaves, LoadsCsv) {
+  Leaves csv = Leaves::FromFile(kFixtures + "/leaves_small.csv");
+  Leaves klv2 = Leaves::FromFile(kFixtures + "/leaves_small.klv2");
+  EXPECT_EQ(csv.Size(), klv2.Size());
+  for (const char* leave : {"?", "A", "BA", "CBA", "Q", "UQ", "S?", "STIRE", "EEEEEE", "Z"})
+    EXPECT_DOUBLE_EQ(V(csv, leave), V(klv2, leave)) << leave;
+  EXPECT_DOUBLE_EQ(V(Leaves::FromCsv("leave,value\nAB,1.5\n"), "BA"), 1.5);
+  EXPECT_THROW(Leaves::FromCsv("AB,1\nBA,2\n"), std::runtime_error);
+  EXPECT_THROW(Leaves::FromCsv("AB\n"), std::runtime_error);
+}
+
 TEST(Leaves, MissingLeavesAreWorthZero) {
   Leaves l = Leaves::FromFile(kFixtures + "/leaves_small.klv2");
   EXPECT_EQ(V(l, ""), 0);
