@@ -157,3 +157,17 @@ def test_rating_range_keeps_unrated_turns():
     assert set(in_rating_range(info, 1500, None)) == {("g", 2), ("g", 3)}
     assert set(in_rating_range(info, None, 1500)) == {("g", 1), ("g", 3)}
     assert in_rating_range(info, None, None) == info
+
+
+def test_mix_info_adds_self_play_train_turns_as_human_ones():
+    from ml.human_model.logit import mix_info
+
+    info = {("h", i): (1500, "train" if i < 30 else "val", False) for i in range(40)}
+    extra = {("sp", i): (None, ["train", "val", "test"][i % 3], True) for i in range(300)}
+    mixed = mix_info(info, extra, 0.25)
+    added = [k for k in mixed if k[0] == "sp"]
+    assert len(added) == 10  # 10 / (30 + 10) = 25 % of the train turns
+    assert all(mixed[k] == (None, "train", False) for k in added)
+    assert all(extra[k][1] == "train" for k in added)
+    assert mix_info(info, extra, 0.0) == info
+    assert len([k for k in mix_info(info, extra, 0.9) if k[0] == "sp"]) == 100  # all train ones
