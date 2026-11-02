@@ -4,6 +4,7 @@
 //   kingbble_features --lexicon lexica/CSW24.txt --leaves lexica/CSW24.klv2
 //                     --games data/raw/woogles --out data/features [--top 128]
 //                     [--turn-info FILE] [--word-freq TSV] [--alt-lexicon FILE] [--progress]
+//                     [--half] [--sample-turns N]
 //
 // Writes <out>/options.bin: a header (the bytes "KBFT", then uint32 version,
 // feature count and names length, the space-separated names from
@@ -14,6 +15,10 @@
 // legal options), chosen (rank of the played option, -1 if not legal for us,
 // e.g. a phony), first_row and rows in options.bin. Phony turns and turns
 // without a rack are skipped.
+//
+// To keep large levels on disk: --half writes the rows as float16 (format
+// version 3; version 2 is float32), and --sample-turns N keeps about one turn in
+// N, chosen by a hash of the game and turn (so the same turns at every run).
 //
 // --turn-info lists "game_id<TAB>turn<TAB>rating<TAB>split<TAB>is_bot" lines
 // (the turn store's view); the rating feeds the context features.
@@ -26,6 +31,7 @@
 #include "scrabble/features.hpp"
 
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <chrono>
 #include <cstdint>
@@ -49,7 +55,41 @@ namespace fs = std::filesystem;
 
 namespace {
 
-constexpr std::uint32_t kFormatVersion = 2;
+constexpr std::uint32_t kFormatVersion = 2;      // float32 rows
+constexpr std::uint32_t kHalfFormatVersion = 3;  // float16 rows
+
+// IEEE 754 binary16 bits of x, rounded to nearest even (overflow to infinity).
+std::uint16_t ToHalf(float x) {
+  const std::uint32_t f = std::bit_cast<std::uint32_t>(x);
+  const std::uint32_t sign = (f >> 16) & 0x8000u;
+  const std::uint32_t abs = f & 0x7fffffffu;
+  if (abs >= 0x7f800000u)  // inf or nan
+    return static_cast<std::uint16_t>(sign | 0x7c00u | (abs > 0x7f800000u ? 0x200u : 0u));
+  if (abs >= 0x477ff000u) return static_cast<std::uint16_t>(sign | 0x7c00u);  // too large
+  if (abs < 0x38800000u) {  // subnormal or zero in half
+    if (abs < 0x33000000u) return static_cast<std::uint16_t>(sign);
+    const std::uint32_t mant = (abs & 0x7fffffu) | 0x800000u;
+    const int shift = 126 - static_cast<int>(abs >> 23);
+    std::uint32_t h = mant >> (shift + 1);
+    const std::uint32_t rest = mant & ((1u << (shift + 1)) - 1);
+    const std::uint32_t half = 1u << shift;
+    if (rest > half || (rest == half && (h & 1u))) ++h;
+    return static_cast<std::uint16_t>(sign | h);
+  }
+  std::uint32_t h = ((abs - 0x38000000u) >> 13);
+  const std::uint32_t rest = abs & 0x1fffu;
+  if (rest > 0x1000u || (rest == 0x1000u && (h & 1u))) ++h;
+  return static_cast<std::uint16_t>(sign | h);
+}
+
+// Whether --sample-turns N keeps this turn: FNV-1a of the game id and turn.
+bool Sampled(const std::string& id, int turn, int every) {
+  if (every <= 1) return true;
+  std::uint64_t h = 1469598103934665603ULL;
+  for (char c : id + "#" + std::to_string(turn))
+    h = (h ^ static_cast<unsigned char>(c)) * 1099511628211ULL;
+  return h % static_cast<std::uint64_t>(every) == 0;
+}
 
 struct TurnInfo {
   int rating = 0;
@@ -78,11 +118,12 @@ std::map<std::pair<std::string, int>, TurnInfo> ReadTurnInfo(const std::string& 
   return out;
 }
 
-void WriteHeader(std::ostream& bin) {
+void WriteHeader(std::ostream& bin, bool half) {
   std::string names;
   for (const char* n : MoveFeatureNames()) names += std::string(names.empty() ? "" : " ") + n;
   names.resize((names.size() + 3) / 4 * 4, ' ');
-  const std::uint32_t fields[3] = {kFormatVersion, static_cast<std::uint32_t>(kNumMoveFeatures),
+  const std::uint32_t fields[3] = {half ? kHalfFormatVersion : kFormatVersion,
+                                   static_cast<std::uint32_t>(kNumMoveFeatures),
                                    static_cast<std::uint32_t>(names.size())};
   bin.write("KBFT", 4);
   bin.write(reinterpret_cast<const char*>(fields), sizeof(fields));
@@ -95,7 +136,8 @@ int main(int argc, char** argv) {
   static_assert(std::endian::native == std::endian::little, "options.bin is little-endian");
   std::string lexicon, leaves_path, games_dir, out_dir, info_path, freq_path, alt_path, count_path;
   int top = 128;
-  bool progress = false;
+  int sample_turns = 1;
+  bool progress = false, half = false;
   for (int i = 1; i < argc; ++i) {
     std::string a = argv[i];
     auto value = [&]() -> std::string {
@@ -125,11 +167,15 @@ int main(int argc, char** argv) {
       count_path = value();
     } else if (a == "--progress") {
       progress = true;
+    } else if (a == "--half") {
+      half = true;
+    } else if (a == "--sample-turns") {
+      sample_turns = std::max(1, std::stoi(value()));
     } else {
       std::cerr << "usage: " << argv[0]
                 << " --lexicon FILE --games DIR (--leaves KLV --out DIR [--top N]"
                    " [--word-freq TSV] [--alt-lexicon FILE] | --count-words OUT)"
-                   " [--turn-info FILE] [--progress]\n";
+                   " [--turn-info FILE] [--progress] [--half] [--sample-turns N]\n";
       return 2;
     }
   }
@@ -174,7 +220,7 @@ int main(int argc, char** argv) {
   fs::create_directories(out_dir);
   std::ofstream bin(fs::path(out_dir) / "options.bin", std::ios::binary);
   std::ofstream tsv(fs::path(out_dir) / "turns.tsv");
-  WriteHeader(bin);
+  WriteHeader(bin, half);
   tsv << "game_id\tturn\tplayer\track\tbag\toptions\tchosen\tfirst_row\trows\n";
 
   long long rows_written = 0, turns = 0, unmatched = 0, filled = 0;
@@ -182,7 +228,13 @@ int main(int argc, char** argv) {
   using Clock = std::chrono::steady_clock;
   int failed = 0, empty = 0;
   auto write_row = [&](const Option& o) {
-    bin.write(reinterpret_cast<const char*>(o.features.data()), sizeof(o.features));
+    if (half) {
+      std::array<std::uint16_t, kNumMoveFeatures> h;
+      for (int i = 0; i < kNumMoveFeatures; ++i) h[i] = ToHalf(o.features[i]);
+      bin.write(reinterpret_cast<const char*>(h.data()), sizeof(h));
+    } else {
+      bin.write(reinterpret_cast<const char*>(o.features.data()), sizeof(o.features));
+    }
     ++rows_written;
   };
   for (std::size_t g = 0; g < files.size(); ++g) {
@@ -198,7 +250,7 @@ int main(int argc, char** argv) {
     }
     const std::string id = files[g].stem().string();
     for (const ReplayedTurn& t : replayed) {
-      if (!t.known_rack || t.phony) continue;
+      if (!t.known_rack || t.phony || !Sampled(id, t.turn, sample_turns)) continue;
       const TurnInfo* ti = info_of(id, t.turn);
       Rack unseen = UnseenTiles(t.board, t.rack);
       const auto t0 = Clock::now();
