@@ -12,6 +12,7 @@ ml = ["numpy>=1.26"]
 freq = ["wordfreq>=3"]
 mlflow = ["mlflow-skinny>=2.10"]
 lgbm = ["lightgbm>=4", "numpy>=1.26"]
+app = ["streamlit>=1.30"]
 
 [tool.setuptools.packages.find]
 include = ["ml*", "app*"]
