@@ -10,7 +10,10 @@
 Levels (data scale): 0 smoke = 1,000 games, 1 test = 10,000 (the conditional
 logit, ml.human_model.logit), 2 base = 100,000 (and a small network), 3 full =
 1,000,000 (and a bigger network); --games sets any other size. Every run logs
-its rough time and disk first (--estimate prints them and exits).
+its rough time and disk first (--estimate prints them and exits). Levels 2
+and 3 keep compact features (64 candidates, float16, only as many turns as the
+fits read) and delete them once the version is saved (--keep-features keeps
+them).
 --source selfplay (the default) generates self-play games up to the level's
 size (kingbble_selfplay resumes) and builds their turn store: the pipeline
 smoke and the bot model, never the human model (a bot is trivially predictable
@@ -53,10 +56,19 @@ LEVELS = {0: ("smoke", 1000), 1: ("test", 10000), 2: ("base", 100000), 3: ("full
 # Per level: train turns of the largest fit and the network (hidden units, 0 = logit
 # only). Levels 2 and 3 always fit the network; the RL step of level 3 is #53's.
 LEVEL_MODEL = {0: (60000, 0), 1: (60000, 0), 2: (300000, 32), 3: (1000000, 64)}
-# Per level, the features kept on disk (#81): candidates per turn (0: 128 for
-# self-play, 256 for human games, as before), float16 rows, one turn in N kept.
-# Levels 2 and 3 store about 1/20 of the full rows so they fit on the disk.
-LEVEL_FEATURES = {0: (0, False, 1), 1: (0, False, 1), 2: (64, True, 5), 3: (64, True, 5)}
+# Per level, the features on disk (#81): candidates per turn (0: 128 for
+# self-play, 256 for human games, as before), float16 rows, one turn in N kept
+# (0: just enough turns for the level's fits, auto_sample) and whether they are
+# kept once the version is saved. Levels 2 and 3 store a small share of the full
+# rows and delete them after training, so they fit on the disk.
+LEVEL_FEATURES = {
+    0: (0, False, 1, True),
+    1: (0, False, 1, True),
+    2: (64, True, 0, False),
+    3: (64, True, 0, False),
+}
+# Share of the turns in the train split (by player or game), to sample enough of them.
+TRAIN_SHARE = 0.8
 FULL_TOP = {"selfplay": 128, "human": 256}
 # Rough costs on 2 cores, measured on the M6a and #67 runs: equity self-play games
 # per hour, feature extraction seconds per game, fit seconds per 1,000 train turns
@@ -109,6 +121,7 @@ class Config:
     feature_top: int = 0
     feature_half: bool | None = None
     sample_turns: int = 0
+    keep_features: bool | None = None  # keep them after training (None: the level's)
     drop: str = ""  # feature groups to leave out, e.g. "A"
     fractions: tuple[float, ...] = FRACTIONS
     extra: dict = field(default_factory=dict)
@@ -119,16 +132,25 @@ class Config:
     def with_level_model(self) -> Config:
         """The level's largest fit and network where they are left to the level."""
         turns, hidden = LEVEL_MODEL.get(self.level, LEVEL_MODEL[max(LEVEL_MODEL)])
-        top, half, sample = LEVEL_FEATURES.get(self.level, LEVEL_FEATURES[max(LEVEL_FEATURES)])
-        return replace(
+        top, half, sample, keep = LEVEL_FEATURES.get(
+            self.level, LEVEL_FEATURES[max(LEVEL_FEATURES)]
+        )
+        cfg = replace(
             self,
             max_train=self.max_train or turns,
             mlp=self.mlp or hidden > 0,
             mlp_hidden=self.mlp_hidden or hidden or 32,
             feature_top=self.feature_top or top or FULL_TOP.get(self.source, 128),
             feature_half=half if self.feature_half is None else self.feature_half,
-            sample_turns=self.sample_turns or sample,
+            keep_features=keep if self.keep_features is None else self.keep_features,
         )
+        return replace(cfg, sample_turns=self.sample_turns or sample or cfg.auto_sample())
+
+    def auto_sample(self) -> int:
+        """One turn in N with N as large as still leaves the largest fit its train
+        turns (with a 10 % margin), so no turn is extracted that no fit reads."""
+        needed = self.max_train / TRAIN_SHARE * 1.1
+        return max(1, int(self.size() * TURNS_PER_GAME // needed))
 
     def feature_args(self) -> list:
         """kingbble_features options for this config's features on disk."""
@@ -152,7 +174,7 @@ class Config:
 
 
 def estimate(cfg: Config) -> dict:
-    """Rough wall hours (on 2 cores) and disk GB of a level's run, before it starts."""
+    """Rough wall hours (on 2 cores) and features disk (peak and kept) of a level's run."""
     cfg = cfg.with_level_model()
     games = cfg.size()
     sample = max(1, cfg.sample_turns)
@@ -167,7 +189,13 @@ def estimate(cfg: Config) -> dict:
     full_top = FULL_TOP.get(cfg.source, 128)
     shrink = min(cfg.feature_top, full_top) / full_top * (0.5 if cfg.feature_half else 1.0) / sample
     gb = games * FEATURE_BYTES_PER_GAME.get(cfg.source, 1.0e6) * shrink / 2**30
-    return {"games": games, "hours": round(hours, 1), "gb": round(gb, 1)}
+    # gb: the features' peak on disk; kept_gb: what stays after training.
+    return {
+        "games": games,
+        "hours": round(hours, 1),
+        "gb": round(gb, 1),
+        "kept_gb": round(gb if cfg.keep_features else 0.0, 1),
+    }
 
 
 def data_dir(work: Path, cfg: Config) -> Path:
@@ -557,6 +585,10 @@ def train(cfg: Config, work: Path = DEFAULT_WORK, limits: Limits | None = None, 
     tmp.rename(version)
     log(f"saved {version}")
     tracking.log_training(version)
+    if not cfg.keep_features:
+        # Only the fits read them; evaluation works from the games and the turn store.
+        shutil.rmtree(feats, ignore_errors=True)
+        log(f"  deleted the features ({feats.name}); --keep-features keeps them")
     return version
 
 
@@ -608,6 +640,14 @@ def config_args(ap: argparse.ArgumentParser) -> None:
         "--sample-turns", type=int, default=0, help="keep one turn in N on disk (0: the level's)"
     )
     ap.add_argument(
+        "--keep-features",
+        dest="keep_features",
+        action="store_true",
+        default=None,
+        help="keep the features after training (default: levels 0-1 only)",
+    )
+    ap.add_argument("--delete-features", dest="keep_features", action="store_false")
+    ap.add_argument(
         "--fractions",
         default="0.25,0.5,1",
         help="shares of --max-train fitted (the learning curve)",
@@ -653,6 +693,7 @@ def config_from(args) -> tuple[Config, Limits]:
         feature_top=args.feature_top,
         feature_half=args.feature_half,
         sample_turns=args.sample_turns,
+        keep_features=args.keep_features,
         mix_raw=args.mix_raw,
         min_rating=args.min_rating,
         max_rating=args.max_rating,
