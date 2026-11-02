@@ -1,0 +1,6 @@
+# Does tracking the opponent's rack help? The full bot against the same bot
+# simulating uniform opponent racks.
+name: inference
+a: sim+inf:human+eg
+b: sim+inf:none+eg
+seed: 7101

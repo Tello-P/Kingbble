@@ -7,11 +7,18 @@
 
 namespace scrabble {
 
-// Plays like `inner` while the bag has tiles and solves the endgame once it is empty.
+// Plays like `inner` while the bag has tiles and solves the endgame once it is
+// empty, to at most `max_plies` plies within `time_limit_s` seconds (0: no
+// limit). With no time limit and one thread the moves do not depend on the
+// machine's speed.
 class EndgameBot : public Bot {
  public:
-  EndgameBot(std::unique_ptr<Bot> inner, const Gaddag& gaddag, double time_limit_s, int threads = 1)
-      : inner_(std::move(inner)), solver_(gaddag), time_limit_s_(time_limit_s) {
+  EndgameBot(std::unique_ptr<Bot> inner, const Gaddag& gaddag, double time_limit_s, int threads = 1,
+             int max_plies = 25)
+      : inner_(std::move(inner)),
+        solver_(gaddag),
+        time_limit_s_(time_limit_s),
+        max_plies_(max_plies) {
     solver_.set_threads(threads);
   }
 
@@ -35,6 +42,7 @@ class EndgameBot : public Bot {
   std::unique_ptr<Bot> inner_;
   EndgameSolver solver_;
   double time_limit_s_;
+  int max_plies_;
   EndgameResult last_;
   Stats stats_;
   bool compare_inner_ = false;

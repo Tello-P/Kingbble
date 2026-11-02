@@ -8,7 +8,7 @@ Move EndgameBot::Choose(const Game& game) {
     last_num_moves_ = inner_->last_num_moves();
     return m;
   }
-  last_ = solver_.Solve(game, 25, time_limit_s_);
+  last_ = solver_.Solve(game, max_plies_, time_limit_s_);
   last_num_moves_ = static_cast<std::size_t>(last_.nodes);
   ++stats_.solves;
   stats_.exact += last_.exact;
