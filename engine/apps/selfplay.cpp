@@ -28,6 +28,8 @@
 // --risk-policy FILE sets lambda_scale per bag and lead bucket (a policy learned
 // by ml.rl.risk_policy, "bag_lo bag_hi lead_lo lead_hi scale" lines).
 // --gcg-dir DIR saves game N as DIR/gameN.gcg with both racks (training data).
+// --a-leaves FILE gives bot a its own leave table (KLV2 or CSV), e.g. a fitted
+// one against the published table with --paired.
 // "human" plays moves drawn from the human move model (--human-params, with
 // --word-freq and --alt-lexicon as it was fitted, for a player of --human-rating).
 
@@ -90,7 +92,7 @@ void PrintSummary(const ResultsFile& results, int games, const std::string& kind
 }  // namespace
 
 int main(int argc, char** argv) {
-  std::string lexicon, leaves_path, kind_a = "greedy", kind_b = "greedy";
+  std::string lexicon, leaves_path, a_leaves_path, kind_a = "greedy", kind_b = "greedy";
   int games = 10;
   std::uint64_t seed = 1;
   bool verbose = false;
@@ -122,6 +124,8 @@ int main(int argc, char** argv) {
       lexicon = value();
     } else if (a == "--leaves") {
       leaves_path = value();
+    } else if (a == "--a-leaves") {
+      a_leaves_path = value();
     } else if (a == "--a") {
       kind_a = value();
     } else if (a == "--b") {
@@ -196,7 +200,8 @@ int main(int argc, char** argv) {
       risk.win.rest_sd_per_sqrt_tile = std::stod(value());
     } else {
       std::cerr << "usage: " << argv[0]
-                << " --lexicon FILE [--leaves KLV] [--a BOT] [--b BOT] [--games N] [--seed S]"
+                << " --lexicon FILE [--leaves KLV] [--a-leaves KLV] [--a BOT] [--b BOT] [--games "
+                   "N] [--seed S]"
                    " [--sim-candidates N] [--sim-iterations N] [--sim-plies N] [--a-plies N] "
                    "[--sim-time S]"
                    " [--threads N] [--endgame-time S]"
@@ -227,7 +232,8 @@ int main(int argc, char** argv) {
   std::cout << "lexicon: " << gaddag.NumWords() << " words, " << gaddag.NumNodes() << " nodes, "
             << gaddag.NumEdges() << " edges, built in " << build_s << " s\n";
 
-  std::unique_ptr<Leaves> leaves;
+  std::unique_ptr<Leaves> leaves, a_leaves;
+  if (!a_leaves_path.empty()) a_leaves = std::make_unique<Leaves>(Leaves::FromFile(a_leaves_path));
   if (!leaves_path.empty()) {
     leaves = std::make_unique<Leaves>(Leaves::FromFile(leaves_path));
     std::cout << "leaves: " << leaves->Size() << "\n";
@@ -247,7 +253,8 @@ int main(int argc, char** argv) {
     human.lexicon = words ? &*words : nullptr;
   }
   std::unique_ptr<Bot> bots[2] = {
-      MakeBot(kind_a, gaddag, leaves.get(), a_sim, endgame_time, peg, risk, human),
+      MakeBot(kind_a, gaddag, a_leaves ? a_leaves.get() : leaves.get(), a_sim, endgame_time, peg,
+              risk, human),
       MakeBot(kind_b, gaddag, leaves.get(), sim, endgame_time, peg, risk, human)};
   if (endgame_stats)
     for (auto& b : bots)
