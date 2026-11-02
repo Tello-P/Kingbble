@@ -9,8 +9,12 @@
 # (--fresh starts over, --status reports).
 # --quick: 10 match games against Quackle's Speedy Player with a lighter Kingbble
 # (40 simulations, 2 s pre-endgame and endgame), and 2 x 20 Lazy SMP games.
+# --sim-time S: Kingbble simulates S seconds per move (capped at --sim-cap
+# iterations, default 5000) instead of a fixed number of iterations, as in a
+# timed match; such a match keeps its own results file (match_simtS), so it never
+# mixes with the fixed-iteration games.
 #   scripts/issues/issue_34_quackle_and_smp.sh [--dry-run] [--quick] [--fresh] [--status]
-#       [--games N] [--match-only | --smp-only]
+#       [--games N] [--sim-time S [--sim-cap N]] [--match-only | --smp-only]
 source "$(dirname "$0")/lib.sh"
 
 quick_args "$@"
@@ -22,15 +26,29 @@ if ((QUICK)); then
 fi
 args=("$@")
 for ((i = 0; i < ${#args[@]}; ++i)); do
-  [[ ${args[i]} == --games ]] && MATCH_GAMES=${args[i + 1]:?--games needs a value}
+  case ${args[i]} in
+    --games) MATCH_GAMES=${args[i + 1]:?--games needs a value} ;;
+    --sim-time) SIM_TIME=${args[i + 1]:?--sim-time needs seconds} ;;
+    --sim-cap) SIM_CAP=${args[i + 1]:?--sim-cap needs a value} ;;
+  esac
 done
+MATCH_NAME=match
+if [[ -n ${SIM_TIME:-} ]]; then
+  [[ $SIM_TIME =~ ^[0-9]+([.][0-9]+)?$ ]] || {
+    echo "--sim-time wants seconds, got '$SIM_TIME'" >&2
+    exit 2
+  }
+  # Later arguments win: the time and cap replace the quick mode's iterations.
+  MATCH_ARGS+=(--sim-time "$SIM_TIME" --sim-iterations "${SIM_CAP:-5000}")
+  MATCH_NAME=match_simt$SIM_TIME
+fi
 issue_init 34 $((MATCH_GAMES + 2 * SMP_GAMES)) "$@"
 match=1 smp=1
 for ((i = 0; i < ${#ARGS[@]}; ++i)); do
   case ${ARGS[i]} in
     --match-only) smp=0 ;;
     --smp-only) match=0 ;;
-    --games) i=$((i + 1)) ;;
+    --games | --sim-time | --sim-cap) i=$((i + 1)) ;;
     *) echo "unknown argument: ${ARGS[i]}" >&2; exit 2 ;;
   esac
 done
@@ -49,13 +67,13 @@ if ((match)); then
     step 0 "" cmake --build build/quackle_helper -j"$MAX_THREADS"
   fi
   need_csw24
-  note "Quackle match, $MATCH_GAMES games"
+  note "Quackle match, $MATCH_GAMES games${SIM_TIME:+, ${SIM_TIME} s of simulation per move}"
   step $MATCH_GAMES "" build/engine/kingbble_quackle_match \
     --lexicon lexica/CSW24.txt --leaves lexica/CSW24.klv2 \
     --helper build/quackle_helper/quackle_helper --bot sim+peg+eg --threads $MAX_THREADS \
     --quackle-threads $MAX_THREADS --games $MATCH_GAMES --seed 1 \
-    --gcg-dir "build/quackle_games/match$(quick_suffix)" \
-    --results "$(results_file match)" "${MATCH_ARGS[@]}"
+    --gcg-dir "build/quackle_games/$MATCH_NAME$(quick_suffix)" \
+    --results "$(results_file "$MATCH_NAME")" "${MATCH_ARGS[@]}"
 else
   skip_units $MATCH_GAMES
 fi
