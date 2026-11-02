@@ -32,6 +32,18 @@
 // one against the published table with --paired.
 // "human" plays moves drawn from the human move model (--human-params, with
 // --word-freq and --alt-lexicon as it was fitted, for a player of --human-rating).
+// "sim+inf:MODEL" tracks the opponent's rack with MODEL (human, rf, none) and
+// draws its simulated opponent racks from it (--posterior-share of them; the
+// filter takes --particles, --exact-limit and --surprise-bits, RangeFinder
+// --tau), e.g. --a sim+inf:human+eg --b sim+eg --paired.
+// Reproducible runs: --per-game-seeds restarts every bot's random streams at
+// each game from the seed, the deal and the seat, so a game does not depend on
+// the games before it (a resumed run plays the same games) and both games of a
+// pair share the streams of each seat. Give fixed iterations (no --sim-time)
+// and, for "+eg", --endgame-time 0 with --endgame-plies N and
+// --endgame-threads 1. With --results the run's manifest (--tag KEY=VALUE
+// entries, the config with file hashes, the command line) is written to
+// <results>.manifest.json; resuming with another config fails.
 
 #include <array>
 #include <chrono>
@@ -45,21 +57,15 @@
 
 #include "bot_factory.hpp"
 #include "game_record.hpp"
+#include "manifest.hpp"
 #include "results_file.hpp"
+#include "run_seeds.hpp"
 #include "scrabble/gaddag.hpp"
 #include "scrabble/game.hpp"
 
 using namespace scrabble;
 
 namespace {
-
-// SplitMix64: decorrelates per-game seeds so different --seed values share no games.
-std::uint64_t MixSeed(std::uint64_t x) {
-  x += 0x9E3779B97F4A7C15ULL;
-  x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ULL;
-  x = (x ^ (x >> 27)) * 0x94D049BB133111EBULL;
-  return x ^ (x >> 31);
-}
 
 // Totals over every finished game ("game N: S1 - S2, a in seat K" lines).
 void PrintSummary(const ResultsFile& results, int games, const std::string& kind_a,
@@ -103,7 +109,10 @@ int main(int argc, char** argv) {
   bool paired = false;
   bool endgame_fallback = false;  // "+eg" bots play the inner move when not solved exactly
   bool endgame_stats = false;     // per "+eg" bot: solves, exact ones, moves changed vs inner
-  int a_plies = 0;                // 0: as b
+  bool per_game_seeds = false;    // restart the bots' streams at each game (reproducible)
+  Manifest manifest;
+  InferenceOptions inference;
+  int a_plies = 0;  // 0: as b
   SimParams sim;
   RiskParams risk;
   double endgame_time = 5;
@@ -186,6 +195,30 @@ int main(int argc, char** argv) {
       endgame_fallback = true;
     } else if (a == "--paired") {
       paired = true;
+    } else if (a == "--per-game-seeds") {
+      per_game_seeds = true;
+    } else if (a == "--endgame-plies") {
+      peg.endgame_plies = std::stoi(value());
+    } else if (a == "--endgame-threads") {
+      peg.endgame_threads = std::stoi(value());
+    } else if (a == "--posterior-share") {
+      sim.posterior_share = std::stod(value());
+    } else if (a == "--particles") {
+      inference.filter.particles = std::stoi(value());
+    } else if (a == "--exact-limit") {
+      inference.filter.exact_limit = std::stoll(value());
+    } else if (a == "--surprise-bits") {
+      inference.filter.surprise_bits = std::stod(value());
+    } else if (a == "--tau") {
+      inference.tau = std::stod(value());
+    } else if (a == "--tag") {
+      const std::string tag = value();
+      const std::size_t eq = tag.find('=');
+      if (eq == std::string::npos) {
+        std::cerr << "--tag wants KEY=VALUE\n";
+        return 2;
+      }
+      manifest.Tag(tag.substr(0, eq), tag.substr(eq + 1));
     } else if (a == "--risk-policy") {
       risk.policy = LoadRiskPolicy(value());
     } else if (a == "--risk-lambda") {
@@ -212,7 +245,10 @@ int main(int argc, char** argv) {
                    " [--risk-rest-sd S] [--risk-shrink K] [--risk-relative]"
                    " [--risk-iterations F] [--endgame-stats] [--endgame-fallback] [--gcg-dir DIR] "
                    "[--human-params FILE]"
-                   " [--human-rating R] [--word-freq TSV] [--alt-lexicon FILE]\n";
+                   " [--human-rating R] [--word-freq TSV] [--alt-lexicon FILE]"
+                   " [--per-game-seeds] [--endgame-plies N] [--endgame-threads N]"
+                   " [--posterior-share P] [--particles N] [--exact-limit N]"
+                   " [--surprise-bits B] [--tau T] [--tag KEY=VALUE]\n";
       return 2;
     }
   }
@@ -252,16 +288,79 @@ int main(int argc, char** argv) {
     human.params = &human_params;
     human.lexicon = words ? &*words : nullptr;
   }
-  std::unique_ptr<Bot> bots[2] = {
-      MakeBot(kind_a, gaddag, a_leaves ? a_leaves.get() : leaves.get(), a_sim, endgame_time, peg,
-              risk, human),
-      MakeBot(kind_b, gaddag, leaves.get(), sim, endgame_time, peg, risk, human)};
+  BotSetup setups[2] = {
+      MakeBotSetup(kind_a, gaddag, a_leaves ? a_leaves.get() : leaves.get(), a_sim, endgame_time,
+                   peg, risk, human, inference),
+      MakeBotSetup(kind_b, gaddag, leaves.get(), sim, endgame_time, peg, risk, human, inference)};
+
+  if (!results_path.empty()) {
+    // Everything the games depend on; --games may grow on a rerun.
+    manifest.SetArgv(argc, argv);
+    manifest.Set("tool", "kingbble_selfplay");
+    manifest.Set("a", kind_a);
+    manifest.Set("b", kind_b);
+    manifest.Set("seed", std::to_string(seed));
+    manifest.Set("paired", paired ? "1" : "0");
+    manifest.Set("per_game_seeds", per_game_seeds ? "1" : "0");
+    manifest.Set("lexicon", std::filesystem::path(lexicon).filename().string());
+    manifest.Set("lexicon_hash", FileHash(lexicon));
+    manifest.Set("leaves_hash", leaves_path.empty() ? "none" : FileHash(leaves_path));
+    manifest.Set("a_leaves_hash", a_leaves_path.empty() ? "none" : FileHash(a_leaves_path));
+    manifest.Set("human_params_hash", human_path.empty() ? "none" : FileHash(human_path));
+    manifest.Set("word_freq_hash", freq_path.empty() ? "none" : FileHash(freq_path));
+    manifest.Set("alt_lexicon_hash", alt_path.empty() ? "none" : FileHash(alt_path));
+    manifest.Set("human_rating", human_rating);
+    manifest.Set("threads", sim.threads);
+    manifest.Set("sim_candidates", sim.candidates);
+    manifest.Set("sim_iterations", sim.max_iterations);
+    manifest.Set("sim_plies", sim.plies);
+    manifest.Set("a_plies", a_sim.plies);
+    manifest.Set("sim_time", sim.time_limit_s);
+    manifest.Set("posterior_share", sim.posterior_share);
+    manifest.Set("particles", inference.filter.particles);
+    manifest.Set("exact_limit", static_cast<double>(inference.filter.exact_limit));
+    manifest.Set("surprise_bits", inference.filter.surprise_bits);
+    manifest.Set("tau", inference.tau);
+    manifest.Set("endgame_time", endgame_time);
+    manifest.Set("endgame_plies", peg.endgame_plies);
+    manifest.Set("endgame_threads", peg.endgame_threads);
+    manifest.Set("endgame_fallback", endgame_fallback ? "1" : "0");
+    manifest.Set("peg", std::to_string(peg.max_bag) + "/" + std::to_string(peg.params.candidates) +
+                            "/" + std::to_string(peg.params.time_limit_s));
+    manifest.Set("apeg", std::to_string(peg.approx.candidates) + "/" +
+                             std::to_string(peg.approx.samples) + "/" +
+                             std::to_string(peg.approx.endgame_plies) + "/" +
+                             std::to_string(peg.approx.time_limit_s));
+    manifest.Set("risk", std::to_string(risk.lambda_scale) + "/" + std::to_string(risk.shrink) +
+                             "/" + std::to_string(risk.relative_variance) + "/" +
+                             std::to_string(risk.iterations_factor) + "/" +
+                             std::to_string(risk.win.rest_sd_per_sqrt_tile) +
+                             (risk.policy.empty() ? "" : "/policy"));
+    // Timed searches make the games depend on the machine's speed.
+    const bool timed = sim.time_limit_s > 0 ||
+                       ((kind_a + kind_b).find("+eg") != std::string::npos &&
+                        (endgame_time > 0 || peg.endgame_threads != 1)) ||
+                       (kind_a + kind_b).find("peg") != std::string::npos;
+    manifest.Set("reproducible", per_game_seeds && !timed ? "1" : "0");
+    const std::string manifest_path = results_path + ".manifest.json";
+    const std::string old = Manifest::ReadConfig(manifest_path);
+    const ResultsFile existing(results_path, true);
+    if (!old.empty() && !existing.lines().empty() && old != manifest.ConfigJson()) {
+      std::cerr << results_path << " holds games played with another config (see " << manifest_path
+                << "); start a new results file or delete it\n";
+      return 2;
+    }
+    if (!manifest.Write(manifest_path)) {
+      std::cerr << "cannot write " << manifest_path << "\n";
+      return 1;
+    }
+  }
   if (endgame_stats)
-    for (auto& b : bots)
-      if (auto* eg = dynamic_cast<EndgameBot*>(b.get())) eg->set_compare_inner(true);
+    for (auto& s : setups)
+      if (auto* eg = dynamic_cast<EndgameBot*>(s.bot.get())) eg->set_compare_inner(true);
   if (endgame_fallback)
-    for (auto& b : bots)
-      if (auto* eg = dynamic_cast<EndgameBot*>(b.get())) eg->set_inexact_fallback(true);
+    for (auto& s : setups)
+      if (auto* eg = dynamic_cast<EndgameBot*>(s.bot.get())) eg->set_inexact_fallback(true);
   if (!gcg_dir.empty()) std::filesystem::create_directories(gcg_dir);
   const std::string lexicon_name = std::filesystem::path(lexicon).stem().string();
 
@@ -277,7 +376,7 @@ int main(int argc, char** argv) {
   for (int g = 0; g < games; ++g) {
     if (results.Done(g + 1)) continue;
     const int deal = paired ? g / 2 : g;
-    Game game(MixSeed(MixSeed(seed) + static_cast<std::uint64_t>(deal)));
+    Game game(DealSeed(seed, deal));
     const int seat_a = g % 2;  // seat of bot a in this game
     int moves[2] = {0, 0};     // by bot: a, b
     double seconds[2] = {0, 0};
@@ -286,9 +385,15 @@ int main(int argc, char** argv) {
                                                       : std::array<std::string, 2>{kind_b, kind_a};
     GameRecord record({"p1", "p2"}, seat_kinds, lexicon_name,
                       "selfplay seed " + std::to_string(seed) + " game " + std::to_string(g + 1));
+    for (int side = 0; side < 2; ++side) {
+      const int seat = side == 0 ? seat_a : 1 - seat_a;
+      std::optional<std::uint64_t> stream;
+      if (per_game_seeds) stream = StreamSeed(seed, deal, seat);
+      setups[side].NewGame(game, seat, stream);
+    }
     while (!game.over()) {
       const int side = game.to_move() == seat_a ? 0 : 1;
-      Bot& bot = *bots[side];
+      Bot& bot = *setups[side].bot;
       auto t = Clock::now();
       Move m = bot.Choose(game);
       const double spent = std::chrono::duration<double>(Clock::now() - t).count();
@@ -302,7 +407,9 @@ int main(int argc, char** argv) {
                   << "  " << m.ToString() << "\n";
       }
       record.Add(game, m);
+      for (BotSetup& s : setups) s.BeforeMove(game, m);
       game.Apply(m);
+      for (BotSetup& s : setups) s.AfterMove(game);
     }
     record.Finish(game);
     if (!gcg_dir.empty())
@@ -319,7 +426,7 @@ int main(int argc, char** argv) {
   }
   PrintSummary(results, games, kind_a, kind_b);
   for (int side = 0; side < 2 && endgame_stats; ++side)
-    if (auto* eg = dynamic_cast<EndgameBot*>(bots[side].get())) {
+    if (auto* eg = dynamic_cast<EndgameBot*>(setups[side].bot.get())) {
       const EndgameBot::Stats& st = eg->stats();
       std::cout << (side == 0 ? "a" : "b") << " endgames: " << st.solves << " solved, " << st.exact
                 << " exact, avg depth " << (st.solves ? double(st.depth_sum) / st.solves : 0)
