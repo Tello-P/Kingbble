@@ -8,7 +8,8 @@
 # Every finished game is kept: stop the script any time and run it again to go
 # on (--fresh starts over, --status reports, --dry-run prints the commands).
 # --quick: 20 games per experiment with a light simulation (a smoke check of the
-# pipeline, not a result). --only NAME runs one experiment.
+# pipeline, not a result). --only NAME runs one experiment. The report (markdown
+# table, CSV and CI plot from ml.eval.tournament) goes to build/issue_runs/m7[_quick].
 #   scripts/issues/m7_ablations.sh [--dry-run] [--quick] [--fresh] [--status] [--only NAME]
 #     [--threads N] [--mem SIZE] [--force]
 source "$(dirname "$0")/lib.sh"
@@ -57,4 +58,11 @@ for c in "${CONFIGS[@]}"; do
     --tag commit="$COMMIT" --tag dirty="$DIRTY" --tag config="$c" \
     --tag config_hash="$(cfg hash "$c" "${QFLAG[@]}")" --tag mode="$( ((QUICK)) && echo quick || echo full)"
 done
-finish && exit 0
+((DRY_RUN)) && exit 0
+# Win % and spread per experiment with paired 95 % CIs and Holm-corrected p-values.
+REPORT=build/issue_runs/m7$(quick_suffix)
+if ((STATUS)); then
+  "$PY" -m ml.eval.tournament "${RESULTS[@]}"
+else
+  "$PY" -m ml.eval.tournament "${RESULTS[@]}" --out "$REPORT" | tee -a "$LOG"
+fi
