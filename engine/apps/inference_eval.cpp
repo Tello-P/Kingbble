@@ -44,6 +44,7 @@
 #include <tuple>
 #include <vector>
 
+#include "inference_side.hpp"
 #include "journal.hpp"
 #include "scrabble/equity.hpp"
 #include "scrabble/features.hpp"
@@ -66,12 +67,6 @@ std::uint64_t MixSeed(std::uint64_t x) {
   return x ^ (x >> 31);
 }
 
-// Every rack explains every move: the posterior is the prior.
-class UniformModel : public MoveModel {
- public:
-  double Likelihood(const Observation&, const Rack&) override { return 1; }
-};
-
 struct Setup {
   const Gaddag* gaddag;
   const Leaves* leaves;
@@ -84,10 +79,8 @@ struct Setup {
 };
 
 std::unique_ptr<MoveModel> MakeModel(const std::string& name, const Setup& s) {
-  if (name == "none") return std::make_unique<UniformModel>();
-  if (name == "rangefinder") return std::make_unique<RangeFinderModel>(*s.gaddag, *s.leaves, s.tau);
-  if (name == "human")
-    return std::make_unique<HumanMoveModel>(*s.gaddag, *s.leaves, s.human, s.lexicon);
+  if (name == "none" || name == "rangefinder" || name == "human")
+    return MakeMoveModel(name, *s.gaddag, *s.leaves, &s.human, s.lexicon, s.tau);
   if (name == "bot")
     return std::make_unique<HumanMoveModel>(*s.gaddag, *s.leaves, s.bot, s.lexicon);
   if (name == "auto") {
@@ -266,8 +259,7 @@ int EvalHumanGames(const Options& o, const Setup& setup, Journal& journal) {
 
 struct Side {
   std::string model_name;
-  std::unique_ptr<MoveModel> model;
-  std::unique_ptr<RackFilter> filter;  // tracks the other side's rack
+  std::unique_ptr<RackTracker> tracker;  // tracks the other side's rack
   std::unique_ptr<SimBot> bot;
   double rare = 0;
 };
@@ -284,11 +276,10 @@ int SelfPlay(const Options& o, const Setup& setup, Journal& journal) {
     sim.seed = MixSeed(o.seed + s);
     sides[s].bot = std::make_unique<SimBot>(*setup.gaddag, *setup.leaves, sim);
     if (names[s] == "none") continue;
-    sides[s].model = MakeModel(names[s], setup);
     FilterParams fp = o.filter;
     fp.seed = MixSeed(o.seed + 10 + s);
-    sides[s].filter = std::make_unique<RackFilter>(*sides[s].model, *setup.leaves, fp);
-    sides[s].bot->set_rack_sampler(sides[s].filter.get());
+    sides[s].tracker = std::make_unique<RackTracker>(MakeModel(names[s], setup), *setup.leaves, fp);
+    sides[s].tracker->Attach(sides[s].bot.get());
   }
 
   int todo = 0, finished = 0;
@@ -297,22 +288,21 @@ int SelfPlay(const Options& o, const Setup& setup, Journal& journal) {
   for (int g = 0; g < o.games_played; ++g) {
     const std::string key = "game" + std::to_string(g);
     if (journal.IsDone(key)) continue;
-    long long rare_moves = 0, surprises = 0;
-    int turn = 0;
-    bool exchanged[2] = {false, false};
+    long long rare_moves = 0, surprises_before = 0;
+    for (const Side& side : sides)
+      if (side.tracker) surprises_before += side.tracker->surprises();
     Game game(MixSeed(MixSeed(o.seed) + static_cast<std::uint64_t>(o.paired ? g / 2 : g)));
     const int seat_a = g % 2;
     auto side_of = [&](int seat) -> Side& { return sides[seat == seat_a ? 0 : 1]; };
     for (int seat = 0; seat < 2; ++seat)
-      if (auto& f = side_of(seat).filter)
-        f->Reset(UnseenTiles(game.board(), game.rack(seat)), game.rack(1 - seat).Size());
+      if (auto& t = side_of(seat).tracker) t->NewGame(game, seat);
     while (!game.over()) {
       const int me = game.to_move(), opp = 1 - me;
       Side& mover = side_of(me);
-      Side& observer = side_of(opp);
-      if (mover.filter)
+      if (mover.tracker)
         WriteRecord(records, std::string(me == seat_a ? "a:" : "b:") + mover.model_name,
-                    mover.filter->posterior(), game.rack(opp), mover.filter->unseen());
+                    mover.tracker->filter().posterior(), game.rack(opp),
+                    mover.tracker->filter().unseen());
 
       Move m;
       if (mover.rare > 0 && std::bernoulli_distribution(mover.rare)(rare_rng)) {
@@ -330,30 +320,15 @@ int SelfPlay(const Options& o, const Setup& setup, Journal& journal) {
         m = mover.bot->Choose(game);
       }
 
-      Observation obs;
-      obs.board = game.board();
-      obs.move = m;
-      obs.bag_size = game.bag_size();
-      obs.own = game.rack(opp);
-      obs.unseen = UnseenTiles(game.board(), game.rack(opp));
-      obs.score_diff = game.score(me) - game.score(opp);
-      obs.mover_is_bot = true;  // sim bots on both sides
-      obs.turn = turn++;
-      obs.prev_exchange = exchanged[me];
-      exchanged[me] = m.kind == Move::Kind::kExchange;
-      if (m.kind == Move::Kind::kExchange) {
-        obs.exchanged = static_cast<int>(m.tiles.size());
-        obs.move.tiles.clear();
-      }
+      for (Side& side : sides)
+        if (side.tracker) side.tracker->BeforeMove(game, m);
       game.Apply(m);
-      if (game.over()) break;
-      if (observer.filter) {
-        observer.filter->ObserveOpponent(obs);
-        surprises += observer.filter->surprised();
-      }
-      if (mover.filter)
-        mover.filter->Resync(UnseenTiles(game.board(), game.rack(me)), game.rack(opp).Size());
+      for (Side& side : sides)
+        if (side.tracker) side.tracker->AfterMove(game);
     }
+    long long surprises = -surprises_before;
+    for (const Side& side : sides)
+      if (side.tracker) surprises += side.tracker->surprises();
     journal.Finish(key, {double(game.score(seat_a)), double(game.score(1 - seat_a)),
                          double(rare_moves), double(surprises)});
     if (o.progress) std::cerr << "progress: " << ++finished << "/" << todo << std::endl;
