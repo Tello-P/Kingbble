@@ -1,0 +1,6 @@
+# Which move model should the rack tracker use? The human move model against
+# RangeFinder's static-equity model.
+name: human_vs_rangefinder
+a: sim+inf:human+eg
+b: sim+inf:rf+eg
+seed: 7102

@@ -13,6 +13,7 @@ freq = ["wordfreq>=3"]
 mlflow = ["mlflow-skinny>=2.10"]
 lgbm = ["lightgbm>=4", "numpy>=1.26"]
 app = ["streamlit>=1.30"]
+eval = ["pyyaml>=6"]
 
 [tool.setuptools.packages.find]
 include = ["ml*", "app*"]

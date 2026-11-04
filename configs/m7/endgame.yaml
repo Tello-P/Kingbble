@@ -1,0 +1,6 @@
+# How much does the endgame solver add? The full bot against the same bot
+# playing its simulated move with the bag empty.
+name: endgame
+a: sim+inf:human+eg
+b: sim+inf:human
+seed: 7104
