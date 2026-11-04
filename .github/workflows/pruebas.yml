@@ -35,6 +35,10 @@ on:
         description: "Set up Macondo in ~/src/macondo and Go"
         default: false
         type: boolean
+      quackle:
+        description: "Set up Quackle in ~/src/quackle and build its helper"
+        default: false
+        type: boolean
       csw24:
         description: "Download the CSW24 leaves and KWG and rebuild lexica/CSW24.txt on the runner"
         default: false
@@ -46,6 +50,7 @@ permissions:
 env:
   MACONDO_REF: 9c8d5239599baec594c223f9db776ed586af5876
   GO_VERSION: "1.27.2"
+  QUACKLE_REF: 35e11bb21a3bf362c533541d0b5fe8ad92a0c08f
   # The file names below, with their contents pinned by hash.
   WASM_URL: https://raw.githubusercontent.com/woogles-io/liwords/master/liwords-ui/public/wasm/2024
 
@@ -156,6 +161,16 @@ jobs:
         run: |
           git clone --filter=blob:none https://github.com/domino14/macondo "$HOME/src/macondo"
           git -C "$HOME/src/macondo" checkout --quiet "$MACONDO_REF"
+
+      - name: Set up Quackle
+        if: inputs.quackle
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q qt6-base-dev libgl1-mesa-dev
+          git clone --filter=blob:none https://github.com/quackle/quackle "$HOME/src/quackle"
+          git -C "$HOME/src/quackle" checkout --quiet "$QUACKLE_REF"
+          cmake -S scripts/quackle_match -B build/quackle_helper -DQUACKLE_DIR="$HOME/src/quackle"
+          cmake --build build/quackle_helper -j"$(nproc)"
 
       - name: Run the command
         env:
