@@ -1,0 +1,29 @@
+# Shared settings of the M7 ablations (scripts/issues/m7_ablations.sh); every
+# ablation file overrides any of these keys. Simulations use fixed iterations
+# and the endgame a depth limit on one thread, so a run is reproducible: the
+# same config and seed play the same games on any machine.
+lexicon: lexica/CSW24.txt
+leaves: lexica/CSW24.klv2
+human_params: models/human_model.txt
+word_freq: lexica/word_freq.tsv
+alt_lexicon: lexica/ENABLE.txt
+games: 400  # paired: 200 deals, each played twice with the seats swapped
+sim:
+  candidates: 10
+  iterations: 200
+  plies: 2
+endgame:
+  time: 0
+  plies: 6
+  threads: 1
+inference:
+  particles: 500
+  posterior_share: 0.8
+# --quick: a bounded smoke check of the whole pipeline, not a result.
+quick:
+  games: 20
+  sim:
+    candidates: 6
+    iterations: 32
+  endgame:
+    plies: 3

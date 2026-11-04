@@ -1,0 +1,6 @@
+# How much does simulation add? The full bot against the static-equity bot,
+# both solving the endgame.
+name: sim_vs_equity
+a: sim+inf:human+eg
+b: equity+eg
+seed: 7103
