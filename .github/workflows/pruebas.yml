@@ -1,0 +1,212 @@
+# Long runs in the cloud, started by hand:
+#   gh workflow run pruebas.yml -f shards=4 -f comando='... --seed $SEED --results $OUT/r.txt'
+#
+# The command runs from the repo root, once per shard, with these variables:
+#   SHARD, SHARDS  this shard's index (from 0) and the number of shards
+#   SEED           the seed input + SHARD * 100000, so shards never share games
+#   OUT            the folder to write to; it is kept as an artifact
+# The issue scripts fix their own seeds, so they play the same games on every shard:
+# with more than one shard, call the tools directly with --seed $SEED.
+# build/issue_runs (logs and results files of the issue scripts) is copied to OUT.
+#
+# This repo is public, and so are its artifacts: only OUT is uploaded, never lexica/.
+name: Long runs
+
+on:
+  workflow_dispatch:
+    inputs:
+      comando:
+        description: "Command to run; it can use $SHARD $SHARDS $SEED $OUT"
+        required: true
+        type: string
+      shards:
+        description: "Parallel jobs (1-20)"
+        default: "4"
+        type: string
+      seed:
+        description: "Base seed"
+        default: "1"
+        type: string
+      minutos:
+        description: "Minutes per job (30-360); the command stops in time to upload its results"
+        default: "330"
+        type: string
+      macondo:
+        description: "Set up Macondo in ~/src/macondo and Go"
+        default: false
+        type: boolean
+      csw24:
+        description: "Download the CSW24 leaves and KWG and rebuild lexica/CSW24.txt on the runner"
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+env:
+  MACONDO_REF: 9c8d5239599baec594c223f9db776ed586af5876
+  GO_VERSION: "1.27.2"
+  # The file names below, with their contents pinned by hash.
+  WASM_URL: https://raw.githubusercontent.com/woogles-io/liwords/master/liwords-ui/public/wasm/2024
+
+jobs:
+  preparar:
+    name: Check inputs, list shards
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      shards: ${{ steps.list.outputs.shards }}
+    steps:
+      - id: list
+        env:
+          COMANDO: ${{ inputs.comando }}
+          SHARDS: ${{ inputs.shards }}
+          SEED: ${{ inputs.seed }}
+          MINUTOS: ${{ inputs.minutos }}
+        run: |
+          fail() {
+            echo "::error::$1"
+            exit 1
+          }
+          [[ $SHARDS =~ ^[0-9]+$ ]] && ((SHARDS >= 1 && SHARDS <= 20)) || fail "shards: 1-20"
+          [[ $SEED =~ ^[0-9]+$ ]] || fail "seed: a whole number"
+          [[ $MINUTOS =~ ^[0-9]+$ ]] && ((MINUTOS >= 30 && MINUTOS <= 360)) || fail "minutos: 30-360"
+          # Shards running the same seed would play the same games and fake a larger sample.
+          if ((SHARDS > 1)) && [[ $COMANDO != *SEED* && $COMANDO != *SHARD* ]]; then
+            fail "with more than one shard the command must use \$SEED or \$SHARD"
+          fi
+          echo "shards=$(seq 0 $((SHARDS - 1)) | jq -sc .)" >>"$GITHUB_OUTPUT"
+
+  correr:
+    name: Shard ${{ matrix.shard }}
+    needs: preparar
+    runs-on: ubuntu-24.04
+    timeout-minutes: ${{ fromJSON(inputs.minutos) }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.preparar.outputs.shards) }}
+    env:
+      SHARD: ${{ matrix.shard }}
+      SHARDS: ${{ inputs.shards }}
+      SEED: ${{ inputs.seed }}
+      OUT: resultados/shard-${{ matrix.shard }}
+      # Same core count as the results measured at home; prefix the command to change it.
+      KINGBBLE_MAX_THREADS: "2"
+      # systemd-run has no user session here, so lib.sh falls back to ulimit -v.
+      KINGBBLE_MAX_MEM: 12G
+      # Nothing to keep awake, and systemd-inhibit is not allowed on a runner.
+      KINGBBLE_INHIBITED: "1"
+    steps:
+      - run: echo "STARTED=$(date +%s)" >>"$GITHUB_ENV"
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Build the engine
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DSCRABBLE_BUILD_TESTS=OFF
+          cmake --build build -j"$(nproc)"
+
+      - name: Install Python dependencies
+        run: pip install -e ".[dev,eval,ml,data]"
+
+      - name: Fetch ENABLE and the NWL23 leaves
+        run: |
+          python scripts/fetch_lexicon.py --preset enable
+          curl -fsSL --retry 3 -o lexica/NWL23.klv2 "$WASM_URL/NWL23.klv2"
+          sha256sum -c <<SUMS
+          0d6d47327b05142362f52844113497d0439bd0a7fc8d0bc33ee40ecff0216ac1  lexica/ENABLE.txt
+          37dea945c29c3773eb4cd5a4117f3d3256c8b548cd3bf3b5ce8a219cb5e0a3fa  lexica/NWL23.klv2
+          SUMS
+
+      - name: Fetch CSW24
+        if: inputs.csw24
+        run: |
+          curl -fsSL --retry 3 -o lexica/CSW24.klv2 "$WASM_URL/CSW24.klv2"
+          curl -fsSL --retry 3 -o lexica/CSW24.kwg "$WASM_URL/CSW24.kwg"
+          python scripts/kwg_words.py lexica/CSW24.kwg lexica/CSW24.txt
+          sha256sum -c <<SUMS
+          b0ef5f6637cca0cd8e0962d6fb7d35b2d22f9bf648015f48fa8f80e24a60610b  lexica/CSW24.klv2
+          62ca7a84f07429a9976f77a4f74b94911aca5d49cce050dce72dd0e032c0566f  lexica/CSW24.kwg
+          4200a40a888042ac4fa95d42ed3de82952301401df62c395180cdc2e67d63893  lexica/CSW24.txt
+          SUMS
+
+      - uses: actions/setup-go@v5
+        if: inputs.macondo
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+
+      - uses: actions/cache@v4
+        if: inputs.macondo
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: macondo-go${{ env.GO_VERSION }}-${{ env.MACONDO_REF }}
+
+      - name: Set up Macondo
+        if: inputs.macondo
+        run: |
+          git clone --filter=blob:none https://github.com/domino14/macondo "$HOME/src/macondo"
+          git -C "$HOME/src/macondo" checkout --quiet "$MACONDO_REF"
+
+      - name: Run the command
+        env:
+          COMANDO: ${{ inputs.comando }}
+          MINUTOS: ${{ inputs.minutos }}
+        run: |
+          export SEED=$((SEED + SHARD * 100000))
+          mkdir -p "$OUT"
+          printf 'commit %s\nseed %s\nshard %s/%s\ncommand %s\n' \
+            "$(git rev-parse HEAD)" "$SEED" "$SHARD" "$SHARDS" "$COMANDO" >"$OUT/meta.txt"
+          # Stopped here rather than by the job's timeout, which would lose the upload.
+          # The tools keep each finished game, so a stopped run still has its results.
+          left=$((MINUTOS * 60 - 600 - ($(date +%s) - STARTED)))
+          rc=0
+          timeout --kill-after=60 "$left" bash -c "$COMANDO" 2>&1 | tee "$OUT/log.txt" || rc=$?
+          if ((rc == 124)); then
+            echo "::warning::shard $SHARD stopped after ${left}s; it keeps the games it finished"
+            exit 0
+          fi
+          exit "$rc"
+
+      - name: Keep the issue scripts' results
+        if: always()
+        run: |
+          mkdir -p "$OUT"
+          if [[ -d build/issue_runs ]]; then cp -r build/issue_runs "$OUT/"; fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shard-${{ matrix.shard }}
+          path: ${{ env.OUT }}
+          if-no-files-found: warn
+          retention-days: 30
+
+  juntar:
+    name: Gather the results
+    needs: correr
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      # With no name, every artifact goes to its own shard-N folder, so the shards'
+      # files with the same name stay apart (merge-multiple would overwrite them).
+      - uses: actions/download-artifact@v4
+        with:
+          path: resultados-todos
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: resultados-todos
+          path: resultados-todos
+          if-no-files-found: warn
+          retention-days: 30
