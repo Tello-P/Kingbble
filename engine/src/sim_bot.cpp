@@ -20,6 +20,9 @@ std::uint64_t MixSeed(std::uint64_t x) {
   return x ^ (x >> 31);
 }
 
+// A chance of winning so close to 0 or 1 that what is left of it is noise.
+bool Decided(double win) { return win < 0.005 || win > 0.995; }
+
 }  // namespace
 
 SimBot::SimBot(const Gaddag& gaddag, const Leaves& leaves, SimParams params) : params_(params) {
@@ -79,7 +82,7 @@ Move SimBot::Reply(int thread, const Game& game, std::mt19937_64& rng) const {
 }
 
 double SimBot::Playout(int thread, const Game& base, const Move& candidate, std::uint64_t seed,
-                       int plies) const {
+                       int plies, double* win) const {
   EquityBot& bot = *bots_[thread];
   // The same stream for every candidate of an iteration.
   std::mt19937_64 rng(seed);
@@ -100,7 +103,19 @@ double SimBot::Playout(int thread, const Game& base, const Move& candidate, std:
     g.Apply(m);
     if (g.over()) leave = 0;
   }
-  return g.score(me) - g.score(1 - me) - before + leave;
+  const int spread = g.score(me) - g.score(1 - me);
+  if (win) {
+    if (g.over()) {
+      *win = spread > 0 ? 1 : spread == 0 ? 0.5 : 0;
+    } else {
+      // The table is from the side of the player to move.
+      const int unseen = g.bag_size() + g.rack(1 - g.to_move()).Size();
+      const double mine = spread + leave;
+      *win = g.to_move() == me ? params_.win_table->Win(mine, unseen)
+                               : 1 - params_.win_table->Win(-mine, unseen);
+    }
+  }
+  return spread - before + leave;
 }
 
 Move SimBot::Choose(const Game& game) {
@@ -118,6 +133,8 @@ Move SimBot::Choose(const Game& game) {
   const int plies = to_end ? 1000 : params_.plies;
 
   std::vector<std::vector<double>> values(n, std::vector<double>(max_iterations));
+  // With a win table `values` holds the chances of winning and this the spreads.
+  std::vector<std::vector<double>> spreads(n, std::vector<double>(max_iterations));
   std::vector<int> iterations(n, 0);
   std::vector<char> active(n, 1);
   std::size_t num_active = n;
@@ -147,9 +164,15 @@ Move SimBot::Choose(const Game& game) {
       for (int it; (it = next++) < end;) {
         const std::uint64_t seed = MixSeed(base_seed + static_cast<std::uint64_t>(it));
         Game pos = SamplePosition(game, seed);
-        for (std::size_t c = 0; c < n; ++c)
-          if (active[c])
-            values[c][it] = Playout(thread, pos, ranked[c].move, MixSeed(seed ^ 0x9E9), plies);
+        for (std::size_t c = 0; c < n; ++c) {
+          if (!active[c]) continue;
+          const std::uint64_t stream = MixSeed(seed ^ 0x9E9);
+          if (params_.win_table) {
+            spreads[c][it] = Playout(thread, pos, ranked[c].move, stream, plies, &values[c][it]);
+          } else {
+            values[c][it] = spreads[c][it] = Playout(thread, pos, ranked[c].move, stream, plies);
+          }
+        }
       }
     };
     std::vector<std::thread> threads;
@@ -168,6 +191,7 @@ Move SimBot::Choose(const Game& game) {
     for (std::size_t c = 0; c < n; ++c) {
       if (!active[c] || c == best) continue;
       const auto [mean, se] = stats(c);
+      if (params_.win_table && Decided(best_mean) && Decided(mean)) continue;
       if (best_mean - mean > params_.prune_z * std::sqrt(best_se * best_se + se * se)) {
         active[c] = 0;
         --num_active;
@@ -177,14 +201,24 @@ Move SimBot::Choose(const Game& game) {
 
   for (std::size_t c = 0; c < n; ++c) {
     const auto [mean, se] = stats(c);
-    results_.push_back({ranked[c].move, ranked[c].equity, iterations[c] ? mean : ranked[c].equity,
-                        se, iterations[c], !active[c],
-                        std::vector<double>(values[c].begin(), values[c].begin() + iterations[c])});
+    double spread_sum = 0;
+    for (int i = 0; i < iterations[c]; ++i) spread_sum += spreads[c][i];
+    const double fallback = params_.win_table ? 0.5 : ranked[c].equity;
+    results_.push_back({ranked[c].move, ranked[c].equity, iterations[c] ? mean : fallback, se,
+                        iterations[c], !active[c],
+                        std::vector<double>(values[c].begin(), values[c].begin() + iterations[c]),
+                        iterations[c] ? spread_sum / iterations[c] : ranked[c].equity});
   }
   // Survivors first, then by simulated value; stable keeps static order on ties.
-  std::stable_sort(results_.begin(), results_.end(), [](const SimResult& a, const SimResult& b) {
-    return a.pruned != b.pruned ? !a.pruned : a.mean > b.mean;
-  });
+  const bool by_win = params_.win_table != nullptr;
+  std::stable_sort(
+      results_.begin(), results_.end(), [by_win](const SimResult& a, const SimResult& b) {
+        if (a.pruned != b.pruned) return !a.pruned;
+        // A game already decided either way is ranked by its spread.
+        if (by_win && Decided(a.mean) && Decided(b.mean) && (a.mean > 0.5) == (b.mean > 0.5))
+          return a.mean_spread > b.mean_spread;
+        return a.mean > b.mean;
+      });
   return results_.front().move;
 }
 

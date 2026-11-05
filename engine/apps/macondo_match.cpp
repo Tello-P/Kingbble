@@ -7,7 +7,8 @@
 //   kingbble_macondo_match --lexicon lexica/CSW24.txt --leaves lexica/CSW24.klv2
 //       --helper build/macondo_match/kingbble_macondo --macondo-data build/macondo_match/data
 //       --games 40 --seed 1 --time 5 --threads 3 [--bot sim+peg+eg] [--sim-candidates N]
-//       [--sim-plies N] [--end-unseen N] [--late-bag N] [--peg-bag N] [--gcg-dir DIR]
+//       [--sim-plies N] [--end-unseen N] [--late-bag N] [--peg-bag N] [--win-table FILE]
+//       [--gcg-dir DIR]
 //       [--results FILE [--status]] [--progress]
 // Each side gets --time seconds per move: our simulation, pre-endgame and endgame
 // each stop at it, and Macondo's whole decision does. With --results FILE every
@@ -168,7 +169,7 @@ std::string Summary(const ResultsFile& results, int games) {
 
 int main(int argc, char** argv) {
   std::string lexicon, leaves_path, helper_path, macondo_data, bot_kind = "sim+peg+eg";
-  std::string macondo_lexicon = "CSW24", results_path, gcg_dir;
+  std::string macondo_lexicon = "CSW24", results_path, gcg_dir, win_table_path;
   int games = 40;
   bool status_only = false, progress = false;
   std::uint64_t seed = 1;
@@ -210,6 +211,8 @@ int main(int argc, char** argv) {
       sim.candidates = std::stoi(value());
     } else if (a == "--sim-plies") {
       sim.plies = std::stoi(value());
+    } else if (a == "--win-table") {
+      win_table_path = value();
     } else if (a == "--end-unseen") {
       sim.end_unseen = std::stoi(value());
     } else if (a == "--late-bag") {
@@ -229,6 +232,7 @@ int main(int argc, char** argv) {
                 << " --lexicon FILE --leaves KLV --helper PATH --macondo-data DIR [--games N]"
                    " [--seed S] [--time S] [--threads N] [--bot KIND] [--sim-candidates N]"
                    " [--sim-plies N] [--end-unseen N] [--late-bag N] [--peg-bag N]"
+                   " [--win-table FILE]"
                    " [--macondo-lexicon NAME] [--gcg-dir DIR] [--results FILE [--status]]"
                    " [--progress]\n";
       return 2;
@@ -246,6 +250,11 @@ int main(int argc, char** argv) {
 
   Gaddag gaddag = Gaddag::FromFile(lexicon);
   Leaves leaves = Leaves::FromFile(leaves_path);
+  WinTable win_table;
+  if (!win_table_path.empty()) {
+    win_table = WinTable::FromFile(win_table_path);
+    sim.win_table = &win_table;
+  }
   sim.seed = seed;
   sim.time_limit_s = move_time;
   peg.params.candidates = 10;
