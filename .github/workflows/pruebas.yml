@@ -35,6 +35,10 @@ on:
         description: "Set up Macondo in ~/src/macondo and Go"
         default: false
         type: boolean
+      macondo_ref:
+        description: "Macondo commit or tag"
+        default: v0.13.9
+        type: string
       quackle:
         description: "Set up Quackle in ~/src/quackle and build its helper"
         default: false
@@ -48,7 +52,6 @@ permissions:
   contents: read
 
 env:
-  MACONDO_REF: 9c8d5239599baec594c223f9db776ed586af5876
   GO_VERSION: "1.27.2"
   QUACKLE_REF: 35e11bb21a3bf362c533541d0b5fe8ad92a0c08f
   # The file names below, with their contents pinned by hash.
@@ -154,13 +157,26 @@ jobs:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-          key: macondo-go${{ env.GO_VERSION }}-${{ env.MACONDO_REF }}
+          key: macondo-go${{ env.GO_VERSION }}-${{ inputs.macondo_ref }}
 
       - name: Set up Macondo
         if: inputs.macondo
+        env:
+          MACONDO_REF: ${{ inputs.macondo_ref }}
         run: |
           git clone --filter=blob:none https://github.com/domino14/macondo "$HOME/src/macondo"
           git -C "$HOME/src/macondo" checkout --quiet "$MACONDO_REF"
+          # The match helper and its data, as issue_58_macondo_match.sh sets them up.
+          work=$PWD/build/macondo_match
+          mkdir -p "$work/data/lexica/gaddag" "$HOME/src/macondo/cmd/kingbble_macondo"
+          cp -r "$HOME/src/macondo/data/letterdistributions" "$HOME/src/macondo/data/strategy" \
+            "$work/data/"
+          cp scripts/macondo_match/main.go "$HOME/src/macondo/cmd/kingbble_macondo/main.go"
+          (cd "$HOME/src/macondo" && go build -o "$work/kingbble_macondo" ./cmd/kingbble_macondo)
+          if [[ -f lexica/CSW24.txt ]]; then
+            build/engine/kingbble_buildkwg lexica/CSW24.txt "$work/data/lexica/gaddag/CSW24.kwg"
+            cp lexica/CSW24.klv2 "$work/data/lexica/gaddag/CSW24.klv2"
+          fi
 
       - name: Set up Quackle
         if: inputs.quackle
