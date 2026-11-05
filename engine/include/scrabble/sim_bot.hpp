@@ -9,6 +9,7 @@
 #include "scrabble/bot.hpp"
 #include "scrabble/equity_bot.hpp"
 #include "scrabble/inference.hpp"
+#include "scrabble/win_table.hpp"
 
 namespace scrabble {
 
@@ -46,6 +47,9 @@ struct SimParams {
   // Late leave values (LeaveValue) with 1..late_bag tiles in the bag, for the
   // candidates, the moves inside the playouts and the leave at their end. 0: off.
   int late_bag = 0;
+  // With a table, moves are chosen by the chance of winning at the end of the
+  // playouts instead of by the mean spread, as Macondo does. nullptr: off.
+  const WinTable* win_table = nullptr;
 };
 
 // Picks the move of the player to move inside a playout (e.g. from a model of
@@ -59,11 +63,12 @@ class ReplyPolicy {
 struct SimResult {
   Move move;
   double static_equity = 0;
-  double mean = 0;       // mean simulated value
+  double mean = 0;       // mean simulated value (with a win table, the chance of winning)
   double std_error = 0;  // standard error of the mean
   int iterations = 0;
   bool pruned = false;
   std::vector<double> values;  // simulated value of each iteration
+  double mean_spread = 0;      // mean simulated spread, also with a win table
 };
 
 // Monte Carlo simulation (as Quackle and Macondo do): for each of the top
@@ -93,8 +98,9 @@ class SimBot : public Bot {
   void set_reply_policy(const std::function<std::unique_ptr<ReplyPolicy>()>& make);
 
  private:
-  double Playout(int thread, const Game& base, const Move& candidate, std::uint64_t seed,
-                 int plies) const;
+  // The spread over the playout, and in `win` (if not null) the chance of winning.
+  double Playout(int thread, const Game& base, const Move& candidate, std::uint64_t seed, int plies,
+                 double* win = nullptr) const;
   Move Reply(int thread, const Game& game, std::mt19937_64& rng) const;
   Game SamplePosition(const Game& game, std::uint64_t seed) const;
 
