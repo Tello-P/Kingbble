@@ -46,6 +46,25 @@ std::string MoveText(const Quackle::Move& m) {
   }
 }
 
+// The 15 x 15 board, one quarter (T triple word, D double word, t triple letter,
+// d double letter), as in engine/src/board.cpp. Quackle's BoardParameters has no
+// premium squares, and its EnglishBoard is a 17 x 13 board, not this one.
+Quackle::BoardParameters* StandardBoard() {
+  static const char* const kQuarter[8] = {"T..d...T", ".D...t..", "..D...d.", "d..D...d",
+                                          "....D...", ".t...t..", "..d...d.", "T..d...D"};
+  auto* board = new Quackle::BoardParameters();
+  for (int row = 0; row < 15; ++row) {
+    for (int col = 0; col < 15; ++col) {
+      const char square = kQuarter[row <= 7 ? row : 14 - row][col <= 7 ? col : 14 - col];
+      if (square == 'T') board->setWordMultiplier(row, col, Quackle::BoardParameters::tws);
+      if (square == 'D') board->setWordMultiplier(row, col, Quackle::BoardParameters::dws);
+      if (square == 't') board->setLetterMultiplier(row, col, Quackle::BoardParameters::tls);
+      if (square == 'd') board->setLetterMultiplier(row, col, Quackle::BoardParameters::dls);
+    }
+  }
+  return board;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -80,7 +99,7 @@ int main(int argc, char** argv) {
     return 1;
   }
   data.setAlphabetParameters(alphabet);
-  data.setBoardParameters(new Quackle::BoardParameters());
+  data.setBoardParameters(StandardBoard());
   data.lexiconParameters()->loadDawg(Quackle::LexiconParameters::findDictionaryFile(lexicon + ".dawg"));
   if (!data.lexiconParameters()->hasSomething()) {
     std::cerr << "cannot load lexicon " << lexicon << "\n";
