@@ -80,7 +80,7 @@ int main(int argc, char** argv) {
     return 1;
   }
   data.setAlphabetParameters(alphabet);
-  data.setBoardParameters(new Quackle::BoardParameters());
+  data.setBoardParameters(new Quackle::EnglishBoard());
   data.lexiconParameters()->loadDawg(Quackle::LexiconParameters::findDictionaryFile(lexicon + ".dawg"));
   if (!data.lexiconParameters()->hasSomething()) {
     std::cerr << "cannot load lexicon " << lexicon << "\n";
