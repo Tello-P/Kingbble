@@ -6,13 +6,14 @@
 //   kingbble_quackle_match --lexicon lexica/CSW24.txt --leaves lexica/CSW24.klv2
 //       --helper build/quackle_helper/quackle_helper --bot equity+peg+eg
 //       --games 100 --seed 1 [--quackle-player "Championship Player"]
-//       [--quackle-lexicon csw24] [--quackle-threads N] [--gcg-dir DIR]
+//       [--quackle-lexicon csw24] [--quackle-threads N] [--gcg-dir DIR] [--paired]
 // With --results FILE every finished game is appended to FILE and a rerun skips
 // the games already there (stop it any time and run the same command again);
 // --status prints the summary of FILE and exits. Bot options as kingbble_selfplay: --threads,
 // --endgame-time, --peg-bag,
 // --peg-candidates, --peg-time, --apeg-*, --sim-* (--sim-time S: seconds per
-// simulated move, with --sim-iterations as a cap).
+// simulated move, with --sim-iterations as a cap), --end-unseen, --late-bag.
+// With --paired, games 2k-1 and 2k share a deal with the seats swapped.
 
 #include <sys/wait.h>
 #include <unistd.h>
@@ -148,6 +149,7 @@ int main(int argc, char** argv) {
   bool status_only = false;
   std::uint64_t seed = 1;
   SimParams sim;
+  bool paired = false;
   double endgame_time = 5;
   PegOptions peg;
   peg.params.candidates = 10;
@@ -194,6 +196,12 @@ int main(int argc, char** argv) {
       sim.max_iterations = std::stoi(value());
     } else if (a == "--sim-time") {
       sim.time_limit_s = std::stod(value());
+    } else if (a == "--end-unseen") {
+      sim.end_unseen = std::stoi(value());
+    } else if (a == "--late-bag") {
+      sim.late_bag = std::stoi(value());
+    } else if (a == "--paired") {
+      paired = true;
     } else if (a == "--endgame-time") {
       endgame_time = std::stod(value());
     } else if (a == "--peg-bag") {
@@ -214,7 +222,7 @@ int main(int argc, char** argv) {
       std::cerr << "usage: " << argv[0]
                 << " --lexicon FILE --leaves KLV --helper PATH [--bot KIND] [--games N]"
                    " [--seed S] [--quackle-player NAME] [--quackle-lexicon NAME]"
-                   " [--quackle-threads N] [--gcg-dir DIR] [--results FILE [--status]]"
+                   " [--quackle-threads N] [--gcg-dir DIR] [--paired] [--results FILE [--status]]"
                    " [bot options of kingbble_selfplay]\n";
       return 2;
     }
@@ -251,7 +259,7 @@ int main(int argc, char** argv) {
   progress();
   for (int g = 0; g < games; ++g) {
     if (results.Done(g + 1)) continue;
-    Game game(MixSeed(MixSeed(seed) + static_cast<std::uint64_t>(g)));
+    Game game(MixSeed(MixSeed(seed) + static_cast<std::uint64_t>(paired ? g / 2 : g)));
     const int seat = g % 2;  // Kingbble's seat
     GameRecord record(seat == 0 ? std::array<std::string, 2>{"kingbble", "quackle"}
                                 : std::array<std::string, 2>{"quackle", "kingbble"},

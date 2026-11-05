@@ -7,7 +7,8 @@
 //   kingbble_macondo_match --lexicon lexica/CSW24.txt --leaves lexica/CSW24.klv2
 //       --helper build/macondo_match/kingbble_macondo --macondo-data build/macondo_match/data
 //       --games 40 --seed 1 --time 5 --threads 3 [--bot sim+peg+eg] [--sim-candidates N]
-//       [--sim-plies N] [--results FILE [--status]] [--progress]
+//       [--sim-plies N] [--end-unseen N] [--late-bag N] [--peg-bag N] [--gcg-dir DIR]
+//       [--results FILE [--status]] [--progress]
 // Each side gets --time seconds per move: our simulation, pre-endgame and endgame
 // each stop at it, and Macondo's whole decision does. With --results FILE every
 // finished game is appended to FILE ("game N: S1 - S2, a in seat K, a M moves T s,
@@ -21,6 +22,8 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
@@ -28,6 +31,7 @@
 #include <vector>
 
 #include "bot_factory.hpp"
+#include "game_record.hpp"
 #include "results_file.hpp"
 #include "scrabble/cgp.hpp"
 #include "scrabble/gcg.hpp"
@@ -164,7 +168,7 @@ std::string Summary(const ResultsFile& results, int games) {
 
 int main(int argc, char** argv) {
   std::string lexicon, leaves_path, helper_path, macondo_data, bot_kind = "sim+peg+eg";
-  std::string macondo_lexicon = "CSW24", results_path;
+  std::string macondo_lexicon = "CSW24", results_path, gcg_dir;
   int games = 40;
   bool status_only = false, progress = false;
   std::uint64_t seed = 1;
@@ -172,6 +176,7 @@ int main(int argc, char** argv) {
   SimParams sim;
   sim.candidates = 10;
   sim.max_iterations = 100000;  // the time is the limit
+  PegOptions peg;
   for (int i = 1; i < argc; ++i) {
     std::string a = argv[i];
     auto value = [&]() -> std::string {
@@ -205,6 +210,14 @@ int main(int argc, char** argv) {
       sim.candidates = std::stoi(value());
     } else if (a == "--sim-plies") {
       sim.plies = std::stoi(value());
+    } else if (a == "--end-unseen") {
+      sim.end_unseen = std::stoi(value());
+    } else if (a == "--late-bag") {
+      sim.late_bag = std::stoi(value());
+    } else if (a == "--peg-bag") {
+      peg.max_bag = std::stoi(value());
+    } else if (a == "--gcg-dir") {
+      gcg_dir = value();
     } else if (a == "--results") {
       results_path = value();
     } else if (a == "--status") {
@@ -215,7 +228,8 @@ int main(int argc, char** argv) {
       std::cerr << "usage: " << argv[0]
                 << " --lexicon FILE --leaves KLV --helper PATH --macondo-data DIR [--games N]"
                    " [--seed S] [--time S] [--threads N] [--bot KIND] [--sim-candidates N]"
-                   " [--sim-plies N] [--macondo-lexicon NAME] [--results FILE [--status]]"
+                   " [--sim-plies N] [--end-unseen N] [--late-bag N] [--peg-bag N]"
+                   " [--macondo-lexicon NAME] [--gcg-dir DIR] [--results FILE [--status]]"
                    " [--progress]\n";
       return 2;
     }
@@ -234,7 +248,6 @@ int main(int argc, char** argv) {
   Leaves leaves = Leaves::FromFile(leaves_path);
   sim.seed = seed;
   sim.time_limit_s = move_time;
-  PegOptions peg;
   peg.params.candidates = 10;
   peg.params.time_limit_s = move_time;
   peg.approx.time_limit_s = move_time;
@@ -244,6 +257,7 @@ int main(int argc, char** argv) {
   Helper macondo({helper_path, "-data", macondo_data, "-time", std::to_string(move_time),
                   "-threads", std::to_string(sim.threads)});
 
+  if (!gcg_dir.empty()) std::filesystem::create_directories(gcg_dir);
   ResultsFile results(results_path);
   auto report = [&] {
     int done = 0;
@@ -257,6 +271,12 @@ int main(int argc, char** argv) {
     const int seat_a = g % 2;  // Kingbble's seat
     int moves[2] = {0, 0};     // by side: kingbble, macondo
     double seconds[2] = {0, 0};
+    GameRecord record(seat_a == 0 ? std::array<std::string, 2>{"kingbble", "macondo"}
+                                  : std::array<std::string, 2>{"macondo", "kingbble"},
+                      seat_a == 0 ? std::array<std::string, 2>{"Kingbble", "Macondo"}
+                                  : std::array<std::string, 2>{"Macondo", "Kingbble"},
+                      macondo_lexicon,
+                      "seed " + std::to_string(seed) + " game " + std::to_string(g + 1));
     while (!game.over()) {
       const int side = game.to_move() == seat_a ? 0 : 1;
       const auto t0 = std::chrono::steady_clock::now();
@@ -264,8 +284,12 @@ int main(int argc, char** argv) {
                                : ParseAnswer(macondo.Ask(Position(game, macondo_lexicon)), game);
       seconds[side] += std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
       ++moves[side];
+      record.Add(game, m);
       game.Apply(m);  // throws on an illegal move
     }
+    record.Finish(game);
+    if (!gcg_dir.empty())
+      std::ofstream(gcg_dir + "/game" + std::to_string(g + 1) + ".gcg") << WriteGcg(record.gcg());
     char timing[96];
     std::snprintf(timing, sizeof timing, ", a %d moves %.2f s, b %d moves %.2f s", moves[0],
                   seconds[0], moves[1], seconds[1]);
