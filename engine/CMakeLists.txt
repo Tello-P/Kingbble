@@ -28,6 +28,7 @@ add_library(scrabble_engine
   src/features.cpp
   src/inference.cpp
   src/human_reply.cpp
+  src/win_table.cpp
 )
 
 add_executable(kingbble_selfplay apps/selfplay.cpp)
@@ -48,6 +49,8 @@ add_executable(kingbble_position_bank apps/position_bank.cpp)
 target_link_libraries(kingbble_position_bank PRIVATE scrabble_engine)
 add_executable(kingbble_macondo_match apps/macondo_match.cpp)
 target_link_libraries(kingbble_macondo_match PRIVATE scrabble_engine)
+add_executable(kingbble_winstats apps/winstats.cpp)
+target_link_libraries(kingbble_winstats PRIVATE scrabble_engine)
 find_package(Threads REQUIRED)
 target_link_libraries(scrabble_engine PUBLIC Threads::Threads)
 target_include_directories(scrabble_engine PUBLIC include)
@@ -81,6 +84,7 @@ if(SCRABBLE_BUILD_TESTS)
     tests/sim_bot_test.cpp
     tests/sim_depth_test.cpp
     tests/win_prob_test.cpp
+    tests/win_table_test.cpp
     tests/risk_bot_test.cpp
     tests/endgame_test.cpp
     tests/preendgame_test.cpp

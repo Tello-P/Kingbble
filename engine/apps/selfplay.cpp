@@ -28,6 +28,7 @@
 // --risk-policy FILE sets lambda_scale per bag and lead bucket (a policy learned
 // by ml.rl.risk_policy, "bag_lo bag_hi lead_lo lead_hi scale" lines).
 // --gcg-dir DIR saves game N as DIR/gameN.gcg with both racks (training data).
+// --a-win-table FILE makes bot a choose by the chance of winning (scrabble/win_table.hpp).
 // --a-leaves FILE gives bot a its own leave table (KLV2 or CSV), e.g. a fitted
 // one against the published table with --paired.
 // "human" plays moves drawn from the human move model (--human-params, with
@@ -99,6 +100,7 @@ void PrintSummary(const ResultsFile& results, int games, const std::string& kind
 
 int main(int argc, char** argv) {
   std::string lexicon, leaves_path, a_leaves_path, kind_a = "greedy", kind_b = "greedy";
+  std::string a_win_table_path;
   int games = 10;
   std::uint64_t seed = 1;
   bool verbose = false;
@@ -135,6 +137,8 @@ int main(int argc, char** argv) {
       leaves_path = value();
     } else if (a == "--a-leaves") {
       a_leaves_path = value();
+    } else if (a == "--a-win-table") {
+      a_win_table_path = value();
     } else if (a == "--a") {
       kind_a = value();
     } else if (a == "--b") {
@@ -277,6 +281,11 @@ int main(int argc, char** argv) {
   sim.seed = seed;
   SimParams a_sim = sim;
   if (a_plies > 0) a_sim.plies = a_plies;
+  WinTable a_win_table;
+  if (!a_win_table_path.empty()) {
+    a_win_table = WinTable::FromFile(a_win_table_path);
+    a_sim.win_table = &a_win_table;
+  }
   HumanModelParams human_params;
   std::optional<FeatureLexicon> words;  // the human model's word features
   HumanBotOptions human;
