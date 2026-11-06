@@ -46,7 +46,7 @@ TEST_F(DuelTest, ResultsDoNotDependOnThreads) {
   const Game game = MidGame();
   EquityBot bot(gaddag_, leaves_);
   const Move best = bot.Choose(game);
-  // No time limit on the endgames: a limit would depend on the machine.
+  // No endgame solves: their time limit would depend on the machine.
   const DuelResult one = Duel(game, best, Move{}, gaddag_, leaves_, 16, 1, 9, 0);
   const DuelResult two = Duel(game, best, Move{}, gaddag_, leaves_, 16, 2, 9, 0);
   EXPECT_DOUBLE_EQ(one.spread, two.spread);
