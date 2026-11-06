@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <atomic>
+#include <chrono>
 #include <string>
 
 #include "scrabble/equity.hpp"
@@ -167,6 +168,24 @@ TEST_F(SimBotTest, HalvingLeavesOneCandidateWhenTheTimeRunsOut) {
   EXPECT_GE(alive, 1);
   EXPECT_FALSE(bot.last_results().front().pruned);
   EXPECT_EQ(bot.last_results().front().move, move);
+}
+
+TEST_F(SimBotTest, TheTimeLimitHoldsInsideALongBatch) {
+  SimParams p = Params(1);
+  p.candidates = 200;
+  p.max_iterations = 1000000;
+  p.min_iterations = 0;
+  p.batch = 100000;  // far more than fits in the limit
+  p.prune_z = 1e9;
+  p.time_limit_s = 0.05;
+  SimBot bot(gaddag_, leaves_, p);
+  const Game game = MidGame();
+  const auto start = std::chrono::steady_clock::now();
+  bot.Choose(game);
+  const double spent =
+      std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+  EXPECT_LT(spent, 1.0);
+  for (const SimResult& r : bot.last_results()) EXPECT_LT(r.iterations, p.batch);
 }
 
 }  // namespace
