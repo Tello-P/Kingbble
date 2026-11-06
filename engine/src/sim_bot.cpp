@@ -91,11 +91,11 @@ double SimBot::Playout(int thread, const Game& base, const Move& candidate, std:
   for (int ply = 0; ply < plies && !g.over(); ++ply) {
     const int mover = g.to_move();
     Move m = mover != me || params_.reply_own ? Reply(thread, g, rng) : bot.Choose(g);
-    leave = 0;
-    if (ply == plies - 1 && g.bag_size() > 0) {
-      leave =
+    if (!params_.both_leaves) leave = 0;
+    if ((ply == plies - 1 || (params_.both_leaves && ply == plies - 2)) && g.bag_size() > 0) {
+      const double value =
           LeaveValue(LeaveAfter(g.rack(mover), m), g.bag_size(), bot.leaves(), params_.late_bag);
-      if (mover != me) leave = -leave;
+      leave += mover == me ? value : -value;
     }
     g.Apply(m);
     if (g.over()) leave = 0;
