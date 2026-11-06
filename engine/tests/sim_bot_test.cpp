@@ -155,6 +155,20 @@ class CountingSampler : public RackSampler {
   Rack rack_;
 };
 
+TEST_F(SimBotTest, HalvingLeavesOneCandidateWhenTheTimeRunsOut) {
+  SimParams p = Params(2);
+  p.max_iterations = 1000000;
+  p.time_limit_s = 0.2;
+  p.halving = true;
+  SimBot bot(gaddag_, leaves_, p);
+  const Move move = bot.Choose(MidGame());
+  int alive = 0;
+  for (const SimResult& r : bot.last_results()) alive += !r.pruned;
+  EXPECT_GE(alive, 1);
+  EXPECT_FALSE(bot.last_results().front().pruned);
+  EXPECT_EQ(bot.last_results().front().move, move);
+}
+
 }  // namespace
 
 TEST_F(SimBotTest, DealsPosteriorRacksAtTheConfiguredShare) {

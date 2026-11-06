@@ -7,13 +7,15 @@
 //   kingbble_macondo_match --lexicon lexica/CSW24.txt --leaves lexica/CSW24.klv2
 //       --helper build/macondo_match/kingbble_macondo --macondo-data build/macondo_match/data
 //       --games 40 --seed 1 --time 5 --threads 3 [--bot sim+peg+eg] [--sim-candidates N]
-//       [--sim-plies N] [--end-unseen N] [--late-bag N] [--peg-bag N] [--gcg-dir DIR]
-//       [--results FILE [--status]] [--progress]
+//       [--sim-plies N] [--sim-halving] [--end-unseen N] [--late-bag N] [--peg-bag N]
+//       [--gcg-dir DIR] [--stats FILE] [--results FILE [--status]] [--progress]
 // Each side gets --time seconds per move: our simulation, pre-endgame and endgame
 // each stop at it, and Macondo's whole decision does. With --results FILE every
 // finished game is appended to FILE ("game N: S1 - S2, a in seat K, a M moves T s,
 // b M moves T s", as kingbble_selfplay) and a rerun skips the games already there;
-// --status prints the summary of FILE and exits.
+// --status prints the summary of FILE and exits. --end-unseen and --late-bag default
+// to 14 and 7 (0: off). --stats FILE appends "game side bag seconds iterations" for
+// every move, with side 0 for Kingbble and 1 for Macondo.
 
 #include <sys/wait.h>
 #include <unistd.h>
@@ -77,8 +79,9 @@ class Helper {
     waitpid(pid_, nullptr, 0);
   }
 
-  // Macondo's move for a CGP position, as written after "MOVE ".
-  std::string Ask(const std::string& cgp) {
+  // Macondo's move for a CGP position, as written after "MOVE ". Its simulation
+  // iterations, from the "STATS" line before it, go to `iterations`.
+  std::string Ask(const std::string& cgp, long* iterations) {
     fputs((cgp + "\n").c_str(), in_);
     fflush(in_);
     char buf[4096];
@@ -86,6 +89,7 @@ class Helper {
       if (!fgets(buf, sizeof buf, out_)) throw std::runtime_error("the Macondo helper stopped");
       std::string line = buf;
       while (!line.empty() && (line.back() == '\n' || line.back() == '\r')) line.pop_back();
+      if (line.rfind("STATS ", 0) == 0) *iterations = std::stol(line.substr(6));
       if (line.rfind("MOVE ", 0) == 0) return line.substr(5);
     }
   }
@@ -168,7 +172,7 @@ std::string Summary(const ResultsFile& results, int games) {
 
 int main(int argc, char** argv) {
   std::string lexicon, leaves_path, helper_path, macondo_data, bot_kind = "sim+peg+eg";
-  std::string macondo_lexicon = "CSW24", results_path, gcg_dir;
+  std::string macondo_lexicon = "CSW24", results_path, gcg_dir, stats_path;
   int games = 40;
   bool status_only = false, progress = false;
   std::uint64_t seed = 1;
@@ -176,6 +180,8 @@ int main(int argc, char** argv) {
   SimParams sim;
   sim.candidates = 10;
   sim.max_iterations = 100000;  // the time is the limit
+  sim.end_unseen = 14;
+  sim.late_bag = 7;
   PegOptions peg;
   for (int i = 1; i < argc; ++i) {
     std::string a = argv[i];
@@ -210,6 +216,10 @@ int main(int argc, char** argv) {
       sim.candidates = std::stoi(value());
     } else if (a == "--sim-plies") {
       sim.plies = std::stoi(value());
+    } else if (a == "--sim-halving") {
+      sim.halving = true;
+    } else if (a == "--stats") {
+      stats_path = value();
     } else if (a == "--end-unseen") {
       sim.end_unseen = std::stoi(value());
     } else if (a == "--late-bag") {
@@ -228,7 +238,8 @@ int main(int argc, char** argv) {
       std::cerr << "usage: " << argv[0]
                 << " --lexicon FILE --leaves KLV --helper PATH --macondo-data DIR [--games N]"
                    " [--seed S] [--time S] [--threads N] [--bot KIND] [--sim-candidates N]"
-                   " [--sim-plies N] [--end-unseen N] [--late-bag N] [--peg-bag N]"
+                   " [--sim-plies N] [--sim-halving] [--end-unseen N] [--late-bag N]"
+                   " [--peg-bag N] [--stats FILE]"
                    " [--macondo-lexicon NAME] [--gcg-dir DIR] [--results FILE [--status]]"
                    " [--progress]\n";
       return 2;
@@ -251,7 +262,10 @@ int main(int argc, char** argv) {
   peg.params.candidates = 10;
   peg.params.time_limit_s = move_time;
   peg.approx.time_limit_s = move_time;
-  std::unique_ptr<Bot> bot = MakeBot(bot_kind, gaddag, &leaves, sim, move_time, peg);
+  BotSetup setup = MakeBotSetup(bot_kind, gaddag, &leaves, sim, move_time, peg);
+  Bot* bot = setup.bot.get();
+  std::ofstream stats;
+  if (!stats_path.empty()) stats.open(stats_path, std::ios::app);
   // Macondo's endgame solver uses every core it sees: cap Go at our threads.
   setenv("GOMAXPROCS", std::to_string(sim.threads).c_str(), 1);
   Helper macondo({helper_path, "-data", macondo_data, "-time", std::to_string(move_time),
@@ -280,9 +294,21 @@ int main(int argc, char** argv) {
     while (!game.over()) {
       const int side = game.to_move() == seat_a ? 0 : 1;
       const auto t0 = std::chrono::steady_clock::now();
-      const Move m = side == 0 ? bot->Choose(game)
-                               : ParseAnswer(macondo.Ask(Position(game, macondo_lexicon)), game);
-      seconds[side] += std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+      long iterations = 0;
+      const Move m =
+          side == 0 ? bot->Choose(game)
+                    : ParseAnswer(macondo.Ask(Position(game, macondo_lexicon), &iterations), game);
+      const double spent =
+          std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+      seconds[side] += spent;
+      if (stats.is_open()) {
+        // With the bag at the solvers' size the simulation did not run.
+        if (side == 0 && setup.sim && game.bag_size() > peg.max_bag)
+          for (const SimResult& r : setup.sim->last_results())
+            iterations = std::max<long>(iterations, r.iterations);
+        stats << g + 1 << " " << side << " " << game.bag_size() << " " << spent << " " << iterations
+              << "\n";
+      }
       ++moves[side];
       record.Add(game, m);
       game.Apply(m);  // throws on an illegal move
