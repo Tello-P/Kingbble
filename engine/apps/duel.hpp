@@ -1,8 +1,9 @@
 #pragma once
 
 // Plays two moves out to the end of the game on the same deals, to see which one
-// really wins more: both moves meet the same opponent racks and bags, and every
-// later move is the mover's best by static equity.
+// really wins more: both moves meet the same opponent racks and bags. Later moves
+// are the mover's best by static equity, solved briefly once the bag is empty, since
+// static equity alone would misjudge moves made close to the end.
 
 #include <algorithm>
 #include <array>
@@ -14,6 +15,7 @@
 #include <thread>
 #include <vector>
 
+#include "scrabble/endgame.hpp"
 #include "scrabble/equity.hpp"
 #include "scrabble/equity_bot.hpp"
 #include "scrabble/game.hpp"
@@ -48,10 +50,12 @@ inline Game Deal(const Game& game, std::uint64_t seed) {
 }
 
 // The mover's final spread after `move`, and in `points` 1, 0.5 or 0.
-inline int Finish(Game game, const Move& move, EquityBot& bot, double* points) {
+inline int Finish(Game game, const Move& move, EquityBot& bot, EndgameSolver& solver,
+                  double seconds, double* points) {
   const int me = game.to_move();
   game.Apply(move);
-  while (!game.over()) game.Apply(bot.Choose(game));
+  while (!game.over())
+    game.Apply(game.bag_size() == 0 ? solver.Solve(game, 25, seconds).move : bot.Choose(game));
   const int spread = game.score(me) - game.score(1 - me);
   *points = spread > 0 ? 1 : spread == 0 ? 0.5 : 0;
   return spread;
@@ -63,17 +67,18 @@ inline int Finish(Game game, const Move& move, EquityBot& bot, double* points) {
 // dealt anew from the unseen tiles for every rollout.
 inline DuelResult Duel(const Game& game, const Move& first, const Move& second,
                        const Gaddag& gaddag, const Leaves& leaves, int rollouts, int threads,
-                       std::uint64_t seed) {
+                       std::uint64_t seed, double endgame_seconds = 0.02) {
   std::vector<double> wins(rollouts), spreads(rollouts);
   std::atomic<int> next{0};
   auto work = [&] {
     EquityBot bot(gaddag, leaves);
+    EndgameSolver solver(gaddag);
     for (int i; (i = next++) < rollouts;) {
       std::uint64_t s = seed + static_cast<std::uint64_t>(i) * 0x9E3779B97F4A7C15ULL;
       const Game dealt = duel::Deal(game, s);
       double a = 0, b = 0;
-      const int spread_a = duel::Finish(dealt, first, bot, &a);
-      const int spread_b = duel::Finish(dealt, second, bot, &b);
+      const int spread_a = duel::Finish(dealt, first, bot, solver, endgame_seconds, &a);
+      const int spread_b = duel::Finish(dealt, second, bot, solver, endgame_seconds, &b);
       wins[i] = a - b;
       spreads[i] = spread_a - spread_b;
     }

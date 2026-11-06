@@ -316,8 +316,8 @@ int main(int argc, char** argv) {
       seconds[side] += spent;
       if (duels.is_open() && side == 0 && game.bag_size() > 0) {
         long ignored = 0;
-        const Move theirs =
-            ParseAnswer(macondo.Ask(Position(game, macondo_lexicon), &ignored), game);
+        Move theirs = ParseAnswer(macondo.Ask(Position(game, macondo_lexicon), &ignored), game);
+        if (theirs.kind == Move::Kind::kPlace) theirs.score = ScoreMove(game.board(), theirs);
         if (!(theirs.kind == m.kind && theirs.tiles == m.tiles && theirs.row == m.row &&
               theirs.col == m.col && theirs.dir == m.dir)) {
           const Rack unseen = UnseenTiles(game.board(), game.rack(game.to_move()));
