@@ -3,7 +3,8 @@
 // Plays two moves out to the end of the game on the same deals, to see which one
 // really wins more: both moves meet the same opponent racks and bags. Later moves
 // are the mover's best by static equity, solved briefly once the bag is empty, since
-// static equity alone would misjudge moves made close to the end.
+// static equity alone would misjudge moves made close to the end (seconds per solve;
+// 0: static equity to the end).
 
 #include <algorithm>
 #include <array>
@@ -55,7 +56,8 @@ inline int Finish(Game game, const Move& move, EquityBot& bot, EndgameSolver& so
   const int me = game.to_move();
   game.Apply(move);
   while (!game.over())
-    game.Apply(game.bag_size() == 0 ? solver.Solve(game, 25, seconds).move : bot.Choose(game));
+    game.Apply(game.bag_size() == 0 && seconds > 0 ? solver.Solve(game, 25, seconds).move
+                                                   : bot.Choose(game));
   const int spread = game.score(me) - game.score(1 - me);
   *points = spread > 0 ? 1 : spread == 0 ? 0.5 : 0;
   return spread;
