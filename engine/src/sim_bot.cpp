@@ -117,7 +117,8 @@ Move SimBot::Choose(const Game& game) {
       UnseenTiles(game.board(), game.rack(game.to_move())).Size() <= params_.end_unseen;
   const int plies = to_end ? 1000 : params_.plies;
 
-  std::vector<std::vector<double>> values(n, std::vector<double>(max_iterations));
+  // Grown batch by batch: a time limit usually stops far from max_iterations.
+  std::vector<std::vector<double>> values(n);
   std::vector<int> iterations(n, 0);
   std::vector<char> active(n, 1);
   std::size_t num_active = n;
@@ -138,10 +139,16 @@ Move SimBot::Choose(const Game& game) {
            std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count() >=
                params_.time_limit_s;
   };
+  const bool halving = params_.halving && params_.time_limit_s > 0;
+  const int rounds =
+      std::max(1, static_cast<int>(std::ceil(std::log2(std::max<std::size_t>(n, 2)))));
+  int round = 1;
   int done = 0;
   while (num_active > 1 && done < max_iterations &&
          !(done >= params_.min_iterations && out_of_time())) {
     const int end = std::min(max_iterations, done + params_.batch);
+    for (std::size_t c = 0; c < n; ++c)
+      if (active[c]) values[c].resize(end);
     std::atomic<int> next{done};
     auto work = [&](int thread) {
       for (int it; (it = next++) < end;) {
@@ -161,6 +168,23 @@ Move SimBot::Choose(const Game& game) {
     done = end;
 
     if (done < params_.min_iterations) continue;
+    if (halving) {
+      const double elapsed =
+          std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+      if (elapsed < params_.time_limit_s * round / rounds) continue;
+      ++round;
+      std::vector<std::size_t> order;
+      for (std::size_t c = 0; c < n; ++c)
+        if (active[c]) order.push_back(c);
+      std::stable_sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) {
+        return stats(a).first > stats(b).first;
+      });
+      for (std::size_t i = (order.size() + 1) / 2; i < order.size(); ++i) {
+        active[order[i]] = 0;
+        --num_active;
+      }
+      continue;
+    }
     std::size_t best = n;
     for (std::size_t c = 0; c < n; ++c)
       if (active[c] && (best == n || stats(c).first > stats(best).first)) best = c;
