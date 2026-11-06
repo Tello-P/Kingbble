@@ -7,7 +7,8 @@
 //   kingbble_macondo_match --lexicon lexica/CSW24.txt --leaves lexica/CSW24.klv2
 //       --helper build/macondo_match/kingbble_macondo --macondo-data build/macondo_match/data
 //       --games 40 --seed 1 --time 5 --threads 3 [--bot sim+peg+eg] [--sim-candidates N]
-//       [--sim-plies N] [--sim-halving] [--end-unseen N] [--late-bag N] [--peg-bag N]
+//       [--sim-plies N] [--sim-halving] [--sim-both-leaves] [--end-unseen N] [--late-bag N]
+//       [--peg-bag N]
 //       [--gcg-dir DIR] [--stats FILE] [--results FILE [--status]] [--progress]
 // Each side gets --time seconds per move: our simulation, pre-endgame and endgame
 // each stop at it, and Macondo's whole decision does. With --results FILE every
@@ -218,6 +219,8 @@ int main(int argc, char** argv) {
       sim.plies = std::stoi(value());
     } else if (a == "--sim-halving") {
       sim.halving = true;
+    } else if (a == "--sim-both-leaves") {
+      sim.both_leaves = true;
     } else if (a == "--stats") {
       stats_path = value();
     } else if (a == "--end-unseen") {
@@ -238,7 +241,8 @@ int main(int argc, char** argv) {
       std::cerr << "usage: " << argv[0]
                 << " --lexicon FILE --leaves KLV --helper PATH --macondo-data DIR [--games N]"
                    " [--seed S] [--time S] [--threads N] [--bot KIND] [--sim-candidates N]"
-                   " [--sim-plies N] [--sim-halving] [--end-unseen N] [--late-bag N]"
+                   " [--sim-plies N] [--sim-halving] [--sim-both-leaves] [--end-unseen N]"
+                   " [--late-bag N]"
                    " [--peg-bag N] [--stats FILE]"
                    " [--macondo-lexicon NAME] [--gcg-dir DIR] [--results FILE [--status]]"
                    " [--progress]\n";
