@@ -91,7 +91,9 @@ if(SCRABBLE_BUILD_TESTS)
     tests/journal_test.cpp
     tests/game_record_test.cpp
     tests/determinism_test.cpp
+    tests/duel_test.cpp
   )
+  target_include_directories(engine_tests PRIVATE apps)
   target_compile_definitions(engine_tests PRIVATE
     KINGBBLE_FIXTURES="${PROJECT_SOURCE_DIR}/lexica/fixtures")
   target_link_libraries(engine_tests PRIVATE scrabble_engine GTest::gtest_main)

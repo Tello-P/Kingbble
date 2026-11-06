@@ -16,6 +16,11 @@
 // --status prints the summary of FILE and exits. --end-unseen and --late-bag default
 // to 14 and 7 (0: off). --stats FILE appends "game side bag seconds iterations" for
 // every move, with side 0 for Kingbble and 1 for Macondo.
+// --duel FILE: at each of Kingbble's turns with tiles in the bag Macondo is asked for
+// its move too; when the two differ, both are played out --duel-rollouts times on the
+// same deals (duel.hpp) and a line goes to FILE: game, bag, unseen, spread, moves,
+// scores, tiles played, static equities, then win and spread differences (Kingbble's
+// move minus Macondo's) with their standard errors. Both moves are shown as text.
 
 #include <sys/wait.h>
 #include <unistd.h>
@@ -33,6 +38,7 @@
 #include <vector>
 
 #include "bot_factory.hpp"
+#include "duel.hpp"
 #include "game_record.hpp"
 #include "results_file.hpp"
 #include "scrabble/cgp.hpp"
@@ -172,7 +178,8 @@ std::string Summary(const ResultsFile& results, int games) {
 
 int main(int argc, char** argv) {
   std::string lexicon, leaves_path, helper_path, macondo_data, bot_kind = "sim+peg+eg";
-  std::string macondo_lexicon = "CSW24", results_path, gcg_dir, stats_path;
+  std::string macondo_lexicon = "CSW24", results_path, gcg_dir, stats_path, duel_path;
+  int duel_rollouts = 200;
   int games = 40;
   bool status_only = false, progress = false;
   std::uint64_t seed = 1;
@@ -220,6 +227,10 @@ int main(int argc, char** argv) {
       sim.halving = true;
     } else if (a == "--stats") {
       stats_path = value();
+    } else if (a == "--duel") {
+      duel_path = value();
+    } else if (a == "--duel-rollouts") {
+      duel_rollouts = std::stoi(value());
     } else if (a == "--end-unseen") {
       sim.end_unseen = std::stoi(value());
     } else if (a == "--late-bag") {
@@ -239,7 +250,7 @@ int main(int argc, char** argv) {
                 << " --lexicon FILE --leaves KLV --helper PATH --macondo-data DIR [--games N]"
                    " [--seed S] [--time S] [--threads N] [--bot KIND] [--sim-candidates N]"
                    " [--sim-plies N] [--sim-halving] [--end-unseen N] [--late-bag N]"
-                   " [--peg-bag N] [--stats FILE]"
+                   " [--peg-bag N] [--stats FILE] [--duel FILE [--duel-rollouts N]]"
                    " [--macondo-lexicon NAME] [--gcg-dir DIR] [--results FILE [--status]]"
                    " [--progress]\n";
       return 2;
@@ -264,8 +275,10 @@ int main(int argc, char** argv) {
   peg.approx.time_limit_s = move_time;
   BotSetup setup = MakeBotSetup(bot_kind, gaddag, &leaves, sim, move_time, peg);
   Bot* bot = setup.bot.get();
-  std::ofstream stats;
+  std::ofstream stats, duels;
   if (!stats_path.empty()) stats.open(stats_path, std::ios::app);
+  if (!duel_path.empty()) duels.open(duel_path, std::ios::app);
+  EquityBot ranker(gaddag, leaves);
   // Macondo's endgame solver uses every core it sees: cap Go at our threads.
   setenv("GOMAXPROCS", std::to_string(sim.threads).c_str(), 1);
   Helper macondo({helper_path, "-data", macondo_data, "-time", std::to_string(move_time),
@@ -301,6 +314,32 @@ int main(int argc, char** argv) {
       const double spent =
           std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
       seconds[side] += spent;
+      if (duels.is_open() && side == 0 && game.bag_size() > 0) {
+        long ignored = 0;
+        const Move theirs =
+            ParseAnswer(macondo.Ask(Position(game, macondo_lexicon), &ignored), game);
+        if (!(theirs.kind == m.kind && theirs.tiles == m.tiles && theirs.row == m.row &&
+              theirs.col == m.col && theirs.dir == m.dir)) {
+          const Rack unseen = UnseenTiles(game.board(), game.rack(game.to_move()));
+          const DuelResult r = Duel(game, m, theirs, gaddag, leaves, duel_rollouts, sim.threads,
+                                    MixSeed(seed + g * 1000 + moves[0]));
+          auto equity = [&](const Move& x) {
+            return StaticEquity(x, game.rack(game.to_move()), game.bag_size(), unseen, leaves,
+                                sim.late_bag);
+          };
+          auto label = [](const Move& x) {
+            std::string text = x.ToString();
+            std::replace(text.begin(), text.end(), ' ', '_');
+            return text;
+          };
+          duels << g + 1 << " " << game.bag_size() << " " << unseen.Size() << " "
+                << game.score(seat_a) - game.score(1 - seat_a) << " " << (seat_a + 1) << " "
+                << label(m) << " " << label(theirs) << " " << m.TilesPlayed() << " "
+                << theirs.TilesPlayed() << " " << equity(m) << " " << equity(theirs) << " " << r.win
+                << " " << r.win_se << " " << r.spread << " " << r.spread_se << "\n";
+          duels.flush();
+        }
+      }
       if (stats.is_open()) {
         // With the bag at the solvers' size the simulation did not run.
         if (side == 0 && setup.sim && game.bag_size() > peg.max_bag)
