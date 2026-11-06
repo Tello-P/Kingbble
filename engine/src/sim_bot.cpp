@@ -151,7 +151,12 @@ Move SimBot::Choose(const Game& game) {
       if (active[c]) values[c].resize(end);
     std::atomic<int> next{done};
     auto work = [&](int thread) {
-      for (int it; (it = next++) < end;) {
+      for (;;) {
+        // A batch over many candidates can be long: the limit is checked at every
+        // iteration. Those already taken finish, so the done ones stay contiguous.
+        if (done >= params_.min_iterations && out_of_time()) break;
+        const int it = next++;
+        if (it >= end) break;
         const std::uint64_t seed = MixSeed(base_seed + static_cast<std::uint64_t>(it));
         Game pos = SamplePosition(game, seed);
         for (std::size_t c = 0; c < n; ++c)
@@ -163,9 +168,10 @@ Move SimBot::Choose(const Game& game) {
     for (std::size_t t = 1; t < bots_.size(); ++t) threads.emplace_back(work, static_cast<int>(t));
     work(0);
     for (auto& t : threads) t.join();
+    const int reached = std::min(end, next.load());
     for (std::size_t c = 0; c < n; ++c)
-      if (active[c]) iterations[c] = end;
-    done = end;
+      if (active[c]) iterations[c] = reached;
+    done = reached;
 
     if (done < params_.min_iterations) continue;
     if (halving) {
