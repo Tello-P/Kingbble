@@ -50,6 +50,9 @@ struct SimParams {
   // candidates at equal steps of the limit, keeping the best half, so more
   // candidates can be weighed in a fixed time. Needs time_limit_s.
   bool halving = false;
+  // Value the leaves of both last movers at the end of a playout, ours for us and
+  // the opponent's against, as Macondo does, instead of only the last mover's.
+  bool both_leaves = false;
 };
 
 // Picks the move of the player to move inside a playout (e.g. from a model of

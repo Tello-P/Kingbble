@@ -12,7 +12,8 @@
 // --status prints the summary of FILE and exits. Bot options as kingbble_selfplay: --threads,
 // --endgame-time, --peg-bag,
 // --peg-candidates, --peg-time, --apeg-*, --sim-* (--sim-time S: seconds per
-// simulated move, with --sim-iterations as a cap), --sim-halving, --end-unseen and
+// simulated move, with --sim-iterations as a cap), --sim-halving, --sim-both-leaves,
+// --end-unseen and
 // --late-bag (14 and 7 by default, 0: off).
 // With --paired, games 2k-1 and 2k share a deal with the seats swapped.
 
@@ -201,6 +202,8 @@ int main(int argc, char** argv) {
       sim.time_limit_s = std::stod(value());
     } else if (a == "--sim-halving") {
       sim.halving = true;
+    } else if (a == "--sim-both-leaves") {
+      sim.both_leaves = true;
     } else if (a == "--end-unseen") {
       sim.end_unseen = std::stoi(value());
     } else if (a == "--late-bag") {

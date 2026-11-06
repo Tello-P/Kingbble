@@ -169,6 +169,24 @@ TEST_F(SimBotTest, HalvingLeavesOneCandidateWhenTheTimeRunsOut) {
   EXPECT_EQ(bot.last_results().front().move, move);
 }
 
+TEST_F(SimBotTest, BothLeavesChangesTheValueOfAPlayout) {
+  const Game game = MidGame();
+  SimParams p = Params(1);
+  p.prune_z = 1e9;
+  SimBot one(gaddag_, leaves_, p);
+  p.both_leaves = true;
+  SimBot both(gaddag_, leaves_, p);
+  one.Choose(game);
+  both.Choose(game);
+  // The racks and replies are the same, so only the opponent's leave can differ,
+  // and it counts against us: their leaves are worth something on average.
+  double change = 0;
+  for (const SimResult& a : one.last_results())
+    for (const SimResult& b : both.last_results())
+      if (a.move == b.move) change += b.mean - a.mean;
+  EXPECT_LT(change, 0);
+}
+
 }  // namespace
 
 TEST_F(SimBotTest, DealsPosteriorRacksAtTheConfiguredShare) {
