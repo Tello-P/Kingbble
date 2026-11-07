@@ -91,15 +91,20 @@ def equity_gap(d: Duel) -> str:
     return "static equity within 8"
 
 
+def bag_out(d: Duel) -> str:
+    if d.bag > 7:
+        return "bag over 7"
+    ours, theirs = d.tiles_ours >= d.bag, d.tiles_theirs >= d.bag
+    if ours and theirs:
+        return "both empty the bag"
+    if ours:
+        return "only we empty the bag"
+    return "only Macondo empties the bag" if theirs else "neither empties the bag"
+
+
 def exchange(d: Duel) -> str:
     def kind(move: str) -> str:
-        return (
-            "exchange"
-            if move.startswith("-") and len(move) > 1
-            else "pass"
-            if move == "-"
-            else "play"
-        )
+        return move.split("_")[0] if move.split("_")[0] in ("exchange", "pass") else "play"
 
     return f"{kind(d.ours)} vs {kind(d.theirs)}"
 
@@ -112,7 +117,8 @@ def group_table(title: str, duels: list[Duel], key, games: int) -> list[str]:
     for name, part in sorted(groups.items(), key=lambda kv: sum(d.win for d in kv[1])):
         n = len(part)
         win = sum(d.win for d in part) / n
-        err = Z95 * math.sqrt(sum(d.win_se**2 for d in part)) / n
+        spread = sum((d.win - win) ** 2 for d in part) / (n - 1) if n > 1 else 0.0
+        err = Z95 * math.sqrt(spread / n)  # between positions, not only within rollouts
         points = sum(d.points for d in part) / n
         rows.append(
             f"  {name}: {n} positions, win {100 * win:+.2f} (+-{100 * err:.2f}), "
@@ -137,6 +143,8 @@ def main() -> int:
     print(f"sum per game {100 * sum(d.win for d in duels) / games:+.2f} win pts")
     for title, key in (
         ("by phase", phase),
+        ("by exact bag", lambda d: f"bag {d.bag:02d}" if d.bag <= 8 else "bag 09+"),
+        ("by who empties the bag", bag_out),
         ("by score", score_state),
         ("by tiles played", tiles),
         ("by static equity", equity_gap),
