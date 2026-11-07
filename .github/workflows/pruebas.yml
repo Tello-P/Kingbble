@@ -172,6 +172,7 @@ jobs:
           cp -r "$HOME/src/macondo/data/letterdistributions" "$HOME/src/macondo/data/strategy" \
             "$work/data/"
           cp scripts/macondo_match/main.go "$HOME/src/macondo/cmd/kingbble_macondo/main.go"
+          cp scripts/macondo_match/iterations.go "$HOME/src/macondo/ai/bot/kingbble_iterations.go"
           (cd "$HOME/src/macondo" && go build -o "$work/kingbble_macondo" ./cmd/kingbble_macondo)
           if [[ -f lexica/CSW24.txt ]]; then
             build/engine/kingbble_buildkwg lexica/CSW24.txt "$work/data/lexica/gaddag/CSW24.kwg"

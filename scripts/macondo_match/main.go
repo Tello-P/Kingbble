@@ -2,9 +2,10 @@
 // move's rack only, the opponent's left empty so it is not seen) and prints the
 // move Macondo's bot picks within -time seconds as "MOVE <coords> <tiles>"
 // ('.' for played-through squares, lowercase for blanks), "MOVE -<tiles>" for
-// an exchange or "MOVE -" for a pass. The bot simulates, solves pre-endgames
-// and endgames (SIMMING_BOT). Built inside a Macondo checkout by
-// scripts/issues/issue_58_macondo_match.sh.
+// an exchange or "MOVE -" for a pass, after a line "STATS <iterations>" with the
+// iterations it simulated. The bot simulates, solves pre-endgames and endgames
+// (SIMMING_BOT). Built inside a Macondo checkout, with iterations.go in its ai/bot
+// package, by scripts/issues/issue_58_macondo_match.sh.
 package main
 
 import (
@@ -65,6 +66,7 @@ func main() {
 			fmt.Fprintln(os.Stderr, "best play:", err, "- using the static best")
 			m = p.GenerateMoves(1)[0]
 		}
+		fmt.Fprintf(out, "STATS %d\n", p.SimIterations())
 		switch m.Action() {
 		case move.MoveTypePlay:
 			fmt.Fprintf(out, "MOVE %s %s\n", m.BoardCoords(), m.TilesString())
