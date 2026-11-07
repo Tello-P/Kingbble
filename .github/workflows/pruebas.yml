@@ -50,6 +50,8 @@ on:
 
 permissions:
   contents: read
+  # A command can read earlier runs' artifacts: gh run download RUN -R $GITHUB_REPOSITORY.
+  actions: read
 
 env:
   GO_VERSION: "1.27.2"
@@ -105,6 +107,7 @@ jobs:
       KINGBBLE_MAX_MEM: 12G
       # Nothing to keep awake, and systemd-inhibit is not allowed on a runner.
       KINGBBLE_INHIBITED: "1"
+      GH_TOKEN: ${{ github.token }}
     steps:
       - run: echo "STARTED=$(date +%s)" >>"$GITHUB_ENV"
 
