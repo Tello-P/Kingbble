@@ -449,8 +449,11 @@ PreEndgameResult PreEndgameSolver::Solve(const Game& game, const PreEndgameParam
   int rank = 0;
   for (PreEndgamePlay& p : result.plays) {
     const int played = p.move.TilesPlayed();
-    const bool candidate = params.candidates <= 0 || rank++ < params.candidates ||
-                           (params.pass_candidate && p.move.kind == Move::Kind::kPass);
+    const bool candidate =
+        params.only.empty()
+            ? params.candidates <= 0 || rank++ < params.candidates ||
+                  (params.pass_candidate && p.move.kind == Move::Kind::kPass)
+            : std::find(params.only.begin(), params.only.end(), p.move) != params.only.end();
     if (!candidate || (params.max_tiles_left >= 0 && k - played > params.max_tiles_left)) {
       p.skipped = true;
       continue;
