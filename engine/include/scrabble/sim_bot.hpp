@@ -50,6 +50,10 @@ struct SimParams {
   // With a table, moves are chosen by the chance of winning at the end of the
   // playouts instead of by the mean spread, as Macondo does. nullptr: off.
   const WinTable* win_table = nullptr;
+  // Spend the whole time limit: instead of pruning by confidence, halve the
+  // candidates at equal steps of the limit, keeping the best half, so more
+  // candidates can be weighed in a fixed time. Needs time_limit_s.
+  bool halving = false;
 };
 
 // Picks the move of the player to move inside a playout (e.g. from a model of
