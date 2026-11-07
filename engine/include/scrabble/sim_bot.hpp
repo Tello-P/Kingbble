@@ -9,6 +9,7 @@
 #include "scrabble/bot.hpp"
 #include "scrabble/equity_bot.hpp"
 #include "scrabble/inference.hpp"
+#include "scrabble/value_model.hpp"
 #include "scrabble/win_table.hpp"
 
 namespace scrabble {
@@ -50,6 +51,9 @@ struct SimParams {
   // With a table, moves are chosen by the chance of winning at the end of the
   // playouts instead of by the mean spread, as Macondo does. nullptr: off.
   const WinTable* win_table = nullptr;
+  // A value model of the chance of winning at the end of the playouts, used
+  // instead of the win table when set. nullptr: off.
+  const ValueModel* value_model = nullptr;
   // Spend the whole time limit: instead of pruning by confidence, halve the
   // candidates at equal steps of the limit, keeping the best half, so more
   // candidates can be weighed in a fixed time. Needs time_limit_s.

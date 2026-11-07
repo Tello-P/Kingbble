@@ -107,6 +107,10 @@ double SimBot::Playout(int thread, const Game& base, const Move& candidate, std:
   if (win) {
     if (g.over()) {
       *win = spread > 0 ? 1 : spread == 0 ? 0.5 : 0;
+    } else if (params_.value_model) {
+      // The model is from the side of the player to move, as the table.
+      const double p = params_.value_model->Win(g, bot.leaves());
+      *win = g.to_move() == me ? p : 1 - p;
     } else {
       // The table is from the side of the player to move.
       const int unseen = g.bag_size() + g.rack(1 - g.to_move()).Size();
@@ -182,7 +186,7 @@ Move SimBot::Choose(const Game& game) {
         for (std::size_t c = 0; c < n; ++c) {
           if (!active[c]) continue;
           const std::uint64_t stream = MixSeed(seed ^ 0x9E9);
-          if (params_.win_table) {
+          if (params_.win_table || params_.value_model) {
             spreads[c][it] = Playout(thread, pos, ranked[c].move, stream, plies, &values[c][it]);
           } else {
             values[c][it] = spreads[c][it] = Playout(thread, pos, ranked[c].move, stream, plies);
@@ -224,7 +228,8 @@ Move SimBot::Choose(const Game& game) {
     for (std::size_t c = 0; c < n; ++c) {
       if (!active[c] || c == best) continue;
       const auto [mean, se] = stats(c);
-      if (params_.win_table && Decided(best_mean) && Decided(mean)) continue;
+      if ((params_.win_table || params_.value_model) && Decided(best_mean) && Decided(mean))
+        continue;
       if (best_mean - mean > params_.prune_z * std::sqrt(best_se * best_se + se * se)) {
         active[c] = 0;
         --num_active;
@@ -236,14 +241,14 @@ Move SimBot::Choose(const Game& game) {
     const auto [mean, se] = stats(c);
     double spread_sum = 0;
     for (int i = 0; i < iterations[c]; ++i) spread_sum += spreads[c][i];
-    const double fallback = params_.win_table ? 0.5 : ranked[c].equity;
+    const double fallback = params_.win_table || params_.value_model ? 0.5 : ranked[c].equity;
     results_.push_back({ranked[c].move, ranked[c].equity, iterations[c] ? mean : fallback, se,
                         iterations[c], !active[c],
                         std::vector<double>(values[c].begin(), values[c].begin() + iterations[c]),
                         iterations[c] ? spread_sum / iterations[c] : ranked[c].equity});
   }
   // Survivors first, then by simulated value; stable keeps static order on ties.
-  const bool by_win = params_.win_table != nullptr;
+  const bool by_win = params_.win_table != nullptr || params_.value_model != nullptr;
   std::stable_sort(
       results_.begin(), results_.end(), [by_win](const SimResult& a, const SimResult& b) {
         if (a.pruned != b.pruned) return !a.pruned;
