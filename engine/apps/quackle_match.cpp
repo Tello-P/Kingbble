@@ -12,7 +12,8 @@
 // --status prints the summary of FILE and exits. Bot options as kingbble_selfplay: --threads,
 // --endgame-time, --peg-bag,
 // --peg-candidates, --peg-time, --apeg-*, --sim-* (--sim-time S: seconds per
-// simulated move, with --sim-iterations as a cap), --end-unseen, --late-bag.
+// simulated move, with --sim-iterations as a cap), --sim-halving, --win-table, --value-model,
+// --end-unseen and --late-bag (14 and 7 by default, 0: off).
 // With --paired, games 2k-1 and 2k share a deal with the seats swapped.
 
 #include <sys/wait.h>
@@ -144,11 +145,14 @@ std::string Summary(const ResultsFile& results, int games) {
 int main(int argc, char** argv) {
   std::string lexicon, leaves_path, helper_path, bot_kind = "equity+peg+eg";
   std::string quackle_player = "Championship Player", quackle_lexicon = "csw24", gcg_dir;
+  std::string win_table_path, value_model_path;
   int games = 10, quackle_threads = 0;
   std::string results_path;
   bool status_only = false;
   std::uint64_t seed = 1;
   SimParams sim;
+  sim.end_unseen = 14;
+  sim.late_bag = 7;
   bool paired = false;
   double endgame_time = 5;
   PegOptions peg;
@@ -196,6 +200,12 @@ int main(int argc, char** argv) {
       sim.max_iterations = std::stoi(value());
     } else if (a == "--sim-time") {
       sim.time_limit_s = std::stod(value());
+    } else if (a == "--win-table") {
+      win_table_path = value();
+    } else if (a == "--value-model") {
+      value_model_path = value();
+    } else if (a == "--sim-halving") {
+      sim.halving = true;
     } else if (a == "--end-unseen") {
       sim.end_unseen = std::stoi(value());
     } else if (a == "--late-bag") {
@@ -237,6 +247,16 @@ int main(int argc, char** argv) {
   }
 
   Gaddag gaddag = Gaddag::FromFile(lexicon);
+  WinTable win_table;
+  if (!win_table_path.empty()) {
+    win_table = WinTable::FromFile(win_table_path);
+    sim.win_table = &win_table;
+  }
+  ValueModel value_model;
+  if (!value_model_path.empty()) {
+    value_model = ValueModel::FromFile(value_model_path);
+    sim.value_model = &value_model;
+  }
   std::unique_ptr<Leaves> leaves;
   if (!leaves_path.empty()) leaves = std::make_unique<Leaves>(Leaves::FromFile(leaves_path));
   sim.seed = seed;

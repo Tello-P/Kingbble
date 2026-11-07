@@ -121,6 +121,28 @@ def line(label: str, games: list[Game], paired: bool = False) -> str:
     )
 
 
+def phase(bag: int) -> str:
+    return "endgame" if bag == 0 else "pre-endgame (bag 1-7)" if bag <= 7 else "midgame"
+
+
+def stats_table(folders: list[Path]) -> list[str]:
+    """Mean seconds and iterations per move, by side and phase, from --stats files."""
+    totals: dict = {}
+    for folder in folders:
+        for path in sorted(folder.rglob("stats.txt")):
+            for row in path.read_text().splitlines():
+                _game, side, bag, seconds, iterations = row.split()
+                cell = totals.setdefault((int(side), phase(int(bag))), [0, 0.0, 0])
+                cell[0] += 1
+                cell[1] += float(seconds)
+                cell[2] += int(iterations)
+    return [
+        f"{'kingbble' if side == 0 else 'rival'} {name}: {moves} moves, "
+        f"{seconds / moves:.2f} s/move, {iterations / moves:.0f} iterations/move"
+        for (side, name), (moves, seconds, iterations) in sorted(totals.items())
+    ]
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
     p.add_argument("folders", nargs="+", type=Path)
@@ -142,6 +164,8 @@ def main() -> int:
     ):
         if part:
             print(line(label, part))
+    for row in stats_table(args.folders):
+        print(row)
     if args.sprt:
         print(sprt(games, args.sprt[0], args.sprt[1], args.alpha, args.beta))
     return 0

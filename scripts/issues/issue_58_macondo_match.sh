@@ -61,6 +61,7 @@ if ((!STATUS)); then
     cp lexica/CSW24.klv2 "$WORK/data/lexica/gaddag/CSW24.klv2"
     mkdir -p "$MACONDO/cmd/kingbble_macondo"
     cp scripts/macondo_match/main.go "$MACONDO/cmd/kingbble_macondo/main.go"
+    cp scripts/macondo_match/iterations.go "$MACONDO/ai/bot/kingbble_iterations.go"
     (cd "$MACONDO" && "${LIMITS[@]}" "$GO" build -o "$HELPER" ./cmd/kingbble_macondo) >>"$LOG" 2>&1
   fi
 fi
