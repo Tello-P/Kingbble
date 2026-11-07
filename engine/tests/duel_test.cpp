@@ -27,7 +27,7 @@ TEST_F(DuelTest, AMoveAgainstItselfIsATie) {
   const Game game = MidGame();
   EquityBot bot(gaddag_, leaves_);
   const Move best = bot.Choose(game);
-  const DuelResult r = Duel(game, best, best, gaddag_, leaves_, 20, 2, 5);
+  const DuelResult r = Duel(game, best, best, gaddag_, leaves_, 20, 2, 5, 0);
   EXPECT_EQ(r.win, 0);
   EXPECT_EQ(r.spread, 0);
   EXPECT_EQ(r.rollouts, 20);
@@ -38,7 +38,7 @@ TEST_F(DuelTest, ThrowingAwayATurnLosesPoints) {
   EquityBot bot(gaddag_, leaves_);
   const Move best = bot.Choose(game);
   ASSERT_GT(best.score, 0);
-  const DuelResult r = Duel(game, best, Move{}, gaddag_, leaves_, 40, 2, 5);  // a pass
+  const DuelResult r = Duel(game, best, Move{}, gaddag_, leaves_, 40, 2, 5, 0);  // a pass
   EXPECT_GT(r.spread, 0);
 }
 
