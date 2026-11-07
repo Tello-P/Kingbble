@@ -36,3 +36,10 @@ def test_group_table_counts_the_loss_per_game():
     rows = report.group_table("t", report.parse(LINE, "s") * 2, report.phase, 2)
     assert "2 positions" in rows[1]
     assert "per game -5.00 win pts" in rows[1]
+
+
+def test_bag_out_and_exchanges():
+    line = "3 2 9 -20 2 8D_CAT 8H_D 3 1 30.5 28.0 -0.05 0.01 -4.5 1.0"
+    assert report.bag_out(report.parse(line, "s")[0]) == "only we empty the bag"
+    line = "3 40 47 -20 2 exchange_AB_(0) 8H_D 2 1 30.5 28.0 -0.05 0.01 -4.5 1.0"
+    assert report.exchange(report.parse(line, "s")[0]) == "exchange vs play"
