@@ -46,6 +46,10 @@ struct SimParams {
   // Late leave values (LeaveValue) with 1..late_bag tiles in the bag, for the
   // candidates, the moves inside the playouts and the leave at their end. 0: off.
   int late_bag = 0;
+  // Spend the whole time limit: instead of pruning by confidence, halve the
+  // candidates at equal steps of the limit, keeping the best half, so more
+  // candidates can be weighed in a fixed time. Needs time_limit_s.
+  bool halving = false;
 };
 
 // Picks the move of the player to move inside a playout (e.g. from a model of
