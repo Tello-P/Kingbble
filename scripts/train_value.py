@@ -117,25 +117,25 @@ def main() -> int:
     args = p.parse_args()
 
     import lightgbm as lgb  # only needed here
+    import numpy as np
 
     train, test = load(args.folders, args.holdout)
     if not train or not test:
         print("no data")
         return 1
     column = len(FEATURES) if args.label == "rollout" else len(FEATURES) + 1
-    x_train = [r[: len(FEATURES)] for r in train]
-    y_train = [r[column] for r in train]
-    x_test = [r[: len(FEATURES)] for r in test]
+    x_train = np.array([r[: len(FEATURES)] for r in train])
+    y_train = np.array([r[column] for r in train])
+    x_test = np.array([r[: len(FEATURES)] for r in test])
     y_test = [r[len(FEATURES)] for r in test]  # always judged on the rollout share
     params = {"objective": "cross_entropy", "learning_rate": 0.05, "num_leaves": 31,
               "min_data_in_leaf": 50, "verbose": -1, "num_threads": 2}  # fmt: skip
     model = lgb.train(params, lgb.Dataset(x_train, y_train), args.rounds)
-    table_rows = [[r[i] for i in TABLE_FEATURES] for r in x_train]
-    table = lgb.train(params, lgb.Dataset(table_rows, y_train), args.rounds)
-    mean = sum(y_train) / len(y_train)
+    table = lgb.train(params, lgb.Dataset(x_train[:, TABLE_FEATURES], y_train), args.rounds)
+    mean = float(y_train.mean())
     predictions = {
         "mean": [mean] * len(y_test),
-        "spread+unseen": list(table.predict([[r[i] for i in TABLE_FEATURES] for r in x_test])),
+        "spread+unseen": list(table.predict(x_test[:, TABLE_FEATURES])),
         "value model": list(model.predict(x_test)),
     }
     print(f"train {len(train)} rows, held out {len(test)}")
@@ -147,7 +147,8 @@ def main() -> int:
     export(model, args.out)
     print(f"model -> {args.out}")
     if args.engine:
-        return check_engine(args.engine, args.out, x_test[:500], predictions["value model"][:500])
+        rows = x_test[:500].tolist()
+        return check_engine(args.engine, args.out, rows, predictions["value model"][:500])
     return 0
 
 
