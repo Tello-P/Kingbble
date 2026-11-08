@@ -6,6 +6,10 @@
 //
 //   kingbble_valuedata --lexicon lexica/CSW24.txt --leaves lexica/CSW24.klv2
 //       --games 1000 --seed 1 --out value.csv [--sample 0.15] [--rollouts 16]
+//       [--sim-time S]
+// With --sim-time the games themselves are played by the simulating bot, S seconds
+// per move (as the matches, with end_unseen 14 and late_bag 7), so the positions and
+// the game results come from stronger play; the rollouts stay static equity.
 //   kingbble_valuedata --predict MODEL --in ROWS   (one chance per line: checks a model
 //       written by scripts/train_value.py against LightGBM's own predictions)
 
@@ -21,6 +25,7 @@
 #include "scrabble/equity.hpp"
 #include "scrabble/equity_bot.hpp"
 #include "scrabble/game.hpp"
+#include "scrabble/sim_bot.hpp"
 #include "scrabble/value_model.hpp"
 
 using namespace scrabble;
@@ -62,7 +67,7 @@ double Points(const Game& over, int me) {
 int main(int argc, char** argv) {
   std::string lexicon, leaves_path, out_path, predict_path, in_path;
   int games = 100, rollouts = 16;
-  double sample = 0.15;
+  double sample = 0.15, sim_time = 0;
   std::uint64_t seed = 1;
   for (int i = 1; i < argc; ++i) {
     const std::string a = argv[i];
@@ -87,6 +92,8 @@ int main(int argc, char** argv) {
       sample = std::stod(value());
     } else if (a == "--rollouts") {
       rollouts = std::stoi(value());
+    } else if (a == "--sim-time") {
+      sim_time = std::stod(value());
     } else if (a == "--predict") {
       predict_path = value();
     } else if (a == "--in") {
@@ -118,6 +125,14 @@ int main(int argc, char** argv) {
   Gaddag gaddag = Gaddag::FromFile(lexicon);
   Leaves leaves = Leaves::FromFile(leaves_path);
   EquityBot bot(gaddag, leaves);
+  SimParams sim;
+  sim.candidates = 8;
+  sim.max_iterations = 100000;
+  sim.time_limit_s = sim_time;
+  sim.end_unseen = 14;
+  sim.late_bag = 7;
+  sim.seed = seed;
+  SimBot player(gaddag, leaves, sim);
   std::ofstream out(out_path, std::ios::app);
   std::mt19937_64 pick(MixSeed(seed ^ 0xD1CE));
   std::uniform_real_distribution<double> unit(0, 1);
@@ -140,7 +155,7 @@ int main(int argc, char** argv) {
         }
         rows.push_back({ValueFeatures(game, leaves), won / rollouts, me});
       }
-      game.Apply(bot.Choose(game));
+      game.Apply(sim_time > 0 && game.bag_size() > 0 ? player.Choose(game) : bot.Choose(game));
     }
     for (const Row& row : rows) {
       for (double x : row.features) out << x << ",";
