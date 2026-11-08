@@ -50,8 +50,9 @@ on:
 
 permissions:
   contents: read
-  # A command can read earlier runs' artifacts: gh run download RUN -R $GITHUB_REPOSITORY.
-  actions: read
+  # A command can read earlier runs' artifacts (gh run download RUN -R $GITHUB_REPOSITORY)
+  # and start runs (gh workflow run), to chain steps that depend on each other.
+  actions: write
 
 env:
   GO_VERSION: "1.27.2"
