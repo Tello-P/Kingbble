@@ -30,8 +30,9 @@ def test_metrics():
 
 def test_export_writes_what_the_engine_reads(tmp_path):
     lgb = pytest.importorskip("lightgbm")
-    x = [[float(i % 7) - 3] + [0.0] * (len(train.FEATURES) - 1) for i in range(400)]
-    y = [1.0 if r[0] > 0 else 0.0 for r in x]
+    np = pytest.importorskip("numpy")
+    x = np.array([[float(i % 7) - 3] + [0.0] * (len(train.FEATURES) - 1) for i in range(400)])
+    y = (x[:, 0] > 0).astype(float)
     model = lgb.train({"objective": "cross_entropy", "verbose": -1, "min_data_in_leaf": 5},
                       lgb.Dataset(x, y), 5)  # fmt: skip
     out = tmp_path / "m.txt"
