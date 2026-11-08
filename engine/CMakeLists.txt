@@ -48,6 +48,8 @@ add_executable(kingbble_risk_diag apps/risk_diag.cpp)
 target_link_libraries(kingbble_risk_diag PRIVATE scrabble_engine)
 add_executable(kingbble_position_bank apps/position_bank.cpp)
 target_link_libraries(kingbble_position_bank PRIVATE scrabble_engine)
+add_executable(kingbble_duel_judge apps/duel_judge.cpp)
+target_link_libraries(kingbble_duel_judge PRIVATE scrabble_engine)
 add_executable(kingbble_macondo_match apps/macondo_match.cpp)
 target_link_libraries(kingbble_macondo_match PRIVATE scrabble_engine)
 add_executable(kingbble_valuedata apps/valuedata.cpp)
@@ -99,7 +101,9 @@ if(SCRABBLE_BUILD_TESTS)
     tests/journal_test.cpp
     tests/game_record_test.cpp
     tests/determinism_test.cpp
+    tests/duel_test.cpp
   )
+  target_include_directories(engine_tests PRIVATE apps)
   target_compile_definitions(engine_tests PRIVATE
     KINGBBLE_FIXTURES="${PROJECT_SOURCE_DIR}/lexica/fixtures")
   target_link_libraries(engine_tests PRIVATE scrabble_engine GTest::gtest_main)

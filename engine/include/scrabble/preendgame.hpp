@@ -27,6 +27,9 @@ struct PreEndgameParams {
   // when pass_candidate is set.
   int candidates = 0;
   bool pass_candidate = false;
+  // If not empty, only these plays are analysed, whatever their rank (e.g. to
+  // judge two given moves exactly).
+  std::vector<Move> only;
   // Plays leaving more tiles than this in the bag are not analysed (-1 = all).
   int max_tiles_left = 1;
   // How many times our own turn with tiles still in the bag is solved as a
