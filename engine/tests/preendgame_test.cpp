@@ -103,6 +103,28 @@ double Permutations(int n, int k) {
   return r;
 }
 
+TEST_F(PreEndgameTest, OnlyAnalysesTheGivenPlays) {
+  const Game g = PreEndgame(11, 1);
+  PreEndgameSolver solver(gaddag_, leaves_);
+  PreEndgameParams params;
+  params.max_tiles_left = -1;
+  PreEndgameResult all = solver.Solve(g, params);
+  std::vector<Move> chosen;
+  for (const PreEndgamePlay& p : all.plays)
+    if (!p.skipped && chosen.size() < 2) chosen.push_back(p.move);
+  ASSERT_EQ(chosen.size(), 2u);
+  params.only = chosen;
+  params.early_cutoff = false;
+  PreEndgameResult two = solver.Solve(g, params);
+  int analysed = 0;
+  for (const PreEndgamePlay& p : two.plays) {
+    if (p.skipped) continue;
+    ++analysed;
+    EXPECT_TRUE(p.move == chosen[0] || p.move == chosen[1]);
+  }
+  EXPECT_EQ(analysed, 2);
+}
+
 }  // namespace
 
 TEST(PreEndgamePermutations, CountEveryOrderedDraw) {
