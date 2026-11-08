@@ -10,11 +10,16 @@
 // With --sim-time the games themselves are played by the simulating bot, S seconds
 // per move (as the matches, with end_unseen 14 and late_bag 7), so the positions and
 // the game results come from stronger play; the rollouts stay static equity.
+//   kingbble_valuedata --leaves KLV --from-gcg DIR --out value.csv   (rows from the games
+//       saved under DIR, both players' positions with tiles in the bag, both labels set
+//       to who won the game)
 //   kingbble_valuedata --predict MODEL --in ROWS   (one chance per line: checks a model
 //       written by scripts/train_value.py against LightGBM's own predictions)
 
 #include <algorithm>
+#include <cctype>
 #include <cstdint>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <random>
@@ -25,6 +30,7 @@
 #include "scrabble/equity.hpp"
 #include "scrabble/equity_bot.hpp"
 #include "scrabble/game.hpp"
+#include "scrabble/gcg.hpp"
 #include "scrabble/sim_bot.hpp"
 #include "scrabble/value_model.hpp"
 
@@ -57,6 +63,60 @@ Game Deal(const Game& game, std::uint64_t seed) {
                             game.scoreless_turns(), seed);
 }
 
+// Rows from a saved game: each turn with tiles in the bag, labelled by who won.
+void RowsFromGcg(const GcgGame& gcg, const Leaves& leaves, std::ostream& out) {
+  Board board;
+  std::array<int, 2> score{0, 0};
+  int scoreless = 0;
+  std::vector<std::pair<std::array<double, kValueFeatures>, int>> rows;
+  for (const GcgEvent& e : gcg.events) {
+    const bool turn = e.kind == GcgEvent::Kind::kPlace || e.kind == GcgEvent::Kind::kPass ||
+                      e.kind == GcgEvent::Kind::kExchange;
+    if (!turn) continue;
+    Rack own;
+    for (char ch : e.rack) own.Add(ch == '?' ? kBlank : *TileFromChar(ch));
+    const Rack unseen = UnseenTiles(board, own);
+    const int bag = unseen.Size() - kRackSize;
+    if (own.Size() == kRackSize && bag > 0) {
+      std::array<Rack, 2> racks;
+      racks[e.player] = own;
+      Rack in_bag;
+      int i = 0;
+      for (int t = 0; t < kNumTileTypes; ++t)
+        for (int n = 0; n < unseen.Count(Tile(t)); ++n, ++i)
+          (i < bag ? in_bag : racks[1 - e.player]).Add(Tile(t));
+      const Game g =
+          Game::FromPosition(board, racks, {score[0], score[1]}, e.player, in_bag, scoreless, 1);
+      rows.emplace_back(ValueFeatures(g, leaves), e.player);
+    }
+    if (e.kind == GcgEvent::Kind::kPlace) {
+      const Move& m = e.move;
+      const int dr = m.dir == Direction::kVertical ? 1 : 0;
+      for (std::size_t k = 0; k < m.tiles.size(); ++k) {
+        const int r = m.row + dr * static_cast<int>(k);
+        const int c = m.col + (1 - dr) * static_cast<int>(k);
+        const char ch = m.tiles[k];
+        if (ch == '.' || !board.IsEmpty(r, c)) continue;
+        board.Place(r, c, *TileFromChar(std::toupper(static_cast<unsigned char>(ch))),
+                    std::islower(static_cast<unsigned char>(ch)));
+      }
+      score[e.player] += e.score;
+      scoreless = e.score ? 0 : scoreless + 1;
+    } else {
+      ++scoreless;
+    }
+  }
+  // The final totals, end-of-game rack points included.
+  std::array<int, 2> total{0, 0};
+  for (const GcgEvent& e : gcg.events) total[e.player] = e.cumulative;
+  for (const auto& [features, player] : rows) {
+    const int spread = total[player] - total[1 - player];
+    const double won = spread > 0 ? 1 : spread == 0 ? 0.5 : 0;
+    for (double x : features) out << x << ",";
+    out << won << "," << won << "\n";
+  }
+}
+
 double Points(const Game& over, int me) {
   const int spread = over.score(me) - over.score(1 - me);
   return spread > 0 ? 1 : spread == 0 ? 0.5 : 0;
@@ -65,7 +125,7 @@ double Points(const Game& over, int me) {
 }  // namespace
 
 int main(int argc, char** argv) {
-  std::string lexicon, leaves_path, out_path, predict_path, in_path;
+  std::string lexicon, leaves_path, out_path, predict_path, in_path, gcg_dir;
   int games = 100, rollouts = 16;
   double sample = 0.15, sim_time = 0;
   std::uint64_t seed = 1;
@@ -94,6 +154,8 @@ int main(int argc, char** argv) {
       rollouts = std::stoi(value());
     } else if (a == "--sim-time") {
       sim_time = std::stod(value());
+    } else if (a == "--from-gcg") {
+      gcg_dir = value();
     } else if (a == "--predict") {
       predict_path = value();
     } else if (a == "--in") {
@@ -116,6 +178,18 @@ int main(int argc, char** argv) {
         f[i] = std::stod(cell);
       std::cout << model.Predict(f) << "\n";
     }
+    return 0;
+  }
+  if (!gcg_dir.empty()) {
+    const Leaves leaves = Leaves::FromFile(leaves_path);
+    std::ofstream out(out_path, std::ios::app);
+    std::vector<std::filesystem::path> files;
+    for (const auto& entry : std::filesystem::recursive_directory_iterator(gcg_dir))
+      if (entry.path().extension() == ".gcg") files.push_back(entry.path());
+    std::sort(files.begin(), files.end());
+    for (const auto& file : files)
+      if (const auto gcg = ReadGcgFile(file.string())) RowsFromGcg(*gcg, leaves, out);
+    std::cerr << files.size() << " games\n";
     return 0;
   }
   if (lexicon.empty() || leaves_path.empty() || out_path.empty()) {
