@@ -3,7 +3,8 @@
 # value model and, only if it beats spread and unseen tiles on held-out rows,
 # starts the self-play and Macondo runs that test it (they wait for this run and
 # take its model). Fails loudly at any step.
-#   scripts/value_chain.sh DATA_RUN SELFPLAY_SEED MACONDO_SEED [GAME_RUN...]
+#   scripts/value_chain.sh DATA_RUNS SELFPLAY_SEED MACONDO_SEED [GAME_RUN...]
+# DATA_RUNS: one run id or several joined by commas; the chain waits for the first.
 # With GAME_RUN ids, rows from those runs' games against Macondo are added.
 # MIN_ROWS, TEST_SHARDS, SELFPLAY_GAMES and MACONDO_GAMES shrink it for a rehearsal.
 set -euo pipefail
@@ -13,9 +14,13 @@ repo=$GITHUB_REPOSITORY out=${OUT:?}
 min_rows=${MIN_ROWS:-20000} shards=${TEST_SHARDS:-20}
 selfplay_games=${SELFPLAY_GAMES:-100} macondo_games=${MACONDO_GAMES:-50}
 
-until [[ $(gh run view "$data_run" -R "$repo" --json status -q .status) == completed ]]; do sleep 60; done
+until [[ $(gh run view "${data_run%%,*}" -R "$repo" --json status -q .status) == completed ]]; do
+  sleep 60
+done
 pip install -q lightgbm
-gh run download "$data_run" -R "$repo" -D input/sim --pattern "shard-*"
+for run in ${data_run//,/ }; do
+  gh run download "$run" -R "$repo" -D "input/sim/$run" --pattern "shard-*"
+done
 for run in "$@"; do
   gh run download "$run" -R "$repo" -D "games/$run" --pattern "shard-*"
   mkdir -p "input/macondo/$run"
