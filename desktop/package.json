@@ -1,0 +1,14 @@
+{
+  "name": "kingbble-desktop",
+  "version": "0.1.0",
+  "description": "Kingbble desktop app: the web interface in its own window",
+  "main": "main.js",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^33.2.1"
+  }
+}
