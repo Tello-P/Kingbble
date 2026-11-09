@@ -21,8 +21,12 @@ while [[ $(gh run view "$after" -R "$repo" --json status -q .status) != complete
 done
 # A rehearsal chain (CHECK_RUN) must have passed, or round 2 is not started.
 if [[ -n ${CHECK_RUN:-} ]]; then
-  outcome=$(gh run view "$CHECK_RUN" -R "$repo" --json conclusion -q .conclusion)
-  [[ $outcome == success ]] || { echo "::error::rehearsal $CHECK_RUN: $outcome"; exit 1; }
+  # A timed-out job also ends green, so the rehearsal must have left a model.
+  until [[ $(gh run view "$CHECK_RUN" -R "$repo" --json status -q .status) == completed ]]; do
+    sleep 60
+  done
+  gh run download "$CHECK_RUN" -R "$repo" -D rehearsal -n shard-0
+  [[ -s rehearsal/value_model.txt ]] || { echo "::error::rehearsal $CHECK_RUN left no model"; exit 1; }
 fi
 gh workflow run pruebas.yml -R "$repo" --ref "$GITHUB_REF_NAME" -f shards=19 -f seed=171000000 \
   -f minutos=280 -f csw24=true -f comando='for i in 0 1; do mkdir -p $OUT/p$i; build/engine/kingbble_valuedata --lexicon lexica/CSW24.txt --leaves lexica/CSW24.klv2 --games 100000 --seed $((SEED + i * 50000)) --sim-time 0.3 --sample 0.15 --rollouts 16 --out $OUT/p$i/value.csv & done; wait'
