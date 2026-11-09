@@ -6,10 +6,11 @@
 //
 //   kingbble_valuedata --lexicon lexica/CSW24.txt --leaves lexica/CSW24.klv2
 //       --games 1000 --seed 1 --out value.csv [--sample 0.15] [--rollouts 16]
-//       [--sim-time S]
+//       [--sim-time S [--player-model MODEL]]
 // With --sim-time the games themselves are played by the simulating bot, S seconds
 // per move (as the matches, with end_unseen 14 and late_bag 7), so the positions and
-// the game results come from stronger play; the rollouts stay static equity.
+// the game results come from stronger play; the rollouts stay static equity. With
+// --player-model that bot also uses a value model, for rounds of self-improvement.
 //   kingbble_valuedata --leaves KLV --from-gcg DIR --out value.csv   (rows from the games
 //       saved under DIR, both players' positions with tiles in the bag, both labels set
 //       to who won the game)
@@ -125,7 +126,7 @@ double Points(const Game& over, int me) {
 }  // namespace
 
 int main(int argc, char** argv) {
-  std::string lexicon, leaves_path, out_path, predict_path, in_path, gcg_dir;
+  std::string lexicon, leaves_path, out_path, predict_path, in_path, gcg_dir, player_model;
   int games = 100, rollouts = 16;
   double sample = 0.15, sim_time = 0;
   std::uint64_t seed = 1;
@@ -154,6 +155,8 @@ int main(int argc, char** argv) {
       rollouts = std::stoi(value());
     } else if (a == "--sim-time") {
       sim_time = std::stod(value());
+    } else if (a == "--player-model") {
+      player_model = value();
     } else if (a == "--from-gcg") {
       gcg_dir = value();
     } else if (a == "--predict") {
@@ -206,6 +209,11 @@ int main(int argc, char** argv) {
   sim.end_unseen = 14;
   sim.late_bag = 7;
   sim.seed = seed;
+  ValueModel model;
+  if (!player_model.empty()) {
+    model = ValueModel::FromFile(player_model);
+    sim.value_model = &model;
+  }
   SimBot player(gaddag, leaves, sim);
   std::ofstream out(out_path, std::ios::app);
   std::mt19937_64 pick(MixSeed(seed ^ 0xD1CE));
