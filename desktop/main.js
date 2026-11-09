@@ -15,8 +15,8 @@ let server = null;
 function startServer() {
   return new Promise((resolve, reject) => {
     const python = process.env.KINGBBLE_PYTHON || (process.platform === "win32" ? "python" : "python3");
-    const dash = process.argv.indexOf("--");
-    const extra = dash >= 0 ? process.argv.slice(dash + 1) : [];
+    // `npm start -- ARGS` runs `electron . ARGS`: everything after the app path.
+    const extra = process.argv.slice(app.isPackaged ? 1 : 2).filter((a) => a !== "--");
     server = spawn(python, [path.join(root, "ui", "server.py"), "--port", "0", ...extra], { cwd: root });
     let out = "";
     server.stdout.on("data", (d) => {
