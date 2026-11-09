@@ -108,6 +108,7 @@
       <button class="tab on" data-tab="moves" data-i18n="moves">Moves</button>
       <button class="tab" data-tab="analysis" data-i18n="analysis">Analysis</button>
       <button class="tab" data-tab="tiles" data-i18n="tiles">Tiles</button>
+      <button class="tab" data-tab="scoring" data-i18n="scoring">Scoring</button>
     </div>
     <div class="tabpane" data-pane="moves">
       <ol class="history" id="history"></ol>
@@ -126,6 +127,9 @@
       </div>
       <div class="pane-title"><span data-i18n="unseen">Unseen</span> <span id="unseen-count"></span><span class="muted right" id="bag-count"></span></div>
       <div class="unseen" id="unseen"></div>
+    </div>
+    <div class="tabpane" data-pane="scoring" hidden>
+      <div id="scoring"></div>
     </div>
     <div class="panel-foot" id="status">—</div>
   </aside>

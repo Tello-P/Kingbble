@@ -13,7 +13,7 @@ const TEXT = {
     newGame: "New game", exportGcg: "Download game (GCG)", settings: "Settings", play: "Play",
     recall: "Recall", shuffle: "Shuffle", exchange: "Exchange", confirmExchange: "Exchange selected",
     cancel: "Cancel", pass: "Pass", undo: "Undo", pause: "Pause", resume: "Resume", step: "Next move",
-    speed: "Speed", unseen: "Unseen", tiles: "Tiles", analysisHelp: "Moves ranked by static equity.", analysis: "Analysis", bestMoves: "Best moves", racks: "Racks",
+    speed: "Speed", unseen: "Unseen", tiles: "Tiles", analysisHelp: "Moves ranked by static equity.", analysis: "Analysis", bestMoves: "Best moves", racks: "Racks", scoring: "Scoring",
     moves: "Moves", modeVs: "You vs Kingbble", modeWatch: "Bot vs bot", modeAnalysis: "Analysis",
     helpVs: "Play a game against the engine.", helpWatch: "Watch two bots play each other.",
     helpAnalysis: "Two players on one screen, every rack visible, with the engine's suggestions.",
@@ -35,6 +35,23 @@ const TEXT = {
     helpBoth: "Drag tiles, or click a square and type. Click it again to change direction. Enter plays, Esc recalls.",
     helpDrag: "Drag tiles onto the board. Tap a placed tile to take it back.",
     helpType: "Click a square and type. Click it again to change direction. Enter plays, Esc recalls.",
+    rules: {
+      squares: "Squares", letters: "Letter values", how: "How a move scores", blankName: "blank",
+      bonus: {
+        T: "Triple word: the whole word counts ×3.", D: "Double word: the whole word counts ×2. The centre star is one too.",
+        t: "Triple letter: the tile on it counts ×3.", d: "Double letter: the tile on it counts ×2.",
+      },
+      steps: [
+        "Add up the letters of the word, with letter bonuses (DL, TL) applied first.",
+        "Then multiply by any word bonuses under the new tiles (DW ×2, TW ×3; two of them multiply: ×4, ×9).",
+        "Bonuses only count on the turn a tile is placed on them; later they are ordinary squares.",
+        "Every other word your new tiles form (across or down) scores the same way and is added.",
+        "Bingo: using all 7 tiles of your rack adds 50.",
+        "A blank is worth 0, even on a bonus square.",
+        "End: whoever empties the rack with the bag empty gets twice the value of the rival's rack. After six scoreless turns in a row, each player loses the value of their own rack.",
+      ],
+      example: "Example: NOTARIZE down from H1 (TW) through H4 (DL), playing 7 tiles: (1+1+1+2+1+1+10+1) × 3 + 50 = 104.",
+    },
     bots: {
       greedy: "Easy · highest score", equity: "Medium · static equity", sim: "Strong · simulation",
       "sim+eg": "Very strong · simulation + endgame",
@@ -58,7 +75,7 @@ const TEXT = {
     cancel: "Cancelar", pass: "Pasar", undo: "Deshacer", pause: "Pausa", resume: "Seguir",
     step: "Siguiente jugada", speed: "Velocidad", unseen: "Sin ver", tiles: "Fichas",
     analysisHelp: "Jugadas ordenadas por equity estática.", analysis: "Análisis",
-    bestMoves: "Mejores jugadas", racks: "Atriles", moves: "Jugadas", modeVs: "Tú vs Kingbble",
+    bestMoves: "Mejores jugadas", racks: "Atriles", scoring: "Puntos", moves: "Jugadas", modeVs: "Tú vs Kingbble",
     modeWatch: "Bot vs bot", modeAnalysis: "Análisis", helpVs: "Juega una partida contra el motor.",
     helpWatch: "Mira cómo juegan dos bots entre sí.",
     helpAnalysis: "Dos jugadores en una pantalla, con todos los atriles a la vista y las sugerencias del motor.",
@@ -81,6 +98,23 @@ const TEXT = {
     helpBoth: "Arrastra fichas, o haz clic en una casilla y escribe. Otro clic cambia la dirección. Intro juega, Esc recoge.",
     helpDrag: "Arrastra fichas al tablero. Toca una ficha puesta para devolverla.",
     helpType: "Haz clic en una casilla y escribe. Otro clic cambia la dirección. Intro juega, Esc recoge.",
+    rules: {
+      squares: "Casillas", letters: "Valor de las letras", how: "Cómo se puntúa", blankName: "comodín",
+      bonus: {
+        T: "Triple palabra: toda la palabra vale ×3.", D: "Doble palabra: toda la palabra vale ×2. La estrella central también lo es.",
+        t: "Triple letra: la ficha que caiga ahí vale ×3.", d: "Doble letra: la ficha que caiga ahí vale ×2.",
+      },
+      steps: [
+        "Suma las letras de la palabra, aplicando primero los premios de letra (DL, TL).",
+        "Luego multiplica por los premios de palabra que haya bajo las fichas nuevas (DP ×2, TP ×3; si hay dos se multiplican: ×4, ×9).",
+        "Los premios solo cuentan en el turno en que pones una ficha encima; después son casillas normales.",
+        "Cada palabra extra que formen tus fichas nuevas (en horizontal o vertical) se puntúa igual y se suma.",
+        "Bingo: si usas las 7 fichas del atril, +50.",
+        "El comodín vale 0, aunque caiga en un premio.",
+        "Final: quien vacía el atril con la bolsa vacía gana el doble de lo que sumen las fichas del rival. Tras seis turnos seguidos sin puntos, cada uno pierde lo que sumen sus fichas.",
+      ],
+      example: "Ejemplo: NOTARIZE hacia abajo desde H1 (TP) pasando por H4 (DL), con 7 fichas: (1+1+1+2+1+1+10+1) × 3 + 50 = 104.",
+    },
     bots: {
       greedy: "Fácil · máxima puntuación", equity: "Medio · equity estática", sim: "Fuerte · simulación",
       "sim+eg": "Muy fuerte · simulación + finales",
@@ -429,6 +463,7 @@ function showTabs() {
     moves: true,
     analysis: settings.hints && mode() !== "watch",
     tiles: settings.unseen || mode() === "watch",
+    scoring: true,
   };
   if (!show[tab]) tab = "moves";
   for (const b of document.querySelectorAll(".tab")) {
@@ -436,6 +471,43 @@ function showTabs() {
     b.classList.toggle("on", b.dataset.tab === tab);
   }
   for (const pane of document.querySelectorAll(".tabpane")) pane.hidden = pane.dataset.pane !== tab;
+}
+
+// Standard English tile values, shown before the first game reports the lexicon's own.
+const DEFAULT_VALUES = {
+  A: 1, B: 3, C: 3, D: 2, E: 1, F: 4, G: 2, H: 4, I: 1, J: 8, K: 5, L: 1, M: 3,
+  N: 1, O: 1, P: 3, Q: 10, R: 1, S: 1, T: 1, U: 1, V: 4, W: 4, X: 8, Y: 4, Z: 10,
+};
+let scoringKey = "";
+function renderScoring() {
+  const values = (S && S.values) || DEFAULT_VALUES;
+  const key = settings.lang + JSON.stringify(values);
+  if (key === scoringKey) return;
+  scoringKey = key;
+  const R = t("rules");
+  const esc = (x) => String(x).replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+  const labels = BONUS_LABEL[settings.lang] || BONUS_LABEL.en;
+  const squares = Object.keys(BONUS)
+    .map((k) => `<li><span class="sq ${BONUS[k]}">${labels[k]}</span><span>${esc(R.bonus[k])}</span></li>`)
+    .join("");
+  const groups = new Map();
+  for (const [l, v] of Object.entries(values)) {
+    if (!/^\p{L}+$/u.test(l)) continue;
+    if (!groups.has(v)) groups.set(v, []);
+    groups.get(v).push(l);
+  }
+  if (!groups.has(0)) groups.set(0, []);
+  groups.get(0).push(R.blankName);
+  const letters = [...groups.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([v, ls]) => `<tr><td class="pv">${v}</td><td>${ls.map(esc).join(" ")}</td></tr>`)
+    .join("");
+  const steps = R.steps.map((x) => `<li>${esc(x)}</li>`).join("");
+  $("scoring").innerHTML =
+    `<div class="pane-title">${esc(R.squares)}</div><ul class="rules-squares">${squares}</ul>` +
+    `<div class="pane-title">${esc(R.letters)}</div><table class="rules-letters">${letters}</table>` +
+    `<div class="pane-title">${esc(R.how)}</div><ol class="rules-steps">${steps}</ol>` +
+    `<p class="rules-example">${esc(R.example)}</p>`;
 }
 
 function renderPanel() {
@@ -455,6 +527,7 @@ function renderPanel() {
   else if (isHuman(S.to_move)) setStatus(humans().length === 1 ? t("yourTurn") : t("turnOf", name(S.to_move)));
 
   showTabs();
+  renderScoring();
   const total = Object.values(S.unseen).reduce((a, b) => a + b, 0);
   $("unseen-count").textContent = total;
   $("bag-count").textContent = t("bag", S.bag);
@@ -983,6 +1056,7 @@ function applySettings() {
   for (const el of document.querySelectorAll("[data-i18n-title]")) el.title = t(el.dataset.i18nTitle);
   for (const el of document.querySelectorAll("[data-i18n-placeholder]")) el.placeholder = t(el.dataset.i18nPlaceholder);
   if (settings.input === "drag") cursor = null;
+  renderScoring();
   render();
 }
 

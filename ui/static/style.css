@@ -315,3 +315,17 @@ dialog::backdrop { background: rgba(0,0,0,.4); }
   button.tool span { display: none; }
   .help { display: none; }
 }
+
+.rules-squares { list-style: none; margin: 0; padding: 0 14px 6px; display: grid; gap: 8px; font-size: 13px; color: var(--ink-2); }
+.rules-squares li { display: flex; align-items: center; gap: 10px; }
+.rules-squares .sq { flex: none; width: 34px; height: 26px; display: grid; place-items: center; border-radius: 4px; font-size: 11px; font-weight: 600; }
+.rules-squares .sq.tw { background: color-mix(in srgb, var(--tw) 16%, var(--bg)); color: var(--tw); }
+.rules-squares .sq.dw { background: color-mix(in srgb, var(--dw) 12%, var(--bg)); color: var(--dw); }
+.rules-squares .sq.tl { background: color-mix(in srgb, var(--tl) 14%, var(--bg)); color: var(--tl); }
+.rules-squares .sq.dl { background: color-mix(in srgb, var(--dl) 11%, var(--bg)); color: var(--dl); }
+.rules-letters { border-collapse: collapse; margin: 0 14px 6px; width: calc(100% - 28px); font-size: 13px; }
+.rules-letters td { padding: 5px 4px; border-bottom: 1px solid var(--line); letter-spacing: .06em; }
+.rules-letters td.pv { width: 34px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); }
+.rules-steps { margin: 0; padding: 0 14px 0 34px; font-size: 13px; line-height: 1.45; color: var(--ink-2); }
+.rules-steps li { margin-bottom: 6px; }
+.rules-example { margin: 4px 14px 12px; padding: 8px 10px; border-left: 2px solid var(--gold); background: var(--bg-2); font-size: 12px; color: var(--ink-2); }
