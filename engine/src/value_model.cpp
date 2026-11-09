@@ -1,5 +1,6 @@
 #include "scrabble/value_model.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <fstream>
 #include <sstream>
@@ -59,6 +60,53 @@ std::array<double, kValueFeatures> ValueFeatures(const Game& game, const Leaves&
   }
   f[16] = unseen_points;
   f[17] = rack_points;
+  // Anchors (empty squares next to a tile), open premium word squares among them, and
+  // bingo lanes: lines with 7 empty squares in a row, one of them an anchor.
+  const Board& board = game.board();
+  auto empty = [&](int r, int c) {
+    return r < 0 || r >= kBoardDim || c < 0 || c >= kBoardDim || board.IsEmpty(r, c);
+  };
+  auto anchor = [&](int r, int c) {
+    return board.IsEmpty(r, c) &&
+           (!empty(r - 1, c) || !empty(r + 1, c) || !empty(r, c - 1) || !empty(r, c + 1));
+  };
+  for (int r = 0; r < kBoardDim; ++r) {
+    for (int c = 0; c < kBoardDim; ++c) {
+      if (!anchor(r, c)) continue;
+      ++f[19];
+      const Bonus b = Board::BonusAt(r, c);
+      f[20] += b == Bonus::kTripleWord;
+      f[21] += b == Bonus::kDoubleWord;
+    }
+  }
+  for (int line = 0; line < kBoardDim; ++line) {
+    for (int dir = 0; dir < 2; ++dir) {
+      int run = 0;
+      bool touches = false, counted = false;
+      for (int i = 0; i < kBoardDim && !counted; ++i) {
+        const int r = dir ? i : line, c = dir ? line : i;
+        if (!board.IsEmpty(r, c)) {
+          run = 0;
+          touches = false;
+          continue;
+        }
+        ++run;
+        touches = touches || anchor(r, c);
+        if (run >= kRackSize && touches) counted = true;
+      }
+      f[18] += counted;
+    }
+  }
+  int duplicates = 0, rack_heavy = 0, unseen_heavy = 0;
+  for (int t = 1; t < kNumTileTypes; ++t) {
+    duplicates += std::max(0, rack.Count(Tile(t)) - 1);
+    if (EnglishTiles()[t].score >= 8)
+      rack_heavy += rack.Count(Tile(t)), unseen_heavy += unseen.Count(Tile(t));
+  }
+  f[22] = rack.Size() - f[6] - f[7];  // consonants
+  f[23] = duplicates;
+  f[24] = rack_heavy;
+  f[25] = unseen_heavy;
   return f;
 }
 

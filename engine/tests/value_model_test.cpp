@@ -41,12 +41,15 @@ TEST(ValueFeatures, DescribeTheOpening) {
   Leaves leaves = Leaves::FromFile(kFixtures + "/leaves_small.klv2");
   const Game game(3);
   const auto f = ValueFeatures(game, leaves);
-  EXPECT_EQ(f[0], 0);   // spread
-  EXPECT_EQ(f[1], 93);  // unseen: 100 tiles less our 7
-  EXPECT_EQ(f[2], 86);  // bag
-  EXPECT_EQ(f[4], 7);   // rack size
-  EXPECT_EQ(f[13], 0);  // tiles on the board
-  EXPECT_EQ(f[14], 0);  // no open triple word square on an empty board
+  EXPECT_EQ(f[0], 0);                 // spread
+  EXPECT_EQ(f[1], 93);                // unseen: 100 tiles less our 7
+  EXPECT_EQ(f[2], 86);                // bag
+  EXPECT_EQ(f[4], 7);                 // rack size
+  EXPECT_EQ(f[13], 0);                // tiles on the board
+  EXPECT_EQ(f[14], 0);                // no open triple word square on an empty board
+  EXPECT_EQ(f[18], 0);                // no bingo lane without a tile to play through
+  EXPECT_EQ(f[19], 0);                // no anchor on an empty board
+  EXPECT_EQ(f[22] + f[6] + f[7], 7);  // consonants, vowels and blanks make the rack
 }
 
 TEST(ValueModel, DrivesTheSimulationAsAChanceOfWinning) {
