@@ -56,7 +56,7 @@
 <header class="top">
   <div class="brand"><img src="logo.svg" alt="" width="30" height="33"> <span>Kingbble</span></div>
   <nav class="top-actions">
-    <button id="btn-new" class="pill" data-i18n="newGame">New game</button>
+    <button id="btn-new" class="primary small" data-i18n="newGame">New game</button>
     <button id="btn-gcg" class="icon" data-i18n-title="exportGcg" aria-label="GCG">
       <svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M5 19h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
@@ -68,17 +68,7 @@
 
 <main class="layout">
   <section class="play">
-    <div class="scoreboard">
-      <div class="player" id="p0">
-        <div class="pinfo"><span class="name"></span><span class="sub"></span></div>
-        <div class="pnums"><span class="score">0</span><span class="clock"></span></div>
-      </div>
-      <div class="status" id="status">—</div>
-      <div class="player right" id="p1">
-        <div class="pinfo"><span class="name"></span><span class="sub"></span></div>
-        <div class="pnums"><span class="score">0</span><span class="clock"></span></div>
-      </div>
-    </div>
+    <div class="bar" id="bar-top"></div>
 
     <div class="board-wrap" id="board-wrap">
       <div class="coords cols" id="coords-cols"></div>
@@ -86,54 +76,58 @@
       <div class="board" id="board" role="grid" aria-label="Board"></div>
     </div>
 
-    <div class="preview" id="preview" aria-live="polite"></div>
+    <div class="bar" id="bar-bottom"></div>
 
     <div class="rack-row">
-      <div class="rack-label" id="rack-label"></div>
       <div class="rack" id="rack"></div>
+      <div class="preview" id="preview" aria-live="polite"></div>
     </div>
 
-    <div class="controls" id="controls">
+    <div class="toolbar" id="controls">
+      <button id="btn-shuffle" class="tool"><svg viewBox="0 0 24 24"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg><span data-i18n="shuffle">Shuffle</span></button>
+      <button id="btn-exchange" class="tool"><svg viewBox="0 0 24 24"><path d="M7 4 3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/></svg><span data-i18n="exchange">Exchange</span></button>
+      <button id="btn-pass" class="tool"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg><span data-i18n="pass">Pass</span></button>
+      <button id="btn-undo" class="tool"><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3"/></svg><span data-i18n="undo">Undo</span></button>
+      <span class="spacer"></span>
+      <button id="btn-recall" class="secondary" data-i18n="recall">Recall</button>
       <button id="btn-play" class="primary" data-i18n="play">Play</button>
-      <button id="btn-recall" data-i18n="recall">Recall</button>
-      <button id="btn-shuffle" data-i18n="shuffle">Shuffle</button>
-      <button id="btn-exchange" data-i18n="exchange">Exchange</button>
-      <button id="btn-pass" data-i18n="pass">Pass</button>
-      <button id="btn-undo" data-i18n="undo">Undo</button>
     </div>
-    <div class="controls" id="watch-controls" hidden>
-      <button id="btn-pause" class="primary" data-i18n="pause">Pause</button>
-      <button id="btn-step" data-i18n="step">Next move</button>
+    <div class="toolbar" id="watch-controls" hidden>
+      <button id="btn-step" class="tool"><svg viewBox="0 0 24 24"><path d="M6 5l9 7-9 7zM18 5v14"/></svg><span data-i18n="step">Next move</span></button>
       <label class="speed"><span data-i18n="speed">Speed</span>
         <input type="range" id="speed" min="0" max="3000" step="100" value="800">
       </label>
+      <span class="spacer"></span>
+      <button id="btn-pause" class="primary" data-i18n="pause">Pause</button>
     </div>
     <p class="help" id="help"></p>
   </section>
 
   <aside class="panel">
-    <section class="card" id="card-unseen">
-      <h2><span data-i18n="unseen">Unseen tiles</span> <span class="count" id="unseen-count">0</span> <span class="bagc" id="bag-count"></span></h2>
-      <div class="unseen" id="unseen"></div>
-    </section>
-
-    <section class="card" id="card-hints">
-      <div class="card-head">
-        <h2 data-i18n="analysis">Analysis</h2>
-        <button id="btn-hint" class="small" data-i18n="bestMoves">Best moves</button>
+    <div class="tabs" role="tablist">
+      <button class="tab on" data-tab="moves" data-i18n="moves">Moves</button>
+      <button class="tab" data-tab="analysis" data-i18n="analysis">Analysis</button>
+      <button class="tab" data-tab="tiles" data-i18n="tiles">Tiles</button>
+    </div>
+    <div class="tabpane" data-pane="moves">
+      <ol class="history" id="history"></ol>
+    </div>
+    <div class="tabpane" data-pane="analysis" hidden>
+      <div class="pane-head">
+        <span class="muted" data-i18n="analysisHelp">Moves ranked by static equity.</span>
+        <button id="btn-hint" class="secondary small" data-i18n="bestMoves">Best moves</button>
       </div>
       <ol class="hints" id="hints"></ol>
-    </section>
-
-    <section class="card" id="card-racks" hidden>
-      <h2 data-i18n="racks">Racks</h2>
-      <div id="racks"></div>
-    </section>
-
-    <section class="card grow">
-      <h2 data-i18n="moves">Moves</h2>
-      <ol class="history" id="history"></ol>
-    </section>
+    </div>
+    <div class="tabpane" data-pane="tiles" hidden>
+      <div id="card-racks" hidden>
+        <div class="pane-title" data-i18n="racks">Racks</div>
+        <div id="racks"></div>
+      </div>
+      <div class="pane-title"><span data-i18n="unseen">Unseen</span> <span id="unseen-count"></span><span class="muted right" id="bag-count"></span></div>
+      <div class="unseen" id="unseen"></div>
+    </div>
+    <div class="panel-foot" id="status">—</div>
   </aside>
 </main>
 
