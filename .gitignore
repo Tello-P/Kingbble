@@ -26,3 +26,7 @@ mlruns/
 .vscode/
 .idea/
 .DS_Store
+
+# Desktop app
+desktop/node_modules/
+desktop/package-lock.json

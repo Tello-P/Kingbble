@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 260" role="img" aria-label="Kingbble">
+  <defs>
+    <linearGradient id="kb-cape" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d12f3a"/>
+      <stop offset="1" stop-color="#7d1222"/>
+    </linearGradient>
+    <linearGradient id="kb-gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffe08a"/>
+      <stop offset=".55" stop-color="#f0b429"/>
+      <stop offset="1" stop-color="#b9801b"/>
+    </linearGradient>
+    <linearGradient id="kb-tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fffdf6"/>
+      <stop offset="1" stop-color="#efe3c4"/>
+    </linearGradient>
+    <g id="kb-spot"><path d="M0 0 l2.6 6 l-2.6 -1.8 l-2.6 1.8 z" fill="#1d1d1f"/></g>
+  </defs>
+  <g class="kb-cape">
+    <path d="M66 100 C 48 145, 30 192, 16 240 Q 58 230 88 242 Q 120 252 152 242 Q 182 230 224 240 C 210 192, 192 145, 174 100 Z" fill="url(#kb-cape)"/>
+    <path d="M84 120 C 74 160, 64 200, 58 234 M156 120 C 166 160, 176 200, 182 234 M120 196 L120 246" stroke="#000" stroke-opacity=".14" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <path d="M16 240 Q 58 230 88 242 Q 120 252 152 242 Q 182 230 224 240 L 226 254 Q 182 244 152 256 Q 120 266 88 256 Q 58 244 14 254 Z" fill="#fbfbfd"/>
+    <use href="#kb-spot" x="40" y="243"/><use href="#kb-spot" x="76" y="248"/><use href="#kb-spot" x="120" y="253"/><use href="#kb-spot" x="164" y="248"/><use href="#kb-spot" x="200" y="243"/>
+    <rect x="46" y="96" width="148" height="24" rx="12" fill="#fbfbfd"/>
+    <use href="#kb-spot" x="58" y="102"/><use href="#kb-spot" x="182" y="102"/>
+  </g>
+  <g class="kb-tile">
+    <rect x="72" y="98" width="96" height="96" rx="16" fill="#000" fill-opacity=".18" transform="translate(0 4)"/>
+    <rect x="72" y="98" width="96" height="96" rx="16" fill="url(#kb-tile)"/>
+    <rect x="72.5" y="98.5" width="95" height="95" rx="15.5" fill="none" stroke="#d6c69c"/>
+    <text x="118" y="170" text-anchor="middle" font-family="-apple-system, 'SF Pro Rounded', 'Segoe UI', system-ui, sans-serif" font-weight="800" font-size="62" fill="#1d1d1f">K</text>
+    <text x="155" y="186" text-anchor="middle" font-family="-apple-system, 'Segoe UI', system-ui, sans-serif" font-weight="700" font-size="15" fill="#1d1d1f">5</text>
+  </g>
+  <g class="kb-crown">
+    <path d="M80 104 L74 54 L100 78 L120 40 L140 78 L166 54 L160 104 Z" fill="url(#kb-gold)" stroke="#a8730f" stroke-width="2" stroke-linejoin="round"/>
+    <rect x="78" y="92" width="84" height="16" rx="5" fill="#d99a1e" stroke="#a8730f" stroke-width="2"/>
+    <circle cx="100" cy="100" r="4.5" fill="#e0314a"/><circle cx="120" cy="100" r="5" fill="#2f7cf6"/><circle cx="140" cy="100" r="4.5" fill="#21a67a"/>
+    <circle cx="74" cy="53" r="6" fill="url(#kb-gold)" stroke="#a8730f" stroke-width="2"/>
+    <circle cx="120" cy="38" r="7" fill="url(#kb-gold)" stroke="#a8730f" stroke-width="2"/>
+    <circle cx="166" cy="53" r="6" fill="url(#kb-gold)" stroke="#a8730f" stroke-width="2"/>
+  </g>
+</svg>

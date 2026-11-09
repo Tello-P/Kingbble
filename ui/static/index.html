@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kingbble</title>
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="splash" aria-hidden="true">
+  <div class="splash-inner">
+    <svg class="splash-logo" viewBox="0 0 240 270">
+      <defs>
+        <linearGradient id="s-cape" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d12f3a"/><stop offset="1" stop-color="#7d1222"/></linearGradient>
+        <linearGradient id="s-gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe08a"/><stop offset=".55" stop-color="#f0b429"/><stop offset="1" stop-color="#b9801b"/></linearGradient>
+        <linearGradient id="s-tile" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fffdf6"/><stop offset="1" stop-color="#efe3c4"/></linearGradient>
+        <linearGradient id="s-glint" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".9"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+        <clipPath id="s-crown-clip"><path d="M80 104 L74 54 L100 78 L120 40 L140 78 L166 54 L160 104 Z"/></clipPath>
+        <g id="s-spot"><path d="M0 0 l2.6 6 l-2.6 -1.8 l-2.6 1.8 z" fill="#1d1d1f"/></g>
+      </defs>
+      <g class="s-cape">
+        <path d="M66 100 C 48 145, 30 192, 16 240 Q 58 230 88 242 Q 120 252 152 242 Q 182 230 224 240 C 210 192, 192 145, 174 100 Z" fill="url(#s-cape)"/>
+        <path d="M84 120 C 74 160, 64 200, 58 234 M156 120 C 166 160, 176 200, 182 234 M120 196 L120 246" stroke="#000" stroke-opacity=".14" stroke-width="5" fill="none" stroke-linecap="round"/>
+        <path d="M16 240 Q 58 230 88 242 Q 120 252 152 242 Q 182 230 224 240 L 226 254 Q 182 244 152 256 Q 120 266 88 256 Q 58 244 14 254 Z" fill="#fbfbfd"/>
+        <use href="#s-spot" x="40" y="243"/><use href="#s-spot" x="76" y="248"/><use href="#s-spot" x="120" y="253"/><use href="#s-spot" x="164" y="248"/><use href="#s-spot" x="200" y="243"/>
+        <rect x="46" y="96" width="148" height="24" rx="12" fill="#fbfbfd"/>
+        <use href="#s-spot" x="58" y="102"/><use href="#s-spot" x="182" y="102"/>
+      </g>
+      <g class="s-tile">
+        <rect x="72" y="102" width="96" height="96" rx="16" fill="#000" fill-opacity=".18"/>
+        <rect x="72" y="98" width="96" height="96" rx="16" fill="url(#s-tile)"/>
+        <rect x="72.5" y="98.5" width="95" height="95" rx="15.5" fill="none" stroke="#d6c69c"/>
+        <text x="118" y="170" text-anchor="middle" font-family="-apple-system, 'SF Pro Rounded', 'Segoe UI', system-ui, sans-serif" font-weight="800" font-size="62" fill="#1d1d1f">K</text>
+        <text x="155" y="186" text-anchor="middle" font-family="-apple-system, 'Segoe UI', system-ui, sans-serif" font-weight="700" font-size="15" fill="#1d1d1f">5</text>
+      </g>
+      <g class="s-crown">
+        <path d="M80 104 L74 54 L100 78 L120 40 L140 78 L166 54 L160 104 Z" fill="url(#s-gold)" stroke="#a8730f" stroke-width="2" stroke-linejoin="round"/>
+        <g clip-path="url(#s-crown-clip)"><rect class="s-glint" x="40" y="30" width="40" height="90" fill="url(#s-glint)" transform="skewX(-20)"/></g>
+        <rect x="78" y="92" width="84" height="16" rx="5" fill="#d99a1e" stroke="#a8730f" stroke-width="2"/>
+        <circle cx="100" cy="100" r="4.5" fill="#e0314a"/><circle cx="120" cy="100" r="5" fill="#2f7cf6"/><circle cx="140" cy="100" r="4.5" fill="#21a67a"/>
+        <circle cx="74" cy="53" r="6" fill="url(#s-gold)" stroke="#a8730f" stroke-width="2"/>
+        <circle cx="120" cy="38" r="7" fill="url(#s-gold)" stroke="#a8730f" stroke-width="2"/>
+        <circle cx="166" cy="53" r="6" fill="url(#s-gold)" stroke="#a8730f" stroke-width="2"/>
+      </g>
+      <g class="s-sparks" fill="#ffd45e">
+        <path d="M60 40 l3 8 l8 3 l-8 3 l-3 8 l-3 -8 l-8 -3 l8 -3 z"/>
+        <path d="M184 28 l2 6 l6 2 l-6 2 l-2 6 l-2 -6 l-6 -2 l6 -2 z"/>
+        <path d="M196 84 l2 5 l5 2 l-5 2 l-2 5 l-2 -5 l-5 -2 l5 -2 z"/>
+      </g>
+    </svg>
+    <div class="splash-word" aria-label="Kingbble"><span>K</span><span>i</span><span>n</span><span>g</span><span>b</span><span>b</span><span>l</span><span>e</span></div>
+  </div>
+</div>
+
+<header class="top">
+  <div class="brand"><img src="logo.svg" alt="" width="30" height="33"> <span>Kingbble</span></div>
+  <nav class="top-actions">
+    <button id="btn-new" class="pill" data-i18n="newGame">New game</button>
+    <button id="btn-gcg" class="icon" data-i18n-title="exportGcg" aria-label="GCG">
+      <svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M5 19h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <button id="btn-settings" class="icon" data-i18n-title="settings" aria-label="Settings">
+      <svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z M19.4 13a7.6 7.6 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.4 7.4 0 0 0-1.7-1L15 3.5h-4l-.4 2.5a7.4 7.4 0 0 0-1.7 1l-2.4-1-2 3.4L6.6 11a7.6 7.6 0 0 0 0 2l-2 1.6 2 3.4 2.4-1c.5.4 1.1.8 1.7 1l.4 2.5h4l.4-2.5c.6-.2 1.2-.6 1.7-1l2.4 1 2-3.4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+    </button>
+  </nav>
+</header>
+
+<main class="layout">
+  <section class="play">
+    <div class="scoreboard">
+      <div class="player" id="p0">
+        <div class="pinfo"><span class="name"></span><span class="sub"></span></div>
+        <div class="pnums"><span class="score">0</span><span class="clock"></span></div>
+      </div>
+      <div class="status" id="status">—</div>
+      <div class="player right" id="p1">
+        <div class="pinfo"><span class="name"></span><span class="sub"></span></div>
+        <div class="pnums"><span class="score">0</span><span class="clock"></span></div>
+      </div>
+    </div>
+
+    <div class="board-wrap" id="board-wrap">
+      <div class="coords cols" id="coords-cols"></div>
+      <div class="coords rows" id="coords-rows"></div>
+      <div class="board" id="board" role="grid" aria-label="Board"></div>
+    </div>
+
+    <div class="preview" id="preview" aria-live="polite"></div>
+
+    <div class="rack-row">
+      <div class="rack-label" id="rack-label"></div>
+      <div class="rack" id="rack"></div>
+    </div>
+
+    <div class="controls" id="controls">
+      <button id="btn-play" class="primary" data-i18n="play">Play</button>
+      <button id="btn-recall" data-i18n="recall">Recall</button>
+      <button id="btn-shuffle" data-i18n="shuffle">Shuffle</button>
+      <button id="btn-exchange" data-i18n="exchange">Exchange</button>
+      <button id="btn-pass" data-i18n="pass">Pass</button>
+      <button id="btn-undo" data-i18n="undo">Undo</button>
+    </div>
+    <div class="controls" id="watch-controls" hidden>
+      <button id="btn-pause" class="primary" data-i18n="pause">Pause</button>
+      <button id="btn-step" data-i18n="step">Next move</button>
+      <label class="speed"><span data-i18n="speed">Speed</span>
+        <input type="range" id="speed" min="0" max="3000" step="100" value="800">
+      </label>
+    </div>
+    <p class="help" id="help"></p>
+  </section>
+
+  <aside class="panel">
+    <section class="card" id="card-unseen">
+      <h2><span data-i18n="unseen">Unseen tiles</span> <span class="count" id="unseen-count">0</span> <span class="bagc" id="bag-count"></span></h2>
+      <div class="unseen" id="unseen"></div>
+    </section>
+
+    <section class="card" id="card-hints">
+      <div class="card-head">
+        <h2 data-i18n="analysis">Analysis</h2>
+        <button id="btn-hint" class="small" data-i18n="bestMoves">Best moves</button>
+      </div>
+      <ol class="hints" id="hints"></ol>
+    </section>
+
+    <section class="card" id="card-racks" hidden>
+      <h2 data-i18n="racks">Racks</h2>
+      <div id="racks"></div>
+    </section>
+
+    <section class="card grow">
+      <h2 data-i18n="moves">Moves</h2>
+      <ol class="history" id="history"></ol>
+    </section>
+  </aside>
+</main>
+
+<dialog id="dlg-new">
+  <form method="dialog" class="dlg">
+    <h2 data-i18n="newGame">New game</h2>
+    <div class="segmented" id="mode" role="radiogroup">
+      <button type="button" data-mode="vs" data-i18n="modeVs">You vs Kingbble</button>
+      <button type="button" data-mode="watch" data-i18n="modeWatch">Bot vs bot</button>
+      <button type="button" data-mode="analysis" data-i18n="modeAnalysis">Analysis</button>
+    </div>
+    <p class="mode-help" id="mode-help"></p>
+    <div id="bot-cfg"></div>
+    <label class="row" id="first-row"><span data-i18n="firstMove">First move</span>
+      <select id="opt-first">
+        <option value="0" data-i18n="you">You</option>
+        <option value="1">Kingbble</option>
+        <option value="r" data-i18n="random">Random</option>
+      </select>
+    </label>
+    <label class="row"><span data-i18n="lexicon">Lexicon</span><select id="opt-lexicon"></select></label>
+    <label class="row"><span data-i18n="seed">Seed</span><input id="opt-seed" type="number" min="1" data-i18n-placeholder="random"></label>
+    <div class="dlg-actions">
+      <button value="cancel" formnovalidate data-i18n="cancel">Cancel</button>
+      <button value="ok" class="primary" data-i18n="start">Start</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-settings">
+  <form method="dialog" class="dlg">
+    <h2 data-i18n="settings">Settings</h2>
+    <div class="group">
+      <label class="row"><span data-i18n="language">Language</span>
+        <select data-set="lang"><option value="en">English</option><option value="es">Español</option></select></label>
+      <label class="row"><span data-i18n="theme">Appearance</span>
+        <select data-set="theme"><option value="auto" data-i18n="auto">Automatic</option><option value="light" data-i18n="light">Light</option><option value="dark" data-i18n="dark">Dark</option></select></label>
+      <label class="row"><span data-i18n="input">Placing tiles</span>
+        <select data-set="input"><option value="both" data-i18n="inputBoth">Drag, click and type</option><option value="drag" data-i18n="inputDrag">Drag only</option><option value="type" data-i18n="inputType">Click and type only</option></select></label>
+    </div>
+    <h3 data-i18n="assists">Assists</h3>
+    <div class="group">
+      <label class="switch"><span data-i18n="showHints">Best moves panel</span><input type="checkbox" data-set="hints"></label>
+      <label class="switch"><span data-i18n="showPreview">Score preview</span><input type="checkbox" data-set="preview"></label>
+      <label class="switch"><span data-i18n="showUnseen">Unseen tiles</span><input type="checkbox" data-set="unseen"></label>
+      <label class="switch"><span data-i18n="showCoords">Coordinates</span><input type="checkbox" data-set="coords"></label>
+    </div>
+    <h3 data-i18n="extras">Extras</h3>
+    <div class="group">
+      <label class="switch"><span data-i18n="sound">Sound</span><input type="checkbox" data-set="sound"></label>
+      <label class="row"><span data-i18n="clock">Game clock</span>
+        <select data-set="clock"><option value="0" data-i18n="off">Off</option><option value="10">10 min</option><option value="15">15 min</option><option value="20">20 min</option><option value="25">25 min</option></select></label>
+      <label class="switch"><span data-i18n="intro">Intro animation</span><input type="checkbox" data-set="intro"></label>
+    </div>
+    <div class="dlg-actions"><button value="ok" class="primary" data-i18n="done">Done</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlg-blank">
+  <form method="dialog" class="dlg">
+    <h2 data-i18n="blankTitle">Which letter is the blank?</h2>
+    <div class="letters" id="blank-letters"></div>
+    <div class="dlg-actions"><button value="cancel" data-i18n="cancel">Cancel</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlg-over">
+  <form method="dialog" class="dlg center">
+    <img src="logo.svg" alt="" width="72" height="78">
+    <h2 id="over-title"></h2>
+    <p id="over-text"></p>
+    <div class="dlg-actions">
+      <button value="cancel" data-i18n="seeBoard">See board</button>
+      <button value="new" class="primary" data-i18n="again">Play again</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status"></div>
+<script src="app.js"></script>
+</body>
+</html>
