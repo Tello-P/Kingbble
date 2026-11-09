@@ -21,6 +21,8 @@ FEATURES = [
     "spread", "unseen", "bag", "scoreless", "rack_size", "leave_value", "rack_vowels",
     "rack_blanks", "rack_s", "q_without_u", "unseen_blanks", "unseen_s", "unseen_vowel_share",
     "board_tiles", "open_triple_word", "open_double_word", "unseen_points", "rack_points",
+    "bingo_lanes", "anchors", "anchor_triple_word", "anchor_double_word", "rack_consonants",
+    "rack_duplicates", "rack_heavy", "unseen_heavy",
 ]  # fmt: skip
 TABLE_FEATURES = [0, 1]  # spread and unseen
 
@@ -112,7 +114,9 @@ def main() -> int:
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--holdout", type=float, default=0.1)
     p.add_argument("--rounds", type=int, default=400)
-    p.add_argument("--label", choices=["rollout", "game"], default="rollout")
+    p.add_argument("--label", choices=["rollout", "game", "mix"], default="rollout")
+    p.add_argument("--judge", choices=["rollout", "game"], default="rollout",
+                   help="label of the held-out rows the models are scored on")  # fmt: skip
     p.add_argument("--engine", help="kingbble_valuedata: check its predictions of the model")
     args = p.parse_args()
 
@@ -123,11 +127,14 @@ def main() -> int:
     if not train or not test:
         print("no data")
         return 1
-    column = len(FEATURES) if args.label == "rollout" else len(FEATURES) + 1
+    rollout, game = len(FEATURES), len(FEATURES) + 1
+    if args.label == "mix":  # the game's result, smoothed by the rollouts
+        y_train = np.array([(r[rollout] + r[game]) / 2 for r in train])
+    else:
+        y_train = np.array([r[rollout if args.label == "rollout" else game] for r in train])
     x_train = np.array([r[: len(FEATURES)] for r in train])
-    y_train = np.array([r[column] for r in train])
     x_test = np.array([r[: len(FEATURES)] for r in test])
-    y_test = [r[len(FEATURES)] for r in test]  # always judged on the rollout share
+    y_test = [r[rollout if args.judge == "rollout" else game] for r in test]
     params = {"objective": "cross_entropy", "learning_rate": 0.05, "num_leaves": 31,
               "min_data_in_leaf": 50, "verbose": -1, "num_threads": 2}  # fmt: skip
     model = lgb.train(params, lgb.Dataset(x_train, y_train), args.rounds)

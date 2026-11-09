@@ -11,7 +11,7 @@ namespace scrabble {
 
 // Features of a position from the side of the player to move, in the order of
 // FEATURES in scripts/train_value.py.
-inline constexpr int kValueFeatures = 18;
+inline constexpr int kValueFeatures = 26;
 std::array<double, kValueFeatures> ValueFeatures(const Game& game, const Leaves& leaves);
 
 // A gradient-boosted model of the chance that the player to move wins, trained by
