@@ -22,7 +22,20 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 STATIC = Path(__file__).resolve().parent / "static"
 # Commands the page may send; anything else is refused before reaching the engine.
-COMMANDS = {"new", "state", "play", "check", "exchange", "pass", "bot", "hint", "undo", "gcg"}
+COMMANDS = {
+    "new",
+    "state",
+    "play",
+    "check",
+    "exchange",
+    "pass",
+    "bot",
+    "hint",
+    "undo",
+    "view",
+    "rewind",
+    "gcg",
+}
 
 
 class Bridge:

@@ -19,6 +19,8 @@
 //                               (by score without leaves)
 //   undo                        takes back the last human move and the bot moves after it
 //                               (the last move if no seat is human)
+//   view N                      the position after the first N moves (the game is unchanged)
+//   rewind N                    takes back every move after the first N
 //   gcg                         the game so far as GCG
 //   quit
 // Every answer has "ok"; errors carry "error", everything else carries "state".
@@ -26,6 +28,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cstdint>
 #include <cstdio>
 #include <iostream>
 #include <memory>
@@ -93,11 +96,86 @@ char BonusChar(Bonus b) {
   return '.';
 }
 
+// How a placement scores, word by word, as JSON: each word with its letters
+// (value and letter bonus, only on the new tiles), its word multiplier and its
+// points, then the bingo bonus and the total.
+std::string Breakdown(const Board& board, const Move& m) {
+  const int dr = m.dir == Direction::kVertical ? 1 : 0, dc = 1 - dr;
+  std::array<std::array<char, kBoardDim>, kBoardDim> placed{};
+  int tiles = 0;
+  for (std::size_t k = 0; k < m.tiles.size(); ++k)
+    if (m.tiles[k] != '.') {
+      placed[m.row + dr * k][m.col + dc * k] = m.tiles[k];
+      ++tiles;
+    }
+  auto at = [&](int r, int c) -> char {  // letter on the square, lowercase for blanks, 0 if empty
+    if (r < 0 || c < 0 || r >= kBoardDim || c >= kBoardDim) return 0;
+    if (placed[r][c]) return placed[r][c];
+    if (board.IsEmpty(r, c)) return 0;
+    const std::uint8_t v = board.At(r, c);
+    const char ch = TileToChar(static_cast<Tile>(v & ~Board::kBlankBit));
+    return (v & Board::kBlankBit) ? static_cast<char>(std::tolower(ch)) : ch;
+  };
+  std::ostringstream o;
+  int total = 0;
+  bool first = true;
+  // The word through (r, c) along (wr, wc), if it has two letters or more.
+  auto word = [&](int r, int c, int wr, int wc) {
+    while (at(r - wr, c - wc)) r -= wr, c -= wc;
+    if (!at(r + wr, c + wc) && !at(r - wr, c - wc)) return;
+    std::string text, letters;
+    int sum = 0, mult = 1;
+    for (; at(r, c); r += wr, c += wc) {
+      const char ch = at(r, c);
+      const bool blank = std::islower(static_cast<unsigned char>(ch));
+      const int value = blank ? 0 : EnglishTiles()[*TileFromChar(ch)].score;
+      int lm = 1;
+      std::string bonus;
+      if (placed[r][c]) {
+        switch (Board::BonusAt(r, c)) {
+          case Bonus::kDoubleLetter:
+            lm = 2, bonus = "DL";
+            break;
+          case Bonus::kTripleLetter:
+            lm = 3, bonus = "TL";
+            break;
+          case Bonus::kDoubleWord:
+            mult *= 2, bonus = "DW";
+            break;
+          case Bonus::kTripleWord:
+            mult *= 3, bonus = "TW";
+            break;
+          case Bonus::kNone:
+            break;
+        }
+      }
+      sum += value * lm;
+      text += static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+      letters += std::string(letters.empty() ? "" : ",") + "[\"" + ch + "\"," +
+                 std::to_string(value) + ",\"" + bonus + "\"," + (placed[r][c] ? "true" : "false") +
+                 "]";
+    }
+    total += sum * mult;
+    o << (first ? "" : ",") << "{\"word\":\"" << text << "\",\"letters\":[" << letters
+      << "],\"sum\":" << sum << ",\"mult\":" << mult << ",\"score\":" << sum * mult << "}";
+    first = false;
+  };
+  o << "{\"words\":[";
+  word(m.row, m.col, dr, dc);
+  for (int r = 0; r < kBoardDim; ++r)
+    for (int c = 0; c < kBoardDim; ++c)
+      if (placed[r][c]) word(r, c, dc, dr);
+  const int bingo = tiles == kRackSize ? kBingoBonus : 0;
+  o << "],\"bingo\":" << bingo << ",\"total\":" << total + bingo << "}";
+  return o.str();
+}
+
 struct Played {
   int player;
   Move move;
   std::string rack;  // the mover's rack before the move
   int cumulative;
+  std::string breakdown;  // JSON, placements only
 };
 
 class Session {
@@ -147,11 +225,12 @@ class Session {
       if (!want.insert({{r, c}, l}).second) return Error("square used twice");
     }
     if (want.empty()) return Error("no tiles");
-    for (const Move& m : gen_.Generate(game_->board(), game_->rack(game_->to_move())))
+    for (Move m : gen_.Generate(game_->board(), game_->rack(game_->to_move())))
       if (NewTiles(m) == want) {
         if (apply) return Apply(m);
-        return "{\"ok\":true,\"score\":" + std::to_string(ScoreMove(game_->board(), m)) +
-               ",\"move\":" + MoveJson(m) + "}";
+        m.score = ScoreMove(game_->board(), m);
+        return "{\"ok\":true,\"score\":" + std::to_string(m.score) + ",\"move\":" + MoveJson(m) +
+               ",\"breakdown\":" + Breakdown(game_->board(), m) + "}";
       }
     return Error(Diagnose(want));
   }
@@ -210,6 +289,21 @@ class Session {
     }
     o << "]}";
     return o.str();
+  }
+
+  // The position after the first `n` moves, without changing the game.
+  std::string View(std::size_t n) {
+    if (!game_) return Error("no game");
+    return "{\"ok\":true,\"state\":" + State(std::min(n, history_.size())) + "}";
+  }
+
+  // Takes back every move after the first `n`.
+  std::string Rewind(std::size_t n) {
+    if (!game_) return Error("no game");
+    if (n >= history_.size()) return Ok();
+    history_.resize(n);
+    Replay();
+    return Ok();
   }
 
   std::string Undo() {
@@ -292,10 +386,12 @@ class Session {
     if (m.kind == Move::Kind::kPlace) m.score = ScoreMove(game_->board(), m);
     const int player = game_->to_move();
     const std::string rack = game_->rack(player).ToString();
+    const std::string breakdown =
+        m.kind == Move::Kind::kPlace ? Breakdown(game_->board(), m) : std::string();
     for (BotSetup& s : setups_) s.BeforeMove(*game_, m);
     game_->Apply(m);
     for (BotSetup& s : setups_) s.AfterMove(*game_);
-    history_.push_back({player, m, rack, game_->score(player)});
+    history_.push_back({player, m, rack, game_->score(player), breakdown});
     return Ok();
   }
 
@@ -332,8 +428,16 @@ class Session {
     return o.str();
   }
 
-  std::string State() {
-    const Game& g = *game_;
+  // The game as it stands, or (for review) after its first `upto` moves.
+  std::string State(std::size_t upto = SIZE_MAX) {
+    std::optional<Game> past;
+    if (upto < history_.size()) {
+      past.emplace(seed_);
+      for (std::size_t i = 0; i < upto; ++i) past->Apply(history_[i].move);
+    } else {
+      upto = history_.size();
+    }
+    const Game& g = past ? *past : *game_;
     std::ostringstream o;
     o << "{\"players\":[" << Str(kinds_[0]) << "," << Str(kinds_[1]) << "],\"seconds\":["
       << seconds_[0] << "," << seconds_[1] << "],\"seed\":" << seed_
@@ -342,7 +446,7 @@ class Session {
       << "],\"racks\":[";
     for (int p = 0; p < 2; ++p)
       o << (p ? "," : "") << (Visible(p) ? Str(g.rack(p).ToString()) : "null");
-    o << "],\"board\":[";
+    o << "],\"moves\":" << history_.size() << ",\"viewing\":" << upto << ",\"board\":[";
     for (int r = 0; r < kBoardDim; ++r) {
       std::string row;
       for (int c = 0; c < kBoardDim; ++c) {
@@ -382,6 +486,7 @@ class Session {
       o << (i ? "," : "") << "{\"player\":" << p.player << ",\"cumulative\":" << p.cumulative
         << ",\"move\":" << MoveJson(p.move);
       if (Visible(p.player)) o << ",\"rack\":" << Str(p.rack);
+      if (!p.breakdown.empty()) o << ",\"breakdown\":" << p.breakdown;
       o << "}";
     }
     o << "]}";
@@ -483,6 +588,10 @@ int main(int argc, char** argv) {
         out = session.BotMove();
       } else if (cmd == "hint") {
         out = session.Hint(args.empty() ? 10 : std::stoi(args[0]));
+      } else if (cmd == "view" && args.size() == 1) {
+        out = session.View(std::stoul(args[0]));
+      } else if (cmd == "rewind" && args.size() == 1) {
+        out = session.Rewind(std::stoul(args[0]));
       } else if (cmd == "undo") {
         out = session.Undo();
       } else if (cmd == "gcg") {
