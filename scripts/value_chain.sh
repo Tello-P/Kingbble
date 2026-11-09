@@ -41,8 +41,13 @@ for label in ${LABELS:-game}; do
   [[ -s $out/value_model_$label.txt ]] || { echo "::error::no model for $label"; exit 1; }
   loss=$(awk '/^value model:/ {print $5}' "$out/train_$label.txt" | tr -d ,)
   table=$(awk '/^spread\+unseen:/ {print $4}' "$out/train_$label.txt" | tr -d ,)
-  awk -v m="$loss" -v t="$table" 'BEGIN { exit !(m != "" && t != "" && m < t) }' ||
-    { echo "::error::$label: log loss $loss is not below spread+unseen $table"; exit 1; }
+  awk -v m="$loss" -v t="$table" 'BEGIN { exit !(m != "" && t != "" && m < t) }' || {
+    if [[ -n ${SKIP_GUARD:-} ]]; then  # a rehearsal has too few rows to beat it
+      echo "::warning::$label: log loss $loss is not below spread+unseen $table"
+    else
+      echo "::error::$label: log loss $loss is not below spread+unseen $table"; exit 1
+    fi
+  }
   if [[ -z $best_loss ]] || awk -v a="$loss" -v b="$best_loss" 'BEGIN { exit !(a < b) }'; then
     best=$label best_loss=$loss
   fi
