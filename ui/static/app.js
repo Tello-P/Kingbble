@@ -13,7 +13,24 @@ const TEXT = {
     newGame: "New game", exportGcg: "Download game (GCG)", settings: "Settings", play: "Play",
     recall: "Recall", shuffle: "Shuffle", exchange: "Exchange", confirmExchange: "Exchange selected",
     cancel: "Cancel", pass: "Pass", undo: "Undo", pause: "Pause", resume: "Resume", step: "Next move",
-    speed: "Speed", unseen: "Unseen", tiles: "Tiles", analysisHelp: "Moves ranked by static equity.", analysis: "Analysis", bestMoves: "Best moves", racks: "Racks",
+    speed: "Speed", unseen: "Unseen", tiles: "Tiles", rewindHere: "Play from here",
+    backToGame: "Back to game", first: "First move", prev: "Previous move", next: "Next move",
+    last: "Current position", movePos: "Move {0} of {1}", reviewingStatus: "Reviewing move {0} of {1}",
+    reviewingText: "Board after move {0} of {1}.", scoring: "Scoring", squares: "Squares",
+    howToScore: "How a move scores", tileValues: "Tile values",
+    sqTW: "Triple word: the whole word counts three times.", sqDW: "Double word: the whole word counts twice.",
+    sqTL: "Triple letter: that tile counts three times.", sqDL: "Double letter: that tile counts twice.",
+    sqCenter: "Centre: the first move must cover it. It is a double word.",
+    rules: [
+      "Add up the values of every letter in the word. Blanks are worth 0.",
+      "Letter bonuses (DL, TL) apply first, then word bonuses (DW, TW) multiply the word. Two word bonuses multiply each other (×4, ×9).",
+      "Bonuses count only for tiles placed this turn. Squares already covered count at face value.",
+      "Every new word you form across counts too, with the bonuses under your new tiles.",
+      "Playing all 7 tiles is a bingo: +50.",
+      "Going out with the bag empty earns twice the tiles left on the opponent's rack. After six scoreless turns in a row, the game ends and each player loses the value of their own rack.",
+    ],
+    rulesEx: ["E.g. FAR = 4 + 1 + 1 = 6", "A on DL: 1 × 2 = 2; then the word on TW: × 3", "", "", "", ""],
+    bingo: "bingo", points2: "{0} pts", analysisHelp: "Moves ranked by static equity.", analysis: "Analysis", bestMoves: "Best moves", racks: "Racks",
     moves: "Moves", modeVs: "You vs Kingbble", modeWatch: "Bot vs bot", modeAnalysis: "Analysis",
     helpVs: "Play a game against the engine.", helpWatch: "Watch two bots play each other.",
     helpAnalysis: "Two players on one screen, every rack visible, with the engine's suggestions.",
@@ -57,6 +74,23 @@ const TEXT = {
     recall: "Recoger", shuffle: "Mezclar", exchange: "Cambiar", confirmExchange: "Cambiar selección",
     cancel: "Cancelar", pass: "Pasar", undo: "Deshacer", pause: "Pausa", resume: "Seguir",
     step: "Siguiente jugada", speed: "Velocidad", unseen: "Sin ver", tiles: "Fichas",
+    rewindHere: "Volver a esta jugada", backToGame: "Volver a la partida", first: "Primera jugada",
+    prev: "Jugada anterior", next: "Jugada siguiente", last: "Posición actual", movePos: "Jugada {0} de {1}",
+    reviewingStatus: "Repasando la jugada {0} de {1}", reviewingText: "Tablero tras la jugada {0} de {1}.",
+    scoring: "Puntos", squares: "Casillas", howToScore: "Cómo se puntúa", tileValues: "Valor de las fichas",
+    sqTW: "Triple palabra: la palabra entera vale el triple.", sqDW: "Doble palabra: la palabra entera vale el doble.",
+    sqTL: "Triple letra: esa ficha vale el triple.", sqDL: "Doble letra: esa ficha vale el doble.",
+    sqCenter: "Centro: la primera jugada debe pasar por aquí. Es doble palabra.",
+    rules: [
+      "Suma el valor de cada letra de la palabra. El comodín vale 0.",
+      "Primero se aplican los bonus de letra (DL, TL) y luego los de palabra (DP, TP) multiplican la palabra. Dos bonus de palabra se multiplican entre sí (×4, ×9).",
+      "Los bonus solo cuentan para las fichas que pones en ese turno. Las casillas ya ocupadas valen lo que la ficha.",
+      "Cada palabra nueva que formes en perpendicular también suma, con los bonus de tus fichas nuevas.",
+      "Poner las 7 fichas del atril es un bingo: +50.",
+      "Si acabas tus fichas con la bolsa vacía, sumas el doble de lo que le queda al rival. Tras seis turnos seguidos sin puntos, la partida termina y cada uno resta lo que tiene en el atril.",
+    ],
+    rulesEx: ["Ej.: FAR = 4 + 1 + 1 = 6", "A en DL: 1 × 2 = 2; luego la palabra en TP: × 3", "", "", "", ""],
+    bingo: "bingo", points2: "{0} ptos",
     analysisHelp: "Jugadas ordenadas por equity estática.", analysis: "Análisis",
     bestMoves: "Mejores jugadas", racks: "Atriles", moves: "Jugadas", modeVs: "Tú vs Kingbble",
     modeWatch: "Bot vs bot", modeAnalysis: "Análisis", helpVs: "Juega una partida contra el motor.",
@@ -185,7 +219,8 @@ let animate = new Set(); // squares to animate on next render
 const isHuman = (p) => S && S.players[p] === "human";
 const humans = () => (S ? [0, 1].filter(isHuman) : []);
 const mode = () => (!S ? "vs" : humans().length === 2 ? "analysis" : humans().length === 1 ? "vs" : "watch");
-const myTurn = () => S && !S.over && isHuman(S.to_move);
+const reviewing = () => S && S.viewing < S.moves;
+const myTurn = () => S && !S.over && isHuman(S.to_move) && !reviewing();
 const key = (r, c) => `${r},${c}`;
 const boardAt = (r, c) => (S ? S.board[r][c] : ".");
 const isFree = (r, c) => r >= 0 && c >= 0 && r < N && c < N && boardAt(r, c) === "." && !pending.has(key(r, c));
@@ -242,7 +277,7 @@ async function run(cmd, args = [], extra = {}) {
 // Lets the bots move while it is their turn (with a pause between moves when watching).
 async function botLoop() {
   const token = gameToken;
-  while (S && !S.over && !isHuman(S.to_move) && token === gameToken) {
+  while (S && !S.over && !isHuman(S.to_move) && !reviewing() && token === gameToken) {
     if (mode() === "watch") {
       if (paused) return;
       await new Promise((ok) => setTimeout(ok, 3000 - +$("speed").value));
@@ -275,7 +310,7 @@ function setState(st) {
   if (prev && prev.to_move !== st.to_move) startClock();
   syncRack();
   render();
-  if (st.over && prev && !prev.over) showOver();
+  if (st.over && prev && !prev.over && !reviewing()) showOver();
 }
 
 // The rack shown: the human to move, else the human in the game, else the bot to move.
@@ -429,6 +464,7 @@ function showTabs() {
     moves: true,
     analysis: settings.hints && mode() !== "watch",
     tiles: settings.unseen || mode() === "watch",
+    scoring: true,
   };
   if (!show[tab]) tab = "moves";
   for (const b of document.querySelectorAll(".tab")) {
@@ -450,11 +486,15 @@ function renderPanel() {
     el.classList.toggle("turn", !S.over && S.to_move === p);
   }
   renderClocks();
-  if (S.over) setStatus(t("over"));
+  $("rv-pos").textContent = t("movePos", S.viewing, S.moves);
+  document.body.classList.toggle("reviewing", reviewing());
+  if (reviewing()) setStatus(t("reviewingStatus", S.viewing, S.moves));
+  else if (S.over) setStatus(t("over"));
   else if (mode() === "watch" && paused) setStatus(t("paused"));
   else if (isHuman(S.to_move)) setStatus(humans().length === 1 ? t("yourTurn") : t("turnOf", name(S.to_move)));
 
   showTabs();
+  renderScoring();
   const total = Object.values(S.unseen).reduce((a, b) => a + b, 0);
   $("unseen-count").textContent = total;
   $("bag-count").textContent = t("bag", S.bag);
@@ -474,12 +514,15 @@ function renderPanel() {
   h.innerHTML = "";
   S.history.forEach((e, i) => {
     const li = document.createElement("li");
-    li.className = `p${e.player}`;
+    li.className = `p${e.player}${reviewing() && i === S.viewing - 1 ? " at" : ""}${i >= S.viewing ? " after" : ""}`;
+    li.onclick = () => view(i + 1);
     const m = e.move;
     const text = m.kind === "place" ? m.text.replace(/ \(\d+\)$/, "") : m.kind === "exchange" ? t("exchanges", m.count) : t("passes");
     const score = m.kind === "place" ? `<span class="pts">+${m.score}</span>` : "";
     const rk = e.rack ? `<span class="rk">${e.rack}</span>` : "";
-    li.innerHTML = `<span class="n">${i + 1}</span><span><span class="who">${name(e.player)}</span><span class="mv">${text}</span>${score}${rk}</span><span class="cum">${e.cumulative}</span>`;
+    const focus = reviewing() ? i === S.viewing - 1 : i === S.history.length - 1;
+    const bd = focus && e.breakdown ? `<span class="bd">${breakdownText(e.breakdown)}</span>` : "";
+    li.innerHTML = `<span class="n">${i + 1}</span><span><span class="who">${name(e.player)}</span><span class="mv">${text}</span>${score}${rk}${bd}</span><span class="cum">${e.cumulative}</span>`;
     h.appendChild(li);
   });
   if (S.over) {
@@ -499,8 +542,16 @@ function setStatus(text, thinking = false) {
 
 function updateControls() {
   const watch = mode() === "watch";
-  $("controls").hidden = watch;
-  $("watch-controls").hidden = !watch;
+  const rv = reviewing();
+  $("controls").hidden = watch || rv;
+  $("watch-controls").hidden = !watch || rv;
+  $("review-bar").hidden = !rv;
+  $("rv-first").disabled = $("rv-prev").disabled = !S || S.viewing === 0 || busy;
+  $("rv-next").disabled = $("rv-last").disabled = !rv || busy;
+  if (rv) {
+    $("rv-text").textContent = t("reviewingText", S.viewing, S.moves);
+    $("rv-rewind").disabled = busy;
+  }
   const turn = myTurn() && !busy;
   $("btn-play").disabled = !turn || (exchange ? exchange.size === 0 : pending.size === 0);
   $("btn-play").textContent = exchange ? t("confirmExchange") : t("play");
@@ -514,6 +565,32 @@ function updateControls() {
   $("btn-pause").textContent = paused ? t("resume") : t("pause");
   $("btn-step").disabled = !paused || busy || !S || S.over;
   $("help").textContent = watch ? "" : t({ both: "helpBoth", drag: "helpDrag", type: "helpType" }[settings.input]);
+}
+
+// ---------- scoring ----------
+
+// "NOTARIZE 18×3 = 54 · bingo +50 · 104 pts", "ORGY 16 + ORE 3 · 19 pts"
+function breakdownText(b) {
+  if (!b) return "";
+  const parts = [b.words.map((w) => (w.mult > 1 ? `${w.word} ${w.sum}×${w.mult} = ${w.score}` : `${w.word} ${w.score}`)).join(" + ")];
+  if (b.bingo) parts.push(`${t("bingo")} +${b.bingo}`);
+  parts.push(t("points2", b.total));
+  return parts.join(" · ");
+}
+
+const COUNTS = { "?": 2, A: 9, B: 2, C: 2, D: 4, E: 12, F: 2, G: 3, H: 2, I: 9, J: 1, K: 1, L: 4, M: 2, N: 6, O: 8, P: 2, Q: 1, R: 6, S: 4, T: 6, U: 4, V: 2, W: 2, X: 1, Y: 2, Z: 1 };
+
+function renderScoring() {
+  const labels = BONUS_LABEL[settings.lang] || BONUS_LABEL.en;
+  $("legend").innerHTML = [["T", "tw", "sqTW"], ["D", "dw", "sqDW"], ["t", "tl", "sqTL"], ["d", "dl", "sqDL"]]
+    .map(([k, cls, txt]) => `<li><span class="sq cell ${cls}">${labels[k]}</span><span>${t(txt)}</span></li>`)
+    .join("") + `<li><span class="sq cell center"></span><span>${t("sqCenter")}</span></li>`;
+  const ex = t("rulesEx");
+  $("rules").innerHTML = t("rules").map((r, i) => `<li>${r}${ex[i] ? `<span class="ex">${ex[i]}</span>` : ""}</li>`).join("");
+  const values = S ? S.values : null;
+  $("values").innerHTML = Object.entries(COUNTS)
+    .map(([l, n]) => `<span><b>${l === "?" ? "?" : l}</b><em>${values ? values[l] : ""}</em><small>×${n}</small></span>`)
+    .join("");
 }
 
 // ---------- preview ----------
@@ -535,7 +612,7 @@ function schedulePreview() {
     const r = await api("check", args).catch(() => null);
     if (!r || placementArgs().join() !== args.join()) return;
     pv.className = `preview ${r.ok ? "ok" : "bad"}`;
-    pv.textContent = r.ok ? `${r.move.text.replace(/ \(\d+\)$/, "")} · ${t("points", r.score)}` : tr(r.error);
+    pv.textContent = r.ok ? `${r.move.text.replace(/ \(\d+\)$/, "").split(" ")[0]} · ${breakdownText(r.breakdown) || t("points", r.score)}` : tr(r.error);
   }, 120);
 }
 
@@ -706,6 +783,15 @@ async function onBoardClick(e) {
 
 async function onKey(e) {
   if (document.querySelector("dialog[open]") || e.target.matches("input, select, textarea")) return;
+  if (S && (e.key === "ArrowLeft" || e.key === "ArrowRight") && (!cursor || reviewing())) {
+    view(S.viewing + (e.key === "ArrowLeft" ? -1 : 1));
+    e.preventDefault();
+    return;
+  }
+  if (reviewing()) {
+    if (e.key === "Escape") view(S.moves);
+    return;
+  }
   if (mode() === "watch") {
     if (e.key === " ") {
       togglePause();
@@ -825,6 +911,27 @@ function shuffle() {
     [rack[i], rack[j]] = [rack[j], rack[i]];
   }
   renderRack();
+}
+
+// Shows the position after the first `n` moves; n >= moves goes back to the game.
+async function view(n) {
+  if (!S || busy) return;
+  n = Math.max(0, Math.min(n, S.moves));
+  pending.clear();
+  order = [];
+  exchange = null;
+  cursor = null;
+  if (n === S.viewing) return;
+  if (mode() === "watch" && !paused && n < S.moves) togglePause();
+  await run("view", [n]);
+  if (!reviewing()) botLoop();
+}
+
+async function rewind() {
+  if (!reviewing()) return;
+  gameToken++;
+  const r = await run("rewind", [S.viewing]);
+  if (r) botLoop();
 }
 
 function togglePause() {
@@ -1071,6 +1178,12 @@ async function init() {
   $("btn-gcg").onclick = downloadGcg;
   $("btn-settings").onclick = openSettings;
   $("btn-pause").onclick = togglePause;
+  $("rv-first").onclick = () => view(0);
+  $("rv-prev").onclick = () => view(S.viewing - 1);
+  $("rv-next").onclick = () => view(S.viewing + 1);
+  $("rv-last").onclick = () => view(S.moves);
+  $("rv-live").onclick = () => view(S.moves);
+  $("rv-rewind").onclick = rewind;
   $("btn-step").onclick = step;
   for (const b of $("mode").querySelectorAll("button"))
     b.onclick = () => {
