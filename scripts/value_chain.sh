@@ -31,13 +31,24 @@ rows=$(cat $(find input -name value.csv) | wc -l)
 echo "rows: $rows"
 ((rows >= min_rows)) || { echo "::error::only $rows rows"; exit 1; }
 
-python scripts/train_value.py input --label game --out "$out/value_model.txt" \
-  --engine build/engine/kingbble_valuedata | tee "$out/train.txt"
-[[ -s $out/value_model.txt ]] || { echo "::error::no model"; exit 1; }
-model=$(awk '/^value model:/ {print $5}' "$out/train.txt" | tr -d ,)
-table=$(awk '/^spread\+unseen:/ {print $4}' "$out/train.txt" | tr -d ,)
-awk -v m="$model" -v t="$table" 'BEGIN { exit !(m != "" && t != "" && m < t) }' ||
-  { echo "::error::model log loss $model is not below spread+unseen $table"; exit 1; }
+# Every label in LABELS is trained and scored on the held-out rows' JUDGE label; the
+# one with the lowest log loss becomes value_model.txt.
+best="" best_loss=""
+for label in ${LABELS:-game}; do
+  python scripts/train_value.py input --label "$label" --judge "${JUDGE:-rollout}" \
+    --out "$out/value_model_$label.txt" --engine build/engine/kingbble_valuedata |
+    tee "$out/train_$label.txt"
+  [[ -s $out/value_model_$label.txt ]] || { echo "::error::no model for $label"; exit 1; }
+  loss=$(awk '/^value model:/ {print $5}' "$out/train_$label.txt" | tr -d ,)
+  table=$(awk '/^spread\+unseen:/ {print $4}' "$out/train_$label.txt" | tr -d ,)
+  awk -v m="$loss" -v t="$table" 'BEGIN { exit !(m != "" && t != "" && m < t) }' ||
+    { echo "::error::$label: log loss $loss is not below spread+unseen $table"; exit 1; }
+  if [[ -z $best_loss ]] || awk -v a="$loss" -v b="$best_loss" 'BEGIN { exit !(a < b) }'; then
+    best=$label best_loss=$loss
+  fi
+done
+cp "$out/value_model_$best.txt" "$out/value_model.txt"
+echo "chosen label: $best (held-out log loss $best_loss)"
 
 me=$GITHUB_RUN_ID
 wait_model="until [ \"\$(gh run view $me -R $repo --json status -q .status)\" = completed ]; do sleep 30; done; gh run download $me -R $repo -D model -n shard-0"
