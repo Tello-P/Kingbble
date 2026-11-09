@@ -13,7 +13,7 @@ const TEXT = {
     newGame: "New game", exportGcg: "Download game (GCG)", settings: "Settings", play: "Play",
     recall: "Recall", shuffle: "Shuffle", exchange: "Exchange", confirmExchange: "Exchange selected",
     cancel: "Cancel", pass: "Pass", undo: "Undo", pause: "Pause", resume: "Resume", step: "Next move",
-    speed: "Speed", unseen: "Unseen", analysis: "Analysis", bestMoves: "Best moves", racks: "Racks",
+    speed: "Speed", unseen: "Unseen", tiles: "Tiles", analysisHelp: "Moves ranked by static equity.", analysis: "Analysis", bestMoves: "Best moves", racks: "Racks",
     moves: "Moves", modeVs: "You vs Kingbble", modeWatch: "Bot vs bot", modeAnalysis: "Analysis",
     helpVs: "Play a game against the engine.", helpWatch: "Watch two bots play each other.",
     helpAnalysis: "Two players on one screen, every rack visible, with the engine's suggestions.",
@@ -56,7 +56,8 @@ const TEXT = {
     newGame: "Nueva partida", exportGcg: "Descargar partida (GCG)", settings: "Ajustes", play: "Jugar",
     recall: "Recoger", shuffle: "Mezclar", exchange: "Cambiar", confirmExchange: "Cambiar selección",
     cancel: "Cancelar", pass: "Pasar", undo: "Deshacer", pause: "Pausa", resume: "Seguir",
-    step: "Siguiente jugada", speed: "Velocidad", unseen: "Sin ver", analysis: "Análisis",
+    step: "Siguiente jugada", speed: "Velocidad", unseen: "Sin ver", tiles: "Fichas",
+    analysisHelp: "Jugadas ordenadas por equity estática.", analysis: "Análisis",
     bestMoves: "Mejores jugadas", racks: "Atriles", moves: "Jugadas", modeVs: "Tú vs Kingbble",
     modeWatch: "Bot vs bot", modeAnalysis: "Análisis", helpVs: "Juega una partida contra el motor.",
     helpWatch: "Mira cómo juegan dos bots entre sí.",
@@ -274,7 +275,7 @@ function setState(st) {
   if (prev && prev.to_move !== st.to_move) startClock();
   syncRack();
   render();
-  if (st.over && (!prev || !prev.over)) showOver();
+  if (st.over && prev && !prev.over) showOver();
 }
 
 // The rack shown: the human to move, else the human in the game, else the bot to move.
@@ -413,14 +414,36 @@ function renderRack() {
     el.appendChild(te);
   }
   for (let i = rack.length; i < 7; i++) el.appendChild(Object.assign(document.createElement("div"), { className: "slot" }));
-  $("rack-label").textContent =
-    !S ? "" : humans().length === 1 && isHuman(rackSeat) ? t("yourRack") : t("rackOf", name(rackSeat));
+}
+
+// The player whose rack is shown sits below the board, the other above it.
+function placeBars() {
+  const bottom = Math.max(0, shownSeat());
+  $("bar-bottom").appendChild($(`p${bottom}`));
+  $("bar-top").appendChild($(`p${1 - bottom}`));
+}
+
+let tab = "moves";
+function showTabs() {
+  const show = {
+    moves: true,
+    analysis: settings.hints && mode() !== "watch",
+    tiles: settings.unseen || mode() === "watch",
+  };
+  if (!show[tab]) tab = "moves";
+  for (const b of document.querySelectorAll(".tab")) {
+    b.hidden = !show[b.dataset.tab];
+    b.classList.toggle("on", b.dataset.tab === tab);
+  }
+  for (const pane of document.querySelectorAll(".tabpane")) pane.hidden = pane.dataset.pane !== tab;
 }
 
 function renderPanel() {
   if (!S) return;
+  placeBars();
   for (const p of [0, 1]) {
     const el = $(`p${p}`);
+    el.querySelector(".avatar").innerHTML = isHuman(p) ? name(p).charAt(0) : '<img src="logo.svg" alt="">';
     el.querySelector(".name").textContent = name(p);
     el.querySelector(".sub").textContent = isHuman(p) ? "" : (t("bots")[S.players[p]] || S.players[p]);
     el.querySelector(".score").textContent = S.scores[p];
@@ -431,7 +454,7 @@ function renderPanel() {
   else if (mode() === "watch" && paused) setStatus(t("paused"));
   else if (isHuman(S.to_move)) setStatus(humans().length === 1 ? t("yourTurn") : t("turnOf", name(S.to_move)));
 
-  $("card-unseen").hidden = !settings.unseen;
+  showTabs();
   const total = Object.values(S.unseen).reduce((a, b) => a + b, 0);
   $("unseen-count").textContent = total;
   $("bag-count").textContent = t("bag", S.bag);
@@ -443,27 +466,26 @@ function renderPanel() {
     un.appendChild(s);
   }
 
-  $("card-hints").hidden = !settings.hints || mode() === "watch";
   $("card-racks").hidden = mode() !== "watch";
   if (mode() === "watch")
     $("racks").innerHTML = [0, 1].map((p) => `<div><span>${name(p)}</span><span class="mv">${S.racks[p] || ""}</span></div>`).join("");
 
   const h = $("history");
   h.innerHTML = "";
-  for (const e of S.history) {
+  S.history.forEach((e, i) => {
     const li = document.createElement("li");
     li.className = `p${e.player}`;
     const m = e.move;
     const text = m.kind === "place" ? m.text.replace(/ \(\d+\)$/, "") : m.kind === "exchange" ? t("exchanges", m.count) : t("passes");
-    const score = m.kind === "place" ? ` <span class="rk">+${m.score}</span>` : "";
+    const score = m.kind === "place" ? `<span class="pts">+${m.score}</span>` : "";
     const rk = e.rack ? `<span class="rk">${e.rack}</span>` : "";
-    li.innerHTML = `<span><span class="who">${name(e.player)}</span><span class="mv">${text}</span>${score} ${rk}</span><span class="cum">${e.cumulative}</span>`;
+    li.innerHTML = `<span class="n">${i + 1}</span><span><span class="who">${name(e.player)}</span><span class="mv">${text}</span>${score}${rk}</span><span class="cum">${e.cumulative}</span>`;
     h.appendChild(li);
-  }
+  });
   if (S.over) {
     const li = document.createElement("li");
     li.className = "end";
-    li.innerHTML = `<span>${t("over")}</span><span class="cum">${S.scores[0]} – ${S.scores[1]}</span>`;
+    li.innerHTML = `<span class="n"></span><span>${t("over")}</span><span class="cum">${S.scores[0]}–${S.scores[1]}</span>`;
     h.appendChild(li);
   }
   h.scrollTop = h.scrollHeight;
@@ -764,14 +786,14 @@ async function hint() {
   if (!r) return;
   const ol = $("hints");
   ol.innerHTML = "";
-  for (const h of r.hints) {
+  r.hints.forEach((h, i) => {
     const li = document.createElement("li");
     const m = h.move;
     const text = m.kind === "place" ? m.text : m.kind === "exchange" ? `${t("exchange")} ${m.exchanged}` : t("pass");
-    li.innerHTML = `<span class="mv">${text}</span><span class="eq">${h.equity.toFixed(1)}</span>`;
+    li.innerHTML = `<span class="n">${i + 1}</span><span class="mv">${text}</span><span class="eq">${h.equity.toFixed(1)}</span>`;
     li.onclick = () => loadHint(m);
     ol.appendChild(li);
-  }
+  });
 }
 
 function loadHint(m) {
@@ -999,6 +1021,19 @@ function splash() {
 
 async function init() {
   splash();
+  for (const p of [0, 1]) {
+    const el = document.createElement("div");
+    el.className = "player";
+    el.id = `p${p}`;
+    el.innerHTML = `<div class="avatar"></div><div class="pinfo"><span class="name"></span><span class="sub"></span></div><span class="turn-dot"></span><div class="pnums"><span class="clock"></span><span class="score">0</span></div>`;
+    $(p ? "bar-top" : "bar-bottom").appendChild(el);
+  }
+  for (const b of document.querySelectorAll(".tab"))
+    b.onclick = () => {
+      tab = b.dataset.tab;
+      showTabs();
+      if (tab === "analysis" && myTurn() && !$("hints").children.length) hint();
+    };
   $("coords-cols").innerHTML = [...COLS].map((c) => `<span>${c}</span>`).join("");
   $("coords-rows").innerHTML = Array.from({ length: N }, (_, i) => `<span>${i + 1}</span>`).join("");
   applySettings();
