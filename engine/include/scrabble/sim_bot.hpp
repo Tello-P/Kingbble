@@ -86,6 +86,8 @@ class SimBot : public Bot {
   // Opponent racks inferred from the game so far (e.g. a RackFilter); nullptr
   // for uniform racks only. It must outlive Choose and stay unchanged during it.
   void set_rack_sampler(const RackSampler* sampler) { sampler_ = sampler; }
+  // Seconds per move from now on (e.g. what is left after the rack inference).
+  void set_time_limit(double seconds) { params_.time_limit_s = seconds; }
   // Restarts the random streams from `seed`, as if just constructed with it
   // (e.g. so two bots get the same streams in the same seat of a paired game).
   void Reseed(std::uint64_t seed) {

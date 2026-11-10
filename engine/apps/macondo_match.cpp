@@ -8,6 +8,7 @@
 //       --helper build/macondo_match/kingbble_macondo --macondo-data build/macondo_match/data
 //       --games 40 --seed 1 --time 5 --threads 3 [--bot sim+peg+eg] [--sim-candidates N]
 //       [--sim-plies N] [--sim-halving] [--end-unseen N] [--late-bag N] [--peg-bag N]
+//       [--human-params FILE] [--particles N] [--tau T]
 //       [--gcg-dir DIR] [--stats FILE] [--results FILE [--status]] [--progress]
 // Each side gets --time seconds per move: our simulation, pre-endgame and endgame
 // each stop at it, and Macondo's whole decision does. With --results FILE every
@@ -21,6 +22,10 @@
 // same deals (duel.hpp) and a line goes to FILE: game, bag, unseen, spread, moves,
 // scores, tiles played, static equities, then win and spread differences (Kingbble's
 // move minus Macondo's) with their standard errors. Both moves are shown as text.
+// --bot sim+inf:MODEL+peg+eg tracks Macondo's rack (bot_factory.hpp): softrf
+// (--tau: its temperature), rf, or human (--human-params); --particles sizes the
+// filter. The time the filter takes on Macondo's move comes off our next move's
+// simulation and is counted in our time; each game's total goes to stderr.
 
 #include <sys/wait.h>
 #include <unistd.h>
@@ -190,6 +195,8 @@ int main(int argc, char** argv) {
   sim.end_unseen = 14;
   sim.late_bag = 7;
   PegOptions peg;
+  InferenceOptions inference;
+  std::string human_path;
   for (int i = 1; i < argc; ++i) {
     std::string a = argv[i];
     auto value = [&]() -> std::string {
@@ -239,6 +246,12 @@ int main(int argc, char** argv) {
       peg.max_bag = std::stoi(value());
     } else if (a == "--gcg-dir") {
       gcg_dir = value();
+    } else if (a == "--human-params") {
+      human_path = value();
+    } else if (a == "--particles") {
+      inference.filter.particles = std::stoi(value());
+    } else if (a == "--tau") {
+      inference.tau = std::stod(value());
     } else if (a == "--results") {
       results_path = value();
     } else if (a == "--status") {
@@ -273,7 +286,14 @@ int main(int argc, char** argv) {
   peg.params.candidates = 10;
   peg.params.time_limit_s = move_time;
   peg.approx.time_limit_s = move_time;
-  BotSetup setup = MakeBotSetup(bot_kind, gaddag, &leaves, sim, move_time, peg);
+  HumanModelParams human_params;
+  HumanBotOptions human;
+  if (!human_path.empty()) {
+    human_params = HumanModelParams::FromFile(human_path);
+    human.params = &human_params;
+  }
+  BotSetup setup =
+      MakeBotSetup(bot_kind, gaddag, &leaves, sim, move_time, peg, {}, human, inference);
   Bot* bot = setup.bot.get();
   std::ofstream stats, duels;
   if (!stats_path.empty()) stats.open(stats_path, std::ios::app);
@@ -298,6 +318,10 @@ int main(int argc, char** argv) {
     const int seat_a = g % 2;  // Kingbble's seat
     int moves[2] = {0, 0};     // by side: kingbble, macondo
     double seconds[2] = {0, 0};
+    // Rack inference on Macondo's moves counts against our next move's time.
+    double inference_s = 0, inference_total = 0;
+    if (setup.tracker) setup.tracker->Reseed(MixSeed(seed + static_cast<std::uint64_t>(g)));
+    setup.NewGame(game, seat_a);
     GameRecord record(seat_a == 0 ? std::array<std::string, 2>{"kingbble", "macondo"}
                                   : std::array<std::string, 2>{"macondo", "kingbble"},
                       seat_a == 0 ? std::array<std::string, 2>{"Kingbble", "Macondo"}
@@ -306,6 +330,8 @@ int main(int argc, char** argv) {
                       "seed " + std::to_string(seed) + " game " + std::to_string(g + 1));
     while (!game.over()) {
       const int side = game.to_move() == seat_a ? 0 : 1;
+      if (side == 0 && setup.tracker && setup.sim)
+        setup.sim->set_time_limit(std::max(0.5, move_time - inference_s));
       const auto t0 = std::chrono::steady_clock::now();
       long iterations = 0;
       const Move m =
@@ -314,6 +340,10 @@ int main(int argc, char** argv) {
       const double spent =
           std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
       seconds[side] += spent;
+      if (side == 0) {
+        seconds[0] += inference_s;
+        inference_s = 0;
+      }
       if (duels.is_open() && side == 0 && game.bag_size() > 0) {
         long ignored = 0;
         Move theirs = ParseAnswer(macondo.Ask(Position(game, macondo_lexicon), &ignored), game);
@@ -350,8 +380,17 @@ int main(int argc, char** argv) {
       }
       ++moves[side];
       record.Add(game, m);
+      setup.BeforeMove(game, m);
       game.Apply(m);  // throws on an illegal move
+      const auto t1 = std::chrono::steady_clock::now();
+      setup.AfterMove(game);
+      if (setup.tracker && side == 1) {
+        inference_s = std::chrono::duration<double>(std::chrono::steady_clock::now() - t1).count();
+        inference_total += inference_s;
+      }
     }
+    if (setup.tracker)
+      std::cerr << "inference game " << g + 1 << ": " << inference_total << " s" << std::endl;
     record.Finish(game);
     if (!gcg_dir.empty())
       std::ofstream(gcg_dir + "/game" + std::to_string(g + 1) + ".gcg") << WriteGcg(record.gcg());
