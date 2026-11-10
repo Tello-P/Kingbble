@@ -80,3 +80,10 @@ def test_stats_are_split_by_side_and_phase(tmp_path):
     assert "rival midgame: 1 moves, 2.00 s/move, 300 iterations/move" in rows
     assert any(r.startswith("kingbble pre-endgame") for r in rows)
     assert any(r.startswith("kingbble endgame") for r in rows)
+
+
+def test_stats_skip_a_line_cut_by_a_stopped_run(tmp_path):
+    (tmp_path / "stats.txt").write_text("1 0 50 4.0 100\n1 1 50")
+    assert report.stats_table([tmp_path]) == [
+        "kingbble midgame: 1 moves, 4.00 s/move, 100 iterations/move"
+    ]
