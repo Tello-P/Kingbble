@@ -8,6 +8,7 @@
 // either side, BeforeMove with the position and the move about to be played and
 // AfterMove once it is applied.
 
+#include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
@@ -31,14 +32,41 @@ class UniformModel : public MoveModel {
   double Likelihood(const Observation&, const Rack&) override { return 1; }
 };
 
-// The move models a tracker can use: "none" (uniform), "rangefinder" (or "rf")
-// and "human" (needs the human model's params). Exits on an unknown name.
+// A program's move, softly: a rack explains the move by how close the move's
+// static equity (score plus the leave it kept) is to the rack's best option,
+// floor + exp(-gap / temperature), like Macondo's inference with a soft edge.
+// The floor keeps a rack that cannot explain the move (a phony) possible.
+class SoftRangeFinderModel : public MoveModel {
+ public:
+  SoftRangeFinderModel(const Gaddag& gaddag, const Leaves& leaves, double temperature,
+                       double floor = 1e-3)
+      : ranker_(gaddag, leaves), temperature_(temperature > 0 ? temperature : 4), floor_(floor) {}
+  double Likelihood(const Observation& obs, const Rack& rack) override {
+    const std::vector<Option> options = ranker_.Rank(obs, rack);
+    if (options.empty()) return floor_;
+    double gap = -1;
+    for (int i : OptionRanker::Matches(obs, options)) {
+      const double g = options.front().equity - options[i].equity;
+      if (gap < 0 || g < gap) gap = g;
+    }
+    return gap < 0 ? floor_ : floor_ + std::exp(-gap / temperature_);
+  }
+
+ private:
+  OptionRanker ranker_;
+  double temperature_, floor_;
+};
+
+// The move models a tracker can use: "none" (uniform), "rangefinder" (or "rf"),
+// "softrf" (tau: its temperature, 4 if 0) and "human" (needs the human model's
+// params). Exits on an unknown name.
 inline std::unique_ptr<MoveModel> MakeMoveModel(const std::string& name, const Gaddag& gaddag,
                                                 const Leaves& leaves, const HumanModelParams* human,
                                                 const FeatureLexicon* lexicon, double tau = 0) {
   if (name == "none") return std::make_unique<UniformModel>();
   if (name == "rangefinder" || name == "rf")
     return std::make_unique<RangeFinderModel>(gaddag, leaves, tau);
+  if (name == "softrf") return std::make_unique<SoftRangeFinderModel>(gaddag, leaves, tau);
   if (name == "human") {
     if (!human) {
       std::cerr << "inference model 'human' needs --human-params\n";
@@ -46,7 +74,7 @@ inline std::unique_ptr<MoveModel> MakeMoveModel(const std::string& name, const G
     }
     return std::make_unique<HumanMoveModel>(gaddag, leaves, *human, lexicon);
   }
-  std::cerr << "unknown inference model: " << name << " (none, rangefinder or rf, human)\n";
+  std::cerr << "unknown inference model: " << name << " (none, rangefinder or rf, softrf, human)\n";
   std::exit(2);
 }
 

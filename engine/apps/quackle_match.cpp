@@ -245,7 +245,8 @@ int main(int argc, char** argv) {
   std::unique_ptr<Leaves> leaves;
   if (!leaves_path.empty()) leaves = std::make_unique<Leaves>(Leaves::FromFile(leaves_path));
   sim.seed = seed;
-  std::unique_ptr<Bot> bot = MakeBot(bot_kind, gaddag, leaves.get(), sim, endgame_time, peg);
+  BotSetup setup = MakeBotSetup(bot_kind, gaddag, leaves.get(), sim, endgame_time, peg);
+  Bot* bot = setup.bot.get();
   std::vector<std::string> helper_args = {helper_path, "--lexicon", quackle_lexicon, "--player",
                                           quackle_player};
   if (quackle_threads > 0) {
@@ -266,6 +267,8 @@ int main(int argc, char** argv) {
     if (results.Done(g + 1)) continue;
     Game game(MixSeed(MixSeed(seed) + static_cast<std::uint64_t>(paired ? g / 2 : g)));
     const int seat = g % 2;  // Kingbble's seat
+    if (setup.tracker) setup.tracker->Reseed(MixSeed(seed + static_cast<std::uint64_t>(g)));
+    setup.NewGame(game, seat);
     GameRecord record(seat == 0 ? std::array<std::string, 2>{"kingbble", "quackle"}
                                 : std::array<std::string, 2>{"quackle", "kingbble"},
                       seat == 0 ? std::array<std::string, 2>{"Kingbble", "Quackle"}
@@ -278,7 +281,9 @@ int main(int argc, char** argv) {
               ? bot->Choose(game)
               : ParseAnswer(quackle.Ask(WriteGcg(record.gcg()), game.rack(game.to_move())), game);
       record.Add(game, m);
+      setup.BeforeMove(game, m);
       game.Apply(m);  // throws on an illegal move
+      setup.AfterMove(game);
     }
     record.Finish(game);
     if (!gcg_dir.empty())

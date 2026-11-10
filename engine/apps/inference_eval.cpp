@@ -79,7 +79,7 @@ struct Setup {
 };
 
 std::unique_ptr<MoveModel> MakeModel(const std::string& name, const Setup& s) {
-  if (name == "none" || name == "rangefinder" || name == "human")
+  if (name == "none" || name == "rangefinder" || name == "softrf" || name == "human")
     return MakeMoveModel(name, *s.gaddag, *s.leaves, &s.human, s.lexicon, s.tau);
   if (name == "bot")
     return std::make_unique<HumanMoveModel>(*s.gaddag, *s.leaves, s.bot, s.lexicon);
