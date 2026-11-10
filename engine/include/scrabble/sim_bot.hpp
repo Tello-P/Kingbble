@@ -4,6 +4,7 @@
 #include <functional>
 #include <memory>
 #include <random>
+#include <string>
 #include <vector>
 
 #include "scrabble/bot.hpp"
@@ -50,6 +51,10 @@ struct SimParams {
   // candidates at equal steps of the limit, keeping the best half, so more
   // candidates can be weighed in a fixed time. Needs time_limit_s.
   bool halving = false;
+  // Macondo's simulation (v0.13.9 montecarlo.Simmer under its SIMMING_BOT), see
+  // SimBot::ChooseMacondo. Needs win_pct; candidates is then normally 100.
+  bool macondo_style = false;
+  std::shared_ptr<const std::vector<float>> win_pct;  // LoadMacondoWinPct
 };
 
 // Picks the move of the player to move inside a playout (e.g. from a model of
@@ -76,6 +81,18 @@ struct SimResult {
 // static move. A candidate's value is the spread over those moves plus the
 // leave of the last mover, ours counted for us and the opponent's against. Every candidate sees the
 // same racks and draws in a given iteration, and results do not depend on the number of threads.
+// Macondo's win table (data/strategy/default/winpct.csv): win chance of the
+// player to move by spread (+300 down to -300, one row each) and tiles unseen
+// (0..93, one column each). Throws std::runtime_error on a malformed file.
+std::shared_ptr<const std::vector<float>> LoadMacondoWinPct(const std::string& path);
+std::shared_ptr<const std::vector<float>> MacondoWinPctFromText(const std::string& text);
+// Macondo's addWinPctStat: our win chance after a playout that ended with
+// `spread` (ours minus theirs), `leftover` (leave values, ours minus theirs),
+// `unseen` tiles (bag plus the opponent's rack), with `plies_even` when the
+// opponent is to move.
+double MacondoPlayoutWin(const std::vector<float>& table, int spread, double leftover,
+                         bool game_over, int unseen, bool plies_even);
+
 class SimBot : public Bot {
  public:
   SimBot(const Gaddag& gaddag, const Leaves& leaves, SimParams params);
@@ -101,6 +118,12 @@ class SimBot : public Bot {
                  int plies) const;
   Move Reply(int thread, const Game& game, std::mt19937_64& rng) const;
   Game SamplePosition(const Game& game, std::uint64_t seed) const;
+  struct MacondoValue {
+    double equity = 0, win = 0;
+  };
+  MacondoValue PlayoutMacondo(int thread, const Game& base, const Move& candidate,
+                              std::uint64_t seed, int plies) const;
+  Move ChooseMacondo(const Game& game, const std::vector<RankedMove>& ranked);
 
   SimParams params_;
   const RackSampler* sampler_ = nullptr;

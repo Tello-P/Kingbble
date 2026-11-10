@@ -21,6 +21,9 @@
 // same deals (duel.hpp) and a line goes to FILE: game, bag, unseen, spread, moves,
 // scores, tiles played, static equities, then win and spread differences (Kingbble's
 // move minus Macondo's) with their standard errors. Both moves are shown as text.
+// --macondo-style --win-pct FILE: our simulation as Macondo's (SimParams::
+// macondo_style, 100 candidates unless --sim-candidates), with FILE Macondo's
+// data/strategy/default/winpct.csv.
 
 #include <sys/wait.h>
 #include <unistd.h>
@@ -190,6 +193,8 @@ int main(int argc, char** argv) {
   sim.end_unseen = 14;
   sim.late_bag = 7;
   PegOptions peg;
+  std::string win_pct_path;
+  bool candidates_given = false;
   for (int i = 1; i < argc; ++i) {
     std::string a = argv[i];
     auto value = [&]() -> std::string {
@@ -221,6 +226,7 @@ int main(int argc, char** argv) {
       sim.threads = std::stoi(value());
     } else if (a == "--sim-candidates") {
       sim.candidates = std::stoi(value());
+      candidates_given = true;
     } else if (a == "--sim-plies") {
       sim.plies = std::stoi(value());
     } else if (a == "--sim-halving") {
@@ -237,6 +243,10 @@ int main(int argc, char** argv) {
       sim.late_bag = std::stoi(value());
     } else if (a == "--peg-bag") {
       peg.max_bag = std::stoi(value());
+    } else if (a == "--macondo-style") {
+      sim.macondo_style = true;
+    } else if (a == "--win-pct") {
+      win_pct_path = value();
     } else if (a == "--gcg-dir") {
       gcg_dir = value();
     } else if (a == "--results") {
@@ -273,6 +283,14 @@ int main(int argc, char** argv) {
   peg.params.candidates = 10;
   peg.params.time_limit_s = move_time;
   peg.approx.time_limit_s = move_time;
+  if (sim.macondo_style) {
+    if (win_pct_path.empty()) {
+      std::cerr << "--macondo-style needs --win-pct (Macondo's winpct.csv)\n";
+      return 2;
+    }
+    sim.win_pct = LoadMacondoWinPct(win_pct_path);
+    if (!candidates_given) sim.candidates = 100;  // Macondo's GenerateMoves(100)
+  }
   BotSetup setup = MakeBotSetup(bot_kind, gaddag, &leaves, sim, move_time, peg);
   Bot* bot = setup.bot.get();
   std::ofstream stats, duels;
