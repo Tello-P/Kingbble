@@ -81,6 +81,7 @@ if(SCRABBLE_BUILD_TESTS)
     tests/leaves_test.cpp
     tests/equity_test.cpp
     tests/sim_bot_test.cpp
+    tests/sim_macondo_test.cpp
     tests/sim_depth_test.cpp
     tests/win_prob_test.cpp
     tests/risk_bot_test.cpp
