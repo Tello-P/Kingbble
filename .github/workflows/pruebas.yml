@@ -54,8 +54,9 @@ on:
 
 permissions:
   contents: read
-  # A command can read earlier runs' artifacts: gh run download RUN -R $GITHUB_REPOSITORY.
-  actions: read
+  # A command can read earlier runs' artifacts (gh run download RUN -R $GITHUB_REPOSITORY)
+  # and start the next run of a chain (gh workflow run).
+  actions: write
 
 env:
   GO_VERSION: "1.27.2"
@@ -129,6 +130,21 @@ jobs:
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DSCRABBLE_BUILD_TESTS=OFF
           cmake --build build -j"$(nproc)"
+
+      # The human move model is not public: it sits encrypted on the enc/human-model
+      # branch, and its key in the HUMAN_MODEL_KEY secret. It is decrypted outside
+      # OUT, so it is never uploaded, and removed when the job ends.
+      - name: Decrypt the human model
+        if: contains(inputs.comando, 'HUMAN_MODEL')
+        env:
+          KEY: ${{ secrets.HUMAN_MODEL_KEY }}
+        run: |
+          [[ -n $KEY ]] || { echo "::error::the HUMAN_MODEL_KEY secret is not set"; exit 1; }
+          git fetch -q --depth 1 origin enc/human-model
+          git show FETCH_HEAD:human_model.txt.gpg >"$RUNNER_TEMP/human_model.txt.gpg"
+          gpg --batch --quiet --passphrase-fd 3 -o "$RUNNER_TEMP/human_model.txt" \
+            -d "$RUNNER_TEMP/human_model.txt.gpg" 3<<<"$KEY"
+          echo "HUMAN_MODEL=$RUNNER_TEMP/human_model.txt" >>"$GITHUB_ENV"
 
       - name: Install Python dependencies
         run: pip install -e ".[dev,eval,ml,data]"
@@ -225,6 +241,10 @@ jobs:
             fi
           fi
           exit "$rc"
+
+      - name: Remove the human model
+        if: always()
+        run: rm -f "$RUNNER_TEMP"/human_model.txt*
 
       - name: Keep the issue scripts' results
         if: always()
