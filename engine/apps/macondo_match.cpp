@@ -292,7 +292,8 @@ int main(int argc, char** argv) {
     human_params = HumanModelParams::FromFile(human_path);
     human.params = &human_params;
   }
-  BotSetup setup = MakeBotSetup(bot_kind, gaddag, &leaves, sim, move_time, peg, {}, human, inference);
+  BotSetup setup =
+      MakeBotSetup(bot_kind, gaddag, &leaves, sim, move_time, peg, {}, human, inference);
   Bot* bot = setup.bot.get();
   std::ofstream stats, duels;
   if (!stats_path.empty()) stats.open(stats_path, std::ios::app);
