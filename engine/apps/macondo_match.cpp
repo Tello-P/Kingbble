@@ -21,6 +21,8 @@
 // same deals (duel.hpp) and a line goes to FILE: game, bag, unseen, spread, moves,
 // scores, tiles played, static equities, then win and spread differences (Kingbble's
 // move minus Macondo's) with their standard errors. Both moves are shown as text.
+// --late-candidates N and --keep-bag-candidates K: with at most --end-unseen tiles
+// unseen, N candidates plus the K best moves that leave tiles in the bag.
 
 #include <sys/wait.h>
 #include <unistd.h>
@@ -237,6 +239,10 @@ int main(int argc, char** argv) {
       sim.late_bag = std::stoi(value());
     } else if (a == "--peg-bag") {
       peg.max_bag = std::stoi(value());
+    } else if (a == "--late-candidates") {
+      sim.late_candidates = std::stoi(value());
+    } else if (a == "--keep-bag-candidates") {
+      sim.keep_bag_candidates = std::stoi(value());
     } else if (a == "--gcg-dir") {
       gcg_dir = value();
     } else if (a == "--results") {
