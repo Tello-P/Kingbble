@@ -1,5 +1,6 @@
 #pragma once
 
+#include <bit>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -33,34 +34,40 @@ class Gaddag {
   Node Root() const { return root_; }
   // Outgoing letters of a node, in increasing order.
   std::vector<std::uint8_t> Letters(Node node) const;
-  Node Next(Node node, std::uint8_t letter) const;
+  Node Next(Node node, std::uint8_t letter) const {
+    const FrozenNode& n = nodes_[node];
+    const std::uint32_t bit = 1u << letter;
+    if (!(n.letters & bit)) return kNone;
+    return targets_[n.first_edge + std::popcount(n.letters & (bit - 1))];
+  }
   // Bit L set for each outgoing letter L.
-  std::uint32_t LetterMask(Node node) const { return nodes_[node].letters; }
-  bool IsTerminal(Node node) const { return nodes_[node].terminal; }
+  std::uint32_t LetterMask(Node node) const { return nodes_[node].letters & ~kTerminalBit; }
+  bool IsTerminal(Node node) const { return nodes_[node].letters & kTerminalBit; }
 
   // Dictionary lookup through the separator-free reversed path.
   bool Contains(std::string_view word) const;
 
   std::size_t NumNodes() const { return nodes_.size(); }
-  std::size_t NumEdges() const { return edges_.size(); }
+  std::size_t NumEdges() const { return targets_.size(); }
   std::size_t NumWords() const { return num_words_; }
 
  private:
+  // 8 bytes a node: its first edge, and a bit per outgoing letter (edges sorted
+  // by letter, so an edge's place is the count of lower letters) with the
+  // terminal flag in the top bit; an edge is just its target.
+  static constexpr std::uint32_t kTerminalBit = 1u << 31;
   struct FrozenNode {
     std::uint32_t first_edge;
-    std::uint32_t letters;  // bit L set for each outgoing letter; edges sorted by letter
-    std::uint8_t num_edges;
-    bool terminal;
+    std::uint32_t letters;
   };
   struct Edge {
     std::uint8_t letter;
     Node target;
   };
-
   friend class GaddagBuilder;
 
   std::vector<FrozenNode> nodes_;
-  std::vector<Edge> edges_;
+  std::vector<Node> targets_;
   Node root_ = kNone;
   std::size_t num_words_ = 0;
 };
