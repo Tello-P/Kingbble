@@ -64,10 +64,12 @@ class MoveGenerator {
   void GoOn(int pos, std::uint8_t letter, bool blank, Gaddag::Node next);
   void Record(int start, int end);
   void Take(Tile t) {
+    leave_index_ -= radix_[t];
     rack_.Remove(t);
     if (rack_.Count(t) == 0) rack_letters_ &= ~(1u << t);
   }
   void PutBack(Tile t) {
+    leave_index_ += radix_[t];
     rack_.Add(t);
     rack_letters_ |= 1u << t;
   }
@@ -101,7 +103,11 @@ class MoveGenerator {
   char placed_[kBoardDim];          // '\0' = untouched square in the current partial move
   int tiles_placed_ = 0;
   std::vector<Move>* out_ = nullptr;
-  // GenerateBest state.
+  // GenerateBest state. The rack's leave is numbered by its tile counts (mixed
+  // radix over the rack's distinct tiles) and valued once per call.
+  int radix_[kNumTileTypes] = {};
+  int leave_index_ = 0;
+  double leave_value_[1 << kRackSize] = {};
   Evaluator eval_ = nullptr;
   const void* eval_context_ = nullptr;
   Move* best_ = nullptr;
