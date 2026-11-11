@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <bit>
 #include <cctype>
+#include <functional>
 
 namespace scrabble {
 
@@ -26,6 +27,12 @@ int LetterMultiplier(Bonus b) {
 
 int WordMultiplier(Bonus b) {
   return b == Bonus::kDoubleWord ? 2 : b == Bonus::kTripleWord ? 3 : 1;
+}
+
+// Sorts a few values high first (std::sort trips -Warray-bounds on small arrays).
+void SortDescending(int* v, int n) {
+  for (int i = 1; i < n; ++i)
+    for (int j = i; j > 0 && v[j] > v[j - 1]; --j) std::swap(v[j], v[j - 1]);
 }
 
 void ToBoard(Direction dir, int line, int i, int& row, int& col) {
@@ -117,16 +124,112 @@ long MoveGenerator::GenerateBest(const Board& board, const Rack& rack, Evaluator
     if (rack.Count(Tile(t)) > 0) rack_letters_ |= 1u << t;
   out_ = nullptr;
   Prepare(board);
-  for (Direction dir : {Direction::kHorizontal, Direction::kVertical}) {
+
+  // The best value any leave of each size can add (placing k tiles leaves n - k).
+  std::vector<Tile> tiles;
+  for (int t = 0; t < kNumTileTypes; ++t)
+    for (int k = 0; k < rack.Count(Tile(t)); ++k) tiles.push_back(Tile(t));
+  const int n = static_cast<int>(tiles.size());
+  double best_leave[kRackSize + 1];
+  std::fill(best_leave, best_leave + kRackSize + 1, -1e300);
+  for (unsigned mask = 0; mask < (1u << n); ++mask) {
+    Rack leave;
+    for (int i = 0; i < n; ++i)
+      if (mask & (1u << i)) leave.Add(tiles[i]);
+    const int placed = n - leave.Size();
+    best_leave[placed] = std::max(best_leave[placed], eval(context, 0, leave));
+  }
+  int tile_values[kRackSize] = {};
+  for (int i = 0; i < n; ++i)
+    tile_values[i] = tiles[i] == kBlank ? 0 : EnglishTiles()[tiles[i]].score;
+  SortDescending(tile_values, n);
+
+  // Anchors by their bound, highest first, until no placement can beat the best.
+  struct Item {
+    double bound;
+    int dir, line, anchor;
+  };
+  std::vector<Item> items;
+  for (int d = 0; d < 2; ++d) {
     for (int line = 0; line < kBoardDim; ++line) {
-      dir_ = dir;
+      dir_ = static_cast<Direction>(d);
       line_ = line;
-      sq_ = squares_[static_cast<int>(dir)][line];
-      GenLine(dir, line);
+      sq_ = squares_[d][line];
+      for (int a = 0; a < kBoardDim; ++a)
+        if (sq_[a].anchor)
+          items.push_back({AnchorBound(a, tile_values, n, best_leave), d, line, a});
     }
+  }
+  std::stable_sort(items.begin(), items.end(),
+                   [](const Item& x, const Item& y) { return x.bound > y.bound; });
+  for (int i = 0; i < kBoardDim; ++i) placed_[i] = 0;
+  for (const Item& it : items) {
+    if (found_ && it.bound < *best_value_) break;
+    dir_ = static_cast<Direction>(it.dir);
+    line_ = it.line;
+    sq_ = squares_[it.dir][it.line];
+    anchor_ = it.anchor;
+    tiles_placed_ = 0;
+    Gen(0, gaddag_->Root());
   }
   eval_ = nullptr;
   return seen_;
+}
+
+double MoveGenerator::AnchorBound(int a, const int* tile_values, int rack_size,
+                                  const double* best_leave) const {
+  double best = -1e300;
+  auto empty = [&](int i) { return sq_[i].letter == Board::kEmpty; };
+  // Empty squares to the left of the anchor, nearest first, and to the right.
+  // A placement fills a run of squares, so it stops before an empty square no
+  // rack tile can take (its cross set).
+  const std::uint32_t playable = (rack_letters_ & 1u) ? kAllLetters : rack_letters_;
+  auto usable = [&](int i) { return (sq_[i].cross & playable) != 0; };
+  if (!usable(a)) return -1e300;
+  int left[kBoardDim], right[kBoardDim], nl = 0, nr = 0;
+  for (int i = a - 1; i >= 0; --i)
+    if (empty(i)) {
+      if (!usable(i)) break;
+      left[nl++] = i;
+    }
+  for (int i = a + 1; i < kBoardDim; ++i)
+    if (empty(i)) {
+      if (!usable(i)) break;
+      right[nr++] = i;
+    }
+  for (int L = 0; L <= nl && 1 + L <= rack_size; ++L) {
+    int lo = L ? left[L - 1] : a;
+    while (lo > 0 && !empty(lo - 1)) --lo;  // tiles joined on the left
+    for (int R = 0; R <= nr && 1 + L + R <= rack_size; ++R) {
+      int hi = R ? right[R - 1] : a;
+      while (hi < kBoardDim - 1 && !empty(hi + 1)) ++hi;
+      int existing = 0, word_mult = 1, cross_const = 0, k = 0;
+      int lm[kBoardDim], wm[kBoardDim];
+      bool cross[kBoardDim];
+      for (int i = lo; i <= hi; ++i) {
+        if (!empty(i)) {
+          existing += CellValue(sq_[i].letter);
+          continue;
+        }
+        int r, c;
+        ToBoard(dir_, line_, i, r, c);
+        const Bonus b = Board::BonusAt(r, c);
+        lm[k] = LetterMultiplier(b);
+        wm[k] = WordMultiplier(b);
+        cross[k] = sq_[i].has_cross;
+        word_mult *= wm[k];
+        if (cross[k]) cross_const += sq_[i].cross_score * wm[k];
+        ++k;
+      }
+      int coef[kBoardDim];
+      for (int j = 0; j < k; ++j) coef[j] = lm[j] * word_mult + (cross[j] ? lm[j] * wm[j] : 0);
+      SortDescending(coef, k);
+      int score = existing * word_mult + cross_const + (k == kRackSize ? kBingoBonus : 0);
+      for (int j = 0; j < k; ++j) score += tile_values[j] * coef[j];
+      best = std::max(best, score + best_leave[k]);
+    }
+  }
+  return best;
 }
 
 void MoveGenerator::Prepare(const Board& board) {

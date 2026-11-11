@@ -109,6 +109,9 @@ class MoveGenerator {
   bool found_ = false;
   long seen_ = 0;
   Move BuildMove(int start, int end, int score) const;
+  // Upper bound on the score of any placement through anchor `a` of the current
+  // line placing k tiles, plus best_leave[k]; tile_values sorted high first.
+  double AnchorBound(int a, const int* tile_values, int rack_size, const double* best_leave) const;
 };
 
 }  // namespace scrabble
