@@ -39,6 +39,15 @@ class MoveGenerator {
   // Same, into `out` (cleared first), reusing its storage.
   void Generate(const Board& board, const Rack& rack, std::vector<Move>& out);
 
+  // Values a placement from its score and the tiles it leaves on the rack.
+  using Evaluator = double (*)(const void* context, int score, const Rack& leave);
+  // The placement with the highest value, in the order Generate lists them,
+  // equal values going to TiebreaksBetter; only it is built as a Move. Returns
+  // the number of placements seen; `best` and `best_value` are left alone if
+  // there are none.
+  long GenerateBest(const Board& board, const Rack& rack, Evaluator eval, const void* context,
+                    Move& best, double& best_value);
+
  private:
   struct Square {
     std::uint8_t letter;  // Board::kEmpty or letter (with blank bit)
@@ -92,6 +101,14 @@ class MoveGenerator {
   char placed_[kBoardDim];          // '\0' = untouched square in the current partial move
   int tiles_placed_ = 0;
   std::vector<Move>* out_ = nullptr;
+  // GenerateBest state.
+  Evaluator eval_ = nullptr;
+  const void* eval_context_ = nullptr;
+  Move* best_ = nullptr;
+  double* best_value_ = nullptr;
+  bool found_ = false;
+  long seen_ = 0;
+  Move BuildMove(int start, int end, int score) const;
 };
 
 }  // namespace scrabble

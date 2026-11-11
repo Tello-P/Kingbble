@@ -82,8 +82,10 @@ Leaves Leaves::FromBytes(std::string_view bytes) {
       sorted.keys_.push_back(l.keys_[i]);
       sorted.values_.push_back(l.values_[i]);
     }
+    sorted.BuildIndex();
     return sorted;
   }
+  l.BuildIndex();
   return l;
 }
 
@@ -125,6 +127,7 @@ Leaves Leaves::FromCsv(std::string_view text) {
     l.keys_.push_back(key);
     l.values_.push_back(value);
   }
+  l.BuildIndex();
   return l;
 }
 
@@ -137,12 +140,33 @@ Leaves Leaves::FromFile(const std::string& path) {
   return FromBytes(ss.str());
 }
 
+namespace {
+std::uint64_t Slot(std::uint64_t key, std::uint64_t mask) {
+  return (key * 0x9E3779B97F4A7C15ULL >> 32) & mask;
+}
+}  // namespace
+
+void Leaves::BuildIndex() {
+  std::size_t size = 16;
+  while (size < 2 * keys_.size()) size *= 2;
+  slot_keys_.assign(size, 0);
+  slot_values_.assign(size, 0);
+  slot_mask_ = size - 1;
+  for (std::size_t i = 0; i < keys_.size(); ++i) {
+    std::uint64_t s = Slot(keys_[i], slot_mask_);
+    while (slot_keys_[s] != 0) s = (s + 1) & slot_mask_;
+    slot_keys_[s] = keys_[i];
+    slot_values_[s] = values_[i];
+  }
+}
+
 double Leaves::Value(const Rack& leave) const {
-  if (leave.Empty() || leave.Size() > kMaxKeyTiles) return 0;
-  std::uint64_t key = Key(leave);
-  auto it = std::lower_bound(keys_.begin(), keys_.end(), key);
-  if (it == keys_.end() || *it != key) return 0;
-  return values_[static_cast<std::size_t>(it - keys_.begin())];
+  if (leave.Empty() || leave.Size() > kMaxKeyTiles || slot_keys_.empty()) return 0;
+  const std::uint64_t key = Key(leave);
+  for (std::uint64_t s = Slot(key, slot_mask_);; s = (s + 1) & slot_mask_) {
+    if (slot_keys_[s] == key) return slot_values_[s];
+    if (slot_keys_[s] == 0) return 0;
+  }
 }
 
 }  // namespace scrabble

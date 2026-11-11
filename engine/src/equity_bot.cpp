@@ -18,20 +18,52 @@ std::vector<Move> EquityBot::Options(const Game& game) {
   return moves;
 }
 
+namespace {
+
+// StaticEquity of a placement, from its score and leave.
+struct PlacementEquity {
+  int bag_size;
+  const Leaves* leaves;
+  int late_bag;
+  double out_bonus;  // 2 x the unseen tiles' value: going out with an empty bag
+
+  static double Eval(const void* context, int score, const Rack& leave) {
+    const auto& e = *static_cast<const PlacementEquity*>(context);
+    if (e.bag_size > 0) return score + LeaveValue(leave, e.bag_size, *e.leaves, e.late_bag);
+    if (leave.Empty()) return score + e.out_bonus;
+    return score - 2 * RackValue(leave) - 10;
+  }
+};
+
+}  // namespace
+
+// As the best of Options by StaticEquity, without building every placement.
 Move EquityBot::Choose(const Game& game) {
   const Rack& rack = game.rack(game.to_move());
-  std::vector<Move> moves = Options(game);
-  Rack unseen = UnseenTiles(game.board(), rack);
-  const Move* best = nullptr;
+  const Rack unseen = UnseenTiles(game.board(), rack);
+  const PlacementEquity context{game.bag_size(), &leaves_, late_bag_,
+                                game.bag_size() > 0 ? 0.0 : 2.0 * RackValue(unseen)};
+  Move best;
   double best_equity = 0;
-  for (const Move& m : moves) {
-    double e = StaticEquity(m, rack, game.bag_size(), unseen, leaves_, late_bag_);
-    if (!best || e > best_equity || (e == best_equity && TiebreaksBetter(m, *best))) {
-      best = &m;
+  long n =
+      gen_.GenerateBest(game.board(), rack, &PlacementEquity::Eval, &context, best, best_equity);
+  bool found = n > 0;
+  auto consider = [&](const Move& m) {
+    const double e = StaticEquity(m, rack, game.bag_size(), unseen, leaves_, late_bag_);
+    if (!found || e > best_equity || (e == best_equity && TiebreaksBetter(m, best))) {
+      best = m;
       best_equity = e;
+      found = true;
     }
+  };
+  if (game.bag_size() >= Game::kMinBagForExchange) {
+    const std::vector<Move> exchanges = GenerateExchanges(rack);
+    for (const Move& m : exchanges) consider(m);
+    n += static_cast<long>(exchanges.size());
   }
-  return *best;
+  consider(Move{});  // pass
+  last_num_moves_ = static_cast<std::size_t>(n + 1);
+  return best;
 }
 
 std::vector<RankedMove> EquityBot::Rank(const Game& game) {

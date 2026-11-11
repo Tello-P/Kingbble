@@ -102,6 +102,33 @@ void MoveGenerator::Generate(const Board& board, const Rack& rack, std::vector<M
   }
 }
 
+long MoveGenerator::GenerateBest(const Board& board, const Rack& rack, Evaluator eval,
+                                 const void* context, Move& best, double& best_value) {
+  eval_ = eval;
+  eval_context_ = context;
+  best_ = &best;
+  best_value_ = &best_value;
+  found_ = false;
+  seen_ = 0;
+  board_ = &board;
+  rack_ = rack;
+  rack_letters_ = 0;
+  for (int t = 0; t < kNumTileTypes; ++t)
+    if (rack.Count(Tile(t)) > 0) rack_letters_ |= 1u << t;
+  out_ = nullptr;
+  Prepare(board);
+  for (Direction dir : {Direction::kHorizontal, Direction::kVertical}) {
+    for (int line = 0; line < kBoardDim; ++line) {
+      dir_ = dir;
+      line_ = line;
+      sq_ = squares_[static_cast<int>(dir)][line];
+      GenLine(dir, line);
+    }
+  }
+  eval_ = nullptr;
+  return seen_;
+}
+
 void MoveGenerator::Prepare(const Board& board) {
   // Square data only changes around tiles that differ from the board of the
   // previous call (consecutive calls in a search differ by a move or two).
@@ -276,32 +303,49 @@ void MoveGenerator::Record(int start, int end) {
     for (int i = start; i <= end; ++i)
       if (placed_[i] && sq_[i].has_cross) return;
   }
+  int main = 0, word_mult = 1, cross_total = 0;
+  const TileInfo* tiles = EnglishTiles().data();
+  for (int i = start; i <= end; ++i) {
+    if (!placed_[i]) {
+      main += CellValue(sq_[i].letter);
+      continue;
+    }
+    const char ch = placed_[i];
+    int r, c;
+    ToBoard(dir_, line_, i, r, c);
+    const int v = (ch >= 'a' && ch <= 'z') ? 0 : tiles[ch - 'A' + 1].score;
+    const Bonus bonus = Board::BonusAt(r, c);
+    const int lm = LetterMultiplier(bonus), wm = WordMultiplier(bonus);
+    main += v * lm;
+    word_mult *= wm;
+    if (sq_[i].has_cross) cross_total += (sq_[i].cross_score + v * lm) * wm;
+  }
+  const int score = main * word_mult + cross_total + (tiles_placed_ == kRackSize ? kBingoBonus : 0);
+  if (!eval_) {
+    out_->push_back(BuildMove(start, end, score));
+    return;
+  }
+  ++seen_;
+  // rack_ holds exactly the tiles this placement leaves.
+  const double value = eval_(eval_context_, score, rack_);
+  if (found_ && value < *best_value_) return;
+  Move m = BuildMove(start, end, score);
+  if (!found_ || value > *best_value_ || TiebreaksBetter(m, *best_)) {
+    *best_ = std::move(m);
+    *best_value_ = value;
+    found_ = true;
+  }
+}
+
+Move MoveGenerator::BuildMove(int start, int end, int score) const {
   Move m;
   m.kind = Move::Kind::kPlace;
   m.dir = dir_;
   ToBoard(dir_, line_, start, m.row, m.col);
   m.tiles.reserve(end - start + 1);
-  int main = 0, word_mult = 1, cross_total = 0;
-  for (int i = start; i <= end; ++i) {
-    if (!placed_[i]) {
-      m.tiles.push_back('.');
-      main += CellValue(sq_[i].letter);
-      continue;
-    }
-    char ch = placed_[i];
-    m.tiles.push_back(ch);
-    int r, c;
-    ToBoard(dir_, line_, i, r, c);
-    int v =
-        std::islower(static_cast<unsigned char>(ch)) ? 0 : EnglishTiles()[*TileFromChar(ch)].score;
-    Bonus bonus = Board::BonusAt(r, c);
-    int lm = LetterMultiplier(bonus), wm = WordMultiplier(bonus);
-    main += v * lm;
-    word_mult *= wm;
-    if (sq_[i].has_cross) cross_total += (sq_[i].cross_score + v * lm) * wm;
-  }
-  m.score = main * word_mult + cross_total + (tiles_placed_ == kRackSize ? kBingoBonus : 0);
-  out_->push_back(std::move(m));
+  for (int i = start; i <= end; ++i) m.tiles.push_back(placed_[i] ? placed_[i] : '.');
+  m.score = score;
+  return m;
 }
 
 }  // namespace scrabble

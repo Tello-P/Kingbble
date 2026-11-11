@@ -32,6 +32,12 @@ class Leaves {
 
   std::vector<std::uint64_t> keys_;  // ascending
   std::vector<float> values_;
+  // Open-addressing index of keys_ (0 marks a free slot; no leave key is 0), so
+  // a lookup costs a probe or two instead of a binary search over every leave.
+  std::vector<std::uint64_t> slot_keys_;
+  std::vector<float> slot_values_;
+  std::uint64_t slot_mask_ = 0;
+  void BuildIndex();
 };
 
 }  // namespace scrabble
