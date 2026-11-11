@@ -174,7 +174,11 @@ void MoveGenerator::Generate(const Board& board, const Rack& rack, std::vector<M
       dir_ = dir;
       line_ = line;
       sq_ = squares_[static_cast<int>(dir)][line];
-      GenLine(dir, line);
+      if (index_) {
+        ForEachRun(rack.Size(), [&](int l, int r, int k) { GenRun(l, r, k); });
+      } else {
+        GenLine(dir, line);
+      }
     }
   }
 }
@@ -242,6 +246,37 @@ long MoveGenerator::GenerateBest(const Board& board, const Rack& rack, Evaluator
     bingo_[1] = index.eight_less_one.count(key) > 0;
   }
 
+  for (int i = 0; i < kBoardDim; ++i) placed_[i] = 0;
+  if (index_) {
+    // Runs by their bound, highest first, until no placement can beat the best.
+    struct Run {
+      double bound;
+      int dir, line, l, r, k;
+    };
+    std::vector<Run> runs;
+    for (int d = 0; d < 2; ++d) {
+      for (int line = 0; line < kBoardDim; ++line) {
+        dir_ = static_cast<Direction>(d);
+        line_ = line;
+        sq_ = squares_[d][line];
+        ForEachRun(n, [&](int l, int r, int k) {
+          runs.push_back({RunBound(l, r, k, tile_values, best_leave), d, line, l, r, k});
+        });
+      }
+    }
+    std::stable_sort(runs.begin(), runs.end(),
+                     [](const Run& x, const Run& y) { return x.bound > y.bound; });
+    for (const Run& run : runs) {
+      if (found_ && run.bound < *best_value_) break;
+      dir_ = static_cast<Direction>(run.dir);
+      line_ = run.line;
+      sq_ = squares_[run.dir][run.line];
+      GenRun(run.l, run.r, run.k);
+    }
+    eval_ = nullptr;
+    std::fill(radix_, radix_ + kNumTileTypes, 0);
+    return seen_;
+  }
   // Anchors by their bound, highest first, until no placement can beat the best.
   struct Item {
     double bound;
@@ -260,7 +295,6 @@ long MoveGenerator::GenerateBest(const Board& board, const Rack& rack, Evaluator
   }
   std::stable_sort(items.begin(), items.end(),
                    [](const Item& x, const Item& y) { return x.bound > y.bound; });
-  for (int i = 0; i < kBoardDim; ++i) placed_[i] = 0;
   for (const Item& it : items) {
     if (found_ && it.bound < *best_value_) break;
     dir_ = static_cast<Direction>(it.dir);
@@ -551,6 +585,183 @@ Move MoveGenerator::BuildMove(int start, int end, int score) const {
   for (int i = start; i <= end; ++i) m.tiles.push_back(placed_[i] ? placed_[i] : '.');
   m.score = score;
   return m;
+}
+
+void MoveGenerator::ForEachRun(int rack_size,
+                               const std::function<void(int l, int r, int k)>& fn) const {
+  auto empty = [&](int i) { return sq_[i].letter == Board::kEmpty; };
+  const std::uint32_t playable = (rack_letters_ & 1u) ? kAllLetters : rack_letters_;
+  for (int l = 0; l < kBoardDim; ++l) {
+    if (l > 0 && !empty(l - 1)) continue;  // a run starts after an empty square
+    int k = 0;
+    bool anchor = false;
+    for (int r = l; r < kBoardDim; ++r) {
+      if (empty(r)) {
+        // No rack tile fits here, so no run reaches past it.
+        if (!(sq_[r].cross & playable)) break;
+        if (++k > rack_size) break;
+        anchor = anchor || sq_[r].anchor;
+      }
+      if (r == l || k == 0 || !anchor) continue;
+      if (r + 1 < kBoardDim && !empty(r + 1)) continue;  // the word goes on
+      fn(l, r, k);
+    }
+  }
+}
+
+double MoveGenerator::RunBound(int l, int r, int k, const int* tile_values,
+                               const double* best_leave) const {
+  int existing = 0, word_mult = 1, cross_const = 0, m = 0, board_tiles = 0;
+  int lm[kBoardDim], wm[kBoardDim];
+  bool cross[kBoardDim];
+  for (int i = l; i <= r; ++i) {
+    if (sq_[i].letter != Board::kEmpty) {
+      existing += CellValue(sq_[i].letter);
+      ++board_tiles;
+      continue;
+    }
+    lm[m] = sq_[i].letter_mult;
+    wm[m] = sq_[i].word_mult;
+    cross[m] = sq_[i].has_cross;
+    word_mult *= wm[m];
+    if (cross[m]) cross_const += sq_[i].cross_score * wm[m];
+    ++m;
+  }
+  if (k == kRackSize && board_tiles <= 1 && !bingo_[board_tiles]) return -1e300;
+  int coef[kBoardDim];
+  for (int j = 0; j < m; ++j) coef[j] = lm[j] * word_mult + (cross[j] ? lm[j] * wm[j] : 0);
+  SortDescending(coef, m);
+  int score = existing * word_mult + cross_const + (k == kRackSize ? kBingoBonus : 0);
+  for (int j = 0; j < k; ++j) score += tile_values[j] * coef[j];
+  return score + best_leave[k];
+}
+
+void MoveGenerator::GenRun(int l, int r, int k) {
+  run_l_ = l;
+  run_r_ = r;
+  run_k_ = k;
+  run_key_ = AnagramIndex::Key();
+  int m = 0, existing = 0, word_mult = 1, cross_const = 0;
+  int lm[kBoardDim], wm[kBoardDim];
+  bool cross[kBoardDim];
+  for (int i = l; i <= r; ++i) {
+    if (sq_[i].letter != Board::kEmpty) {
+      run_key_.Add(LetterOf(sq_[i].letter));
+      existing += CellValue(sq_[i].letter);
+      continue;
+    }
+    run_empty_[m] = i;
+    lm[m] = sq_[i].letter_mult;
+    wm[m] = sq_[i].word_mult;
+    cross[m] = sq_[i].has_cross;
+    word_mult *= wm[m];
+    if (cross[m]) cross_const += sq_[i].cross_score * wm[m];
+    ++m;
+  }
+  for (int j = 0; j < m; ++j) run_coef_[j] = lm[j] * word_mult + (cross[j] ? lm[j] * wm[j] : 0);
+  SortDescending(run_coef_, m);
+  run_const_ = existing * word_mult + cross_const + (k == kRackSize ? kBingoBonus : 0);
+  // The rack's distinct tiles, to take sub-racks of k tiles from.
+  sub_n_ = 0;
+  for (int t = 0; t < kNumTileTypes; ++t) {
+    const int c = rack_.Count(Tile(t));
+    if (c == 0) continue;
+    sub_tile_[sub_n_] = Tile(t);
+    sub_count_[sub_n_] = c;
+    sub_take_[sub_n_] = 0;
+    ++sub_n_;
+  }
+  TakeSubracks(0, k);
+}
+
+void MoveGenerator::TakeSubracks(int j, int left) {
+  if (j == sub_n_) {
+    if (left != 0) return;
+    // A sub-rack of run_k_ tiles: its naturals with the run's board letters
+    // (and a letter for each blank) are the letters of the words to place.
+    AnagramIndex::Key key = run_key_;
+    int blanks = 0, index = 0, values[kRackSize], nv = 0;
+    for (int t = 0; t < kNumTileTypes; ++t) nat_left_[t] = 0;
+    for (int i = 0; i < sub_n_; ++i) {
+      const Tile t = sub_tile_[i];
+      if (t == kBlank) {
+        blanks = sub_take_[i];
+      } else {
+        nat_left_[t] = sub_take_[i];
+        for (int c = 0; c < sub_take_[i]; ++c) {
+          key.Add(t);
+          values[nv++] = kScores[t];
+        }
+      }
+      index += (sub_count_[i] - sub_take_[i]) * radix_[t];
+    }
+    if (eval_) {
+      // Its tiles' best score here plus the exact value of what it leaves.
+      SortDescending(values, nv);
+      int score = run_const_;
+      for (int i = 0; i < nv; ++i) score += values[i] * run_coef_[i];
+      if (found_ && score + leave_value_[index] < *best_value_) return;
+      leave_index_ = index;
+    }
+    blanks_left_ = blanks;
+    const int length = run_r_ - run_l_ + 1;
+    auto try_key = [&](const AnagramIndex::Key& k) {
+      int count = 0;
+      const std::uint8_t* words = index_->Find(k, length, count);
+      for (int w = 0; w < count; ++w) PlaceWord(words + w * length, 0);
+    };
+    // Each blank stands for a letter: every multiset of them, in order.
+    auto blank_letters = [&](auto& self, int left_blanks, std::uint8_t from) -> void {
+      if (left_blanks == 0) {
+        try_key(key);
+        return;
+      }
+      for (std::uint8_t x = from; x <= 26; ++x) {
+        key.Add(x);
+        self(self, left_blanks - 1, x);
+        key.Remove(x);
+      }
+    };
+    blank_letters(blank_letters, blanks, 1);
+    return;
+  }
+  for (int take = std::min(sub_count_[j], left); take >= 0; --take) {
+    sub_take_[j] = take;
+    TakeSubracks(j + 1, left - take);
+  }
+  sub_take_[j] = 0;
+}
+
+// Places `word` on the run, empty square by empty square from the i-th: each
+// takes a natural tile or a blank whose letter its cross set allows.
+void MoveGenerator::PlaceWord(const std::uint8_t* word, int i) {
+  if (i == 0) {
+    for (int s = run_l_; s <= run_r_; ++s)
+      if (sq_[s].letter != Board::kEmpty && LetterOf(sq_[s].letter) != word[s - run_l_]) return;
+  }
+  if (i == run_k_) {
+    tiles_placed_ = run_k_;
+    Record(run_l_, run_r_);
+    return;
+  }
+  const int s = run_empty_[i];
+  const std::uint8_t c = word[s - run_l_];
+  if (!(sq_[s].cross & (1u << c))) return;
+  if (nat_left_[c] > 0) {
+    --nat_left_[c];
+    placed_[s] = static_cast<char>('A' + c - 1);
+    placed_value_[s] = kScores[c];
+    PlaceWord(word, i + 1);
+    ++nat_left_[c];
+  }
+  if (blanks_left_ > 0) {
+    --blanks_left_;
+    placed_[s] = static_cast<char>('a' + c - 1);
+    placed_value_[s] = 0;
+    PlaceWord(word, i + 1);
+    ++blanks_left_;
+  }
+  placed_[s] = 0;
 }
 
 }  // namespace scrabble

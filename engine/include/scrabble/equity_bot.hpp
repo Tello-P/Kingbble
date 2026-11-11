@@ -26,6 +26,8 @@ class EquityBot : public Bot {
   const Leaves& leaves() const { return leaves_; }
   // Late leave values with 1..n tiles in the bag (see LeaveValue); 0: off.
   void set_late_bag(int n) { late_bag_ = n; }
+  // Generates moves by anagram lookup (MoveGenerator::set_anagram_index).
+  void set_anagram_index(const AnagramIndex* index) { gen_.set_anagram_index(index); }
   int late_bag() const { return late_bag_; }
 
  private:

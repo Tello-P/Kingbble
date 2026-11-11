@@ -28,6 +28,7 @@ SimBot::SimBot(const Gaddag& gaddag, const Leaves& leaves, SimParams params) : p
   for (int i = 0; i < params_.threads; ++i) {
     bots_.push_back(std::make_unique<EquityBot>(gaddag, leaves));
     bots_.back()->set_late_bag(params_.late_bag);
+    bots_.back()->set_anagram_index(params_.anagram_index);
   }
 }
 
