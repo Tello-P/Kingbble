@@ -8,7 +8,9 @@
 //       --helper build/macondo_match/kingbble_macondo --macondo-data build/macondo_match/data
 //       --games 40 --seed 1 --time 5 --threads 3 [--bot sim+peg+eg] [--sim-candidates N]
 //       [--sim-plies N] [--sim-halving] [--end-unseen N] [--late-bag N] [--peg-bag N]
-//       [--gcg-dir DIR] [--stats FILE] [--results FILE [--status]] [--progress]
+//       [--win-table FILE] [--value-model FILE] [--gcg-dir DIR] [--stats FILE] [--results FILE
+//       [--status]]
+//       [--progress]
 // Each side gets --time seconds per move: our simulation, pre-endgame and endgame
 // each stop at it, and Macondo's whole decision does. With --results FILE every
 // finished game is appended to FILE ("game N: S1 - S2, a in seat K, a M moves T s,
@@ -178,7 +180,8 @@ std::string Summary(const ResultsFile& results, int games) {
 
 int main(int argc, char** argv) {
   std::string lexicon, leaves_path, helper_path, macondo_data, bot_kind = "sim+peg+eg";
-  std::string macondo_lexicon = "CSW24", results_path, gcg_dir, stats_path, duel_path;
+  std::string macondo_lexicon = "CSW24", results_path, gcg_dir, stats_path, duel_path,
+              win_table_path, value_model_path;
   int duel_rollouts = 200;
   int games = 40;
   bool status_only = false, progress = false;
@@ -223,6 +226,10 @@ int main(int argc, char** argv) {
       sim.candidates = std::stoi(value());
     } else if (a == "--sim-plies") {
       sim.plies = std::stoi(value());
+    } else if (a == "--win-table") {
+      win_table_path = value();
+    } else if (a == "--value-model") {
+      value_model_path = value();
     } else if (a == "--sim-halving") {
       sim.halving = true;
     } else if (a == "--stats") {
@@ -251,6 +258,7 @@ int main(int argc, char** argv) {
                    " [--seed S] [--time S] [--threads N] [--bot KIND] [--sim-candidates N]"
                    " [--sim-plies N] [--sim-halving] [--end-unseen N] [--late-bag N]"
                    " [--peg-bag N] [--stats FILE] [--duel FILE [--duel-rollouts N]]"
+                   " [--win-table FILE] [--value-model FILE]"
                    " [--macondo-lexicon NAME] [--gcg-dir DIR] [--results FILE [--status]]"
                    " [--progress]\n";
       return 2;
@@ -268,6 +276,16 @@ int main(int argc, char** argv) {
 
   Gaddag gaddag = Gaddag::FromFile(lexicon);
   Leaves leaves = Leaves::FromFile(leaves_path);
+  WinTable win_table;
+  if (!win_table_path.empty()) {
+    win_table = WinTable::FromFile(win_table_path);
+    sim.win_table = &win_table;
+  }
+  ValueModel value_model;
+  if (!value_model_path.empty()) {
+    value_model = ValueModel::FromFile(value_model_path);
+    sim.value_model = &value_model;
+  }
   sim.seed = seed;
   sim.time_limit_s = move_time;
   peg.params.candidates = 10;
