@@ -55,6 +55,7 @@ class MoveGenerator {
     bool has_cross;       // tiles perpendicular to this square
     int cross_score;      // sum of perpendicular tile values
     bool anchor;
+    std::uint8_t letter_mult, word_mult;  // the square's premium
   };
 
   void Prepare(const Board& board);
@@ -99,8 +100,9 @@ class MoveGenerator {
   // Per-call state.
   const Board* board_ = nullptr;
   Rack rack_;
-  std::uint32_t rack_letters_ = 0;  // bit t set while the rack holds tile t
-  char placed_[kBoardDim];          // '\0' = untouched square in the current partial move
+  std::uint32_t rack_letters_ = 0;    // bit t set while the rack holds tile t
+  char placed_[kBoardDim];            // '\0' = untouched square in the current partial move
+  int placed_value_[kBoardDim] = {};  // face value of each placed tile (0 for a blank)
   int tiles_placed_ = 0;
   std::vector<Move>* out_ = nullptr;
   // GenerateBest state. The rack's leave is numbered by its tile counts (mixed
