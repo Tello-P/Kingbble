@@ -120,6 +120,10 @@ class MoveGenerator {
   // Upper bound on the score of any placement through anchor `a` of the current
   // line placing k tiles, plus best_leave[k]; tile_values sorted high first.
   double AnchorBound(int a, const int* tile_values, int rack_size, const double* best_leave) const;
+  // Set by GenerateBest: whether a 7-tile play through 0 or 1 board tiles can
+  // exist (some word is exactly the rack, or the rack plus one letter).
+  bool bingo_[2] = {true, true};
+  const void* bingos_ = nullptr;  // the gaddag's BingoIndex (movegen.cpp)
 };
 
 }  // namespace scrabble

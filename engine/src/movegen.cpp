@@ -4,6 +4,10 @@
 #include <bit>
 #include <cctype>
 #include <functional>
+#include <memory>
+#include <mutex>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace scrabble {
 
@@ -40,6 +44,69 @@ void SortDescending(int* v, int n) {
 void ToBoard(Direction dir, int line, int i, int& row, int& col) {
   row = dir == Direction::kHorizontal ? line : i;
   col = dir == Direction::kHorizontal ? i : line;
+}
+
+// Sorted letters, 5 bits each.
+std::uint64_t AnagramKey(const std::uint8_t* letters, int n) {
+  std::uint8_t sorted[8];
+  std::copy(letters, letters + n, sorted);
+  std::sort(sorted, sorted + n);
+  std::uint64_t key = 0;
+  for (int i = 0; i < n; ++i) key = key << 5 | sorted[i];
+  return key;
+}
+
+// The 7-letter words, and the 7-letter subsets of 8-letter words, by anagram
+// key: whether a rack of 7 (no blank) has a bingo through no board tile or one.
+struct BingoIndex {
+  std::unordered_set<std::uint64_t> seven, eight_less_one;
+};
+
+void CollectBingos(const Gaddag& g, Gaddag::Node node, std::uint8_t* word, int depth,
+                   BingoIndex& index) {
+  if (depth >= 7 && g.IsTerminal(node)) {
+    if (depth == 7) index.seven.insert(AnagramKey(word, 7));
+    if (depth == 8) {
+      for (int skip = 0; skip < 8; ++skip) {
+        std::uint8_t rest[7];
+        for (int i = 0, j = 0; i < 8; ++i)
+          if (i != skip) rest[j++] = word[i];
+        index.eight_less_one.insert(AnagramKey(rest, 7));
+      }
+    }
+  }
+  if (depth == 8) return;
+  // The separator-free path of a word is the word reversed.
+  for (std::uint32_t bits = g.LetterMask(node) & kAllLetters; bits; bits &= bits - 1) {
+    const auto L = static_cast<std::uint8_t>(std::countr_zero(bits));
+    word[depth] = L;
+    CollectBingos(g, g.Next(node, L), word, depth + 1, index);
+  }
+}
+
+const BingoIndex& BingosOf(const Gaddag& g) {
+  static std::mutex mutex;
+  // By address and size, so a lexicon built later at a freed address is not
+  // mistaken for an earlier one.
+  struct Id {
+    const Gaddag* g;
+    std::size_t nodes, edges;
+    bool operator==(const Id&) const = default;
+  };
+  struct IdHash {
+    std::size_t operator()(const Id& id) const {
+      return std::hash<const void*>()(id.g) ^ id.nodes * 31 ^ id.edges * 131;
+    }
+  };
+  static std::unordered_map<Id, std::unique_ptr<BingoIndex>, IdHash> cache;
+  std::lock_guard<std::mutex> lock(mutex);
+  std::unique_ptr<BingoIndex>& slot = cache[Id{&g, g.NumNodes(), g.NumEdges()}];
+  if (!slot) {
+    slot = std::make_unique<BingoIndex>();
+    std::uint8_t word[8];
+    CollectBingos(g, g.Root(), word, 0, *slot);
+  }
+  return *slot;
 }
 
 }  // namespace
@@ -81,6 +148,7 @@ int ScoreMove(const Board& board, const Move& move) {
 void MoveGenerator::set_gaddag(const Gaddag& gaddag) {
   gaddag_ = &gaddag;
   prepared_ = false;
+  bingos_ = nullptr;
   for (auto& by_line : cross_cache_)
     for (auto& line : by_line)
       for (CrossEntry& e : line) e.valid = false;
@@ -161,6 +229,19 @@ long MoveGenerator::GenerateBest(const Board& board, const Rack& rack, Evaluator
     tile_values[i] = tiles[i] == kBlank ? 0 : EnglishTiles()[tiles[i]].score;
   SortDescending(tile_values, n);
 
+  // A bingo through no board tile, or one, needs a word of the rack (plus a
+  // letter); with a blank, assume there is one.
+  bingo_[0] = bingo_[1] = true;
+  if (n == kRackSize && rack.Count(kBlank) == 0) {
+    if (!bingos_) bingos_ = &BingosOf(*gaddag_);
+    const auto& index = *static_cast<const BingoIndex*>(bingos_);
+    std::uint8_t letters[kRackSize];
+    for (int i = 0; i < n; ++i) letters[i] = tiles[i];
+    const std::uint64_t key = AnagramKey(letters, n);
+    bingo_[0] = index.seven.count(key) > 0;
+    bingo_[1] = index.eight_less_one.count(key) > 0;
+  }
+
   // Anchors by their bound, highest first, until no placement can beat the best.
   struct Item {
     double bound;
@@ -236,6 +317,8 @@ double MoveGenerator::AnchorBound(int a, const int* tile_values, int rack_size,
         if (cross[k]) cross_const += sq_[i].cross_score * wm[k];
         ++k;
       }
+      // Board tiles in the span: with none or one, a bingo needs a word found above.
+      if (k == kRackSize && hi - lo + 1 - k <= 1 && !bingo_[hi - lo + 1 - k]) continue;
       int coef[kBoardDim];
       for (int j = 0; j < k; ++j) coef[j] = lm[j] * word_mult + (cross[j] ? lm[j] * wm[j] : 0);
       SortDescending(coef, k);
