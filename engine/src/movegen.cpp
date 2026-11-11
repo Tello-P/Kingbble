@@ -125,20 +125,35 @@ long MoveGenerator::GenerateBest(const Board& board, const Rack& rack, Evaluator
   out_ = nullptr;
   Prepare(board);
 
-  // The best value any leave of each size can add (placing k tiles leaves n - k).
+  // Every leave of the rack, valued once: index = sum of count x radix over the
+  // rack's distinct tiles. The best value of each size bounds the anchors.
   std::vector<Tile> tiles;
   for (int t = 0; t < kNumTileTypes; ++t)
     for (int k = 0; k < rack.Count(Tile(t)); ++k) tiles.push_back(Tile(t));
   const int n = static_cast<int>(tiles.size());
+  Tile distinct[kRackSize];
+  int counts[kRackSize], radix[kRackSize], m = 0, combos = 1;
+  for (int t = 0; t < kNumTileTypes; ++t) {
+    radix_[t] = 0;
+    if (rack.Count(Tile(t)) == 0) continue;
+    distinct[m] = Tile(t);
+    counts[m] = rack.Count(Tile(t));
+    radix[m] = combos;
+    radix_[t] = combos;
+    combos *= counts[m] + 1;
+    ++m;
+  }
   double best_leave[kRackSize + 1];
   std::fill(best_leave, best_leave + kRackSize + 1, -1e300);
-  for (unsigned mask = 0; mask < (1u << n); ++mask) {
+  for (int index = 0; index < combos; ++index) {
     Rack leave;
-    for (int i = 0; i < n; ++i)
-      if (mask & (1u << i)) leave.Add(tiles[i]);
+    for (int j = 0; j < m; ++j)
+      for (int k = 0; k < index / radix[j] % (counts[j] + 1); ++k) leave.Add(distinct[j]);
+    leave_value_[index] = eval(context, 0, leave);
     const int placed = n - leave.Size();
-    best_leave[placed] = std::max(best_leave[placed], eval(context, 0, leave));
+    best_leave[placed] = std::max(best_leave[placed], leave_value_[index]);
   }
+  leave_index_ = combos - 1;  // every tile still on the rack
   int tile_values[kRackSize] = {};
   for (int i = 0; i < n; ++i)
     tile_values[i] = tiles[i] == kBlank ? 0 : EnglishTiles()[tiles[i]].score;
@@ -173,6 +188,7 @@ long MoveGenerator::GenerateBest(const Board& board, const Rack& rack, Evaluator
     Gen(0, gaddag_->Root());
   }
   eval_ = nullptr;
+  std::fill(radix_, radix_ + kNumTileTypes, 0);
   return seen_;
 }
 
@@ -429,8 +445,8 @@ void MoveGenerator::Record(int start, int end) {
     return;
   }
   ++seen_;
-  // rack_ holds exactly the tiles this placement leaves.
-  const double value = eval_(eval_context_, score, rack_);
+  // leave_index_ numbers exactly the tiles this placement leaves.
+  const double value = score + leave_value_[leave_index_];
   if (found_ && value < *best_value_) return;
   Move m = BuildMove(start, end, score);
   if (!found_ || value > *best_value_ || TiebreaksBetter(m, *best_)) {
