@@ -27,6 +27,10 @@ on:
         description: "Base seed"
         default: "1"
         type: string
+      minimo:
+        description: "Fewest finished games each shard must leave in OUT/match.txt (0: no check)"
+        type: number
+        default: 0
       minutos:
         description: "Minutes per job (30-360); the command stops in time to upload its results"
         default: "330"
@@ -50,8 +54,9 @@ on:
 
 permissions:
   contents: read
-  # A command can read earlier runs' artifacts: gh run download RUN -R $GITHUB_REPOSITORY.
-  actions: read
+  # A command can read earlier runs' artifacts (gh run download RUN -R $GITHUB_REPOSITORY)
+  # and start the next run of a chain (gh workflow run).
+  actions: write
 
 env:
   GO_VERSION: "1.27.2"
@@ -73,7 +78,9 @@ jobs:
           SHARDS: ${{ inputs.shards }}
           SEED: ${{ inputs.seed }}
           MINUTOS: ${{ inputs.minutos }}
+          MINIMO: ${{ inputs.minimo }}
         run: |
+          set -o pipefail
           fail() {
             echo "::error::$1"
             exit 1
@@ -208,7 +215,15 @@ jobs:
           timeout --kill-after=60 "$left" bash -c "$COMANDO" 2>&1 | tee "$OUT/log.txt" || rc=$?
           if ((rc == 124)); then
             echo "::warning::shard $SHARD stopped after ${left}s; it keeps the games it finished"
-            exit 0
+            rc=0
+          fi
+          # A green shard must have results: count the finished games it left.
+          if ((rc == 0 && MINIMO > 0)); then
+            done=$(grep -sc '^game [0-9]*:' "$OUT/match.txt" || true)
+            if ((${done:-0} < MINIMO)); then
+              echo "::error::shard $SHARD left ${done:-0} games, fewer than $MINIMO"
+              exit 1
+            fi
           fi
           exit "$rc"
 
