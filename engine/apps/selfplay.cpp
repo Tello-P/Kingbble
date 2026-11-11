@@ -60,6 +60,7 @@
 #include "manifest.hpp"
 #include "results_file.hpp"
 #include "run_seeds.hpp"
+#include "scrabble/anagram_index.hpp"
 #include "scrabble/gaddag.hpp"
 #include "scrabble/game.hpp"
 
@@ -106,6 +107,7 @@ int main(int argc, char** argv) {
   std::string results_path, gcg_dir, human_path, freq_path, alt_path;
   int human_rating = 0;
   bool status_only = false;
+  bool wmp = false;
   bool paired = false;
   bool endgame_fallback = false;  // "+eg" bots play the inner move when not solved exactly
   bool endgame_stats = false;     // per "+eg" bot: solves, exact ones, moves changed vs inner
@@ -193,6 +195,8 @@ int main(int argc, char** argv) {
       endgame_stats = true;
     } else if (a == "--endgame-fallback") {
       endgame_fallback = true;
+    } else if (a == "--wmp") {
+      wmp = true;
     } else if (a == "--paired") {
       paired = true;
     } else if (a == "--per-game-seeds") {
@@ -264,6 +268,12 @@ int main(int argc, char** argv) {
   using Clock = std::chrono::steady_clock;
   auto t0 = Clock::now();
   Gaddag gaddag = Gaddag::FromFile(lexicon);
+  // --wmp: every simulating bot generates moves by anagram lookup.
+  AnagramIndex anagrams;
+  if (wmp) {
+    anagrams = AnagramIndex::FromGaddag(gaddag);
+    sim.anagram_index = &anagrams;
+  }
   double build_s = std::chrono::duration<double>(Clock::now() - t0).count();
   std::cout << "lexicon: " << gaddag.NumWords() << " words, " << gaddag.NumNodes() << " nodes, "
             << gaddag.NumEdges() << " edges, built in " << build_s << " s\n";

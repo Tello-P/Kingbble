@@ -2,8 +2,10 @@
 
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <vector>
 
+#include "scrabble/anagram_index.hpp"
 #include "scrabble/board.hpp"
 #include "scrabble/gaddag.hpp"
 #include "scrabble/move.hpp"
@@ -38,6 +40,12 @@ class MoveGenerator {
   std::vector<Move> Generate(const Board& board, const Rack& rack);
   // Same, into `out` (cleared first), reusing its storage.
   void Generate(const Board& board, const Rack& rack, std::vector<Move>& out);
+
+  // Generates by anagram lookup in `index` (built from the same lexicon)
+  // instead of walking the GADDAG: for every run of squares a placement can
+  // fill, each sub-rack of the right size plus the board letters in the run
+  // finds its words directly. The same moves; nullptr goes back.
+  void set_anagram_index(const AnagramIndex* index) { index_ = index; }
 
   // Values a placement from its score and the tiles it leaves on the rack.
   using Evaluator = double (*)(const void* context, int score, const Rack& leave);
@@ -124,6 +132,24 @@ class MoveGenerator {
   // exist (some word is exactly the rack, or the rack plus one letter).
   bool bingo_[2] = {true, true};
   const void* bingos_ = nullptr;  // the gaddag's BingoIndex (movegen.cpp)
+
+  // Anagram generation (set_anagram_index).
+  const AnagramIndex* index_ = nullptr;
+  // The current line's runs of squares a placement can fill: [l, r] with k
+  // empty squares, and in GenerateBest their bound.
+  void ForEachRun(int rack_size, const std::function<void(int l, int r, int k)>& fn) const;
+  void GenRun(int l, int r, int k);
+  void TakeSubracks(int j, int left);
+  void PlaceWord(const std::uint8_t* word, int i);
+  double RunBound(int l, int r, int k, const int* tile_values, const double* best_leave) const;
+  int run_l_ = 0, run_r_ = 0, run_k_ = 0;
+  int run_empty_[kBoardDim];   // the run's empty squares
+  int run_coef_[kBoardDim];    // their multipliers for a tile's face value, high first
+  int run_const_ = 0;          // the score without the placed tiles' face values
+  AnagramIndex::Key run_key_;  // the run's board letters
+  Tile sub_tile_[kRackSize];   // the rack's distinct tiles
+  int sub_count_[kRackSize], sub_take_[kRackSize], sub_n_ = 0;
+  int nat_left_[kNumTileTypes] = {}, blanks_left_ = 0;
 };
 
 }  // namespace scrabble

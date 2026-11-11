@@ -22,6 +22,7 @@ add_library(scrabble_engine
   src/approx_preendgame_bot.cpp
   src/gcg.cpp
   src/wordmap.cpp
+  src/anagram_index.cpp
   src/kwg.cpp
   src/cgp.cpp
   src/wordprune.cpp
@@ -81,6 +82,7 @@ if(SCRABBLE_BUILD_TESTS)
     tests/leaves_test.cpp
     tests/equity_test.cpp
     tests/sim_bot_test.cpp
+    tests/wmp_test.cpp
     tests/sim_depth_test.cpp
     tests/win_prob_test.cpp
     tests/risk_bot_test.cpp

@@ -50,6 +50,8 @@ struct SimParams {
   // candidates at equal steps of the limit, keeping the best half, so more
   // candidates can be weighed in a fixed time. Needs time_limit_s.
   bool halving = false;
+  // Move generation by anagram lookup for every bot inside (null: GADDAG walk).
+  const AnagramIndex* anagram_index = nullptr;
 };
 
 // Picks the move of the player to move inside a playout (e.g. from a model of
