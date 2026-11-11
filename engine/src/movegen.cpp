@@ -17,9 +17,11 @@ std::uint8_t CellAt(const Board& b, Direction dir, int line, int i) {
 
 std::uint8_t LetterOf(std::uint8_t cell) { return cell & ~Board::kBlankBit; }
 
-int CellValue(std::uint8_t cell) {
-  return (cell & Board::kBlankBit) ? 0 : EnglishTiles()[LetterOf(cell)].score;
-}
+// Face values by tile, as EnglishTiles.
+constexpr int kScores[32] = {0, 1, 3, 3,  2, 1, 4, 2, 4, 1, 8, 5, 1, 3,
+                             1, 1, 3, 10, 1, 1, 1, 1, 4, 4, 8, 4, 10};
+
+int CellValue(std::uint8_t cell) { return (cell & Board::kBlankBit) ? 0 : kScores[LetterOf(cell)]; }
 
 int LetterMultiplier(Bonus b) {
   return b == Bonus::kDoubleLetter ? 2 : b == Bonus::kTripleLetter ? 3 : 1;
@@ -227,11 +229,8 @@ double MoveGenerator::AnchorBound(int a, const int* tile_values, int rack_size,
           existing += CellValue(sq_[i].letter);
           continue;
         }
-        int r, c;
-        ToBoard(dir_, line_, i, r, c);
-        const Bonus b = Board::BonusAt(r, c);
-        lm[k] = LetterMultiplier(b);
-        wm[k] = WordMultiplier(b);
+        lm[k] = sq_[i].letter_mult;
+        wm[k] = sq_[i].word_mult;
         cross[k] = sq_[i].has_cross;
         word_mult *= wm[k];
         if (cross[k]) cross_const += sq_[i].cross_score * wm[k];
@@ -299,6 +298,13 @@ MoveGenerator::Square MoveGenerator::ComputeSquare(const Board& board, Direction
   s.has_cross = false;
   s.cross_score = 0;
   s.anchor = false;
+  {
+    int r, c;
+    ToBoard(dir, line, i, r, c);
+    const Bonus b = Board::BonusAt(r, c);
+    s.letter_mult = static_cast<std::uint8_t>(LetterMultiplier(b));
+    s.word_mult = static_cast<std::uint8_t>(WordMultiplier(b));
+  }
   if (s.letter != Board::kEmpty) return s;
 
   // Perpendicular neighbours: tiles before (lower index) and after this square.
@@ -379,13 +385,15 @@ void MoveGenerator::Gen(int pos, Gaddag::Node node) {
     ++tiles_placed_;
     if (has_letter) {
       Take(L);
-      placed_[idx] = TileToChar(L);
+      placed_[idx] = static_cast<char>('A' + L - 1);
+      placed_value_[idx] = kScores[L];
       GoOn(pos, L, false, next);
       PutBack(L);
     }
     if (has_blank) {
       Take(kBlank);
-      placed_[idx] = static_cast<char>(std::tolower(TileToChar(L)));
+      placed_[idx] = static_cast<char>('a' + L - 1);
+      placed_value_[idx] = 0;
       GoOn(pos, L, true, next);
       PutBack(kBlank);
     }
@@ -423,21 +431,16 @@ void MoveGenerator::Record(int start, int end) {
       if (placed_[i] && sq_[i].has_cross) return;
   }
   int main = 0, word_mult = 1, cross_total = 0;
-  const TileInfo* tiles = EnglishTiles().data();
   for (int i = start; i <= end; ++i) {
+    const Square& q = sq_[i];
     if (!placed_[i]) {
-      main += CellValue(sq_[i].letter);
+      main += CellValue(q.letter);
       continue;
     }
-    const char ch = placed_[i];
-    int r, c;
-    ToBoard(dir_, line_, i, r, c);
-    const int v = (ch >= 'a' && ch <= 'z') ? 0 : tiles[ch - 'A' + 1].score;
-    const Bonus bonus = Board::BonusAt(r, c);
-    const int lm = LetterMultiplier(bonus), wm = WordMultiplier(bonus);
-    main += v * lm;
-    word_mult *= wm;
-    if (sq_[i].has_cross) cross_total += (sq_[i].cross_score + v * lm) * wm;
+    const int v = placed_value_[i] * q.letter_mult;
+    main += v;
+    word_mult *= q.word_mult;
+    if (q.has_cross) cross_total += (q.cross_score + v) * q.word_mult;
   }
   const int score = main * word_mult + cross_total + (tiles_placed_ == kRackSize ? kBingoBonus : 0);
   if (!eval_) {
