@@ -58,6 +58,15 @@ class AnagramIndex {
   }
   std::vector<Slot> slots_;
   std::uint64_t slot_mask_ = 0;
+  // Existence filter (Bloom, two bits a key, about 16 bits per key, so it
+  // stays in cache): most lookups find nothing, and a clear bit says so
+  // without touching the table. A set pair may still be a miss.
+  std::vector<std::uint64_t> filter_;
+  std::uint64_t filter_mask_ = 0;
+  bool MayContain(std::uint64_t h) const {
+    const std::uint64_t a = h & filter_mask_, b = (h >> 40) & filter_mask_;
+    return (filter_[a >> 6] >> (a & 63) & 1) && (filter_[b >> 6] >> (b & 63) & 1);
+  }
   // Every word's letters less one, with the bit of the letter left out.
   struct BlankSlot {
     Key key;
