@@ -145,6 +145,7 @@ class MoveGenerator {
   struct Subrack {
     AnagramIndex::Key key;
     int blanks = 0, nv = 0, leave = 0;
+    std::uint32_t mask = 0;  // its natural letters
     int values[kRackSize] = {};
     std::uint8_t letters[kRackSize] = {};
   };
@@ -161,6 +162,9 @@ class MoveGenerator {
   int run_empty_[kBoardDim];   // the run's empty squares
   int run_coef_[kBoardDim];    // their multipliers for a tile's face value, high first
   int run_const_ = 0;          // the score without the placed tiles' face values
+  // Cross sets of the run's empty squares that a cross word restricts.
+  std::uint32_t run_cross_[kBoardDim];
+  int run_crosses_ = 0;
   AnagramIndex::Key run_key_;  // the run's board letters
   Tile sub_tile_[kRackSize];   // the rack's distinct tiles
   int sub_count_[kRackSize], sub_take_[kRackSize], sub_n_ = 0;
