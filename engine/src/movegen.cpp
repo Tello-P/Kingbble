@@ -663,9 +663,6 @@ void MoveGenerator::GenRun(int l, int r, int k) {
   for (int j = 0; j < m; ++j) run_coef_[j] = lm[j] * word_mult + (cross[j] ? lm[j] * wm[j] : 0);
   SortDescending(run_coef_, m);
   run_const_ = existing * word_mult + cross_const + (k == kRackSize ? kBingoBonus : 0);
-  run_crosses_ = 0;
-  for (int j = 0; j < m; ++j)
-    if (sq_[run_empty_[j]].has_cross) run_cross_[run_crosses_++] = sq_[run_empty_[j]].cross;
   if (k == r - l + 1) {
     // No board tile in the run: some sub-rack of k tiles must be a word.
     if (alone_[k] < 0) {
@@ -710,7 +707,6 @@ void MoveGenerator::TakeSubracks(int j, int size) {
       } else {
         for (int c = 0; c < sub_take_[i]; ++c) {
           sub.key.Add(t);
-          sub.mask |= 1u << t;
           sub.letters[sub.nv] = t;
           sub.values[sub.nv++] = kScores[t];
         }
@@ -738,10 +734,6 @@ void MoveGenerator::TrySubrack(const Subrack& sub) {
     if (found_ && score + leave_value_[sub.leave] < *best_value_) return;
     leave_index_ = sub.leave;
   }
-  // Without a blank, every square a cross word restricts needs one of its letters.
-  if (sub.blanks == 0)
-    for (int i = 0; i < run_crosses_; ++i)
-      if (!(run_cross_[i] & sub.mask)) return;
   AnagramIndex::Key key = run_key_;
   key.lo += sub.key.lo;
   key.hi += sub.key.hi;
