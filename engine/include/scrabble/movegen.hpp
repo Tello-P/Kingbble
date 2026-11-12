@@ -149,6 +149,9 @@ class MoveGenerator {
     std::uint8_t letters[kRackSize] = {};
   };
   std::vector<Subrack> subracks_[kRackSize + 1];
+  // Whether some sub-rack of each size is a word by itself (1 yes, 0 no, -1 not
+  // known yet this call): a run without board tiles needs one.
+  int alone_[kRackSize + 1];
   void PrepareSubracks();
   void TakeSubracks(int j, int size);
   void TrySubrack(const Subrack& sub);
