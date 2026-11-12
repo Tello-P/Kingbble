@@ -139,7 +139,19 @@ class MoveGenerator {
   // empty squares, and in GenerateBest their bound.
   void ForEachRun(int rack_size, const std::function<void(int l, int r, int k)>& fn) const;
   void GenRun(int l, int r, int k);
-  void TakeSubracks(int j, int left);
+  // The rack's sub-racks, built once per call: by size, each with its natural
+  // letters as a key, its blanks, its tiles' face values (high first), its
+  // natural letters one by one and the index of the leave it keeps.
+  struct Subrack {
+    AnagramIndex::Key key;
+    int blanks = 0, nv = 0, leave = 0;
+    int values[kRackSize] = {};
+    std::uint8_t letters[kRackSize] = {};
+  };
+  std::vector<Subrack> subracks_[kRackSize + 1];
+  void PrepareSubracks();
+  void TakeSubracks(int j, int size);
+  void TrySubrack(const Subrack& sub);
   void PlaceWord(const std::uint8_t* word, int i);
   double RunBound(int l, int r, int k, const int* tile_values, const double* best_leave) const;
   int run_l_ = 0, run_r_ = 0, run_k_ = 0;
