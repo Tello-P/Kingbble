@@ -108,7 +108,6 @@ Move SimBot::Choose(const Game& game) {
   results_.clear();
   std::vector<RankedMove> ranked = bots_[0]->Rank(game);
   last_num_moves_ = bots_[0]->last_num_moves();
-  const std::size_t n = std::min(ranked.size(), static_cast<std::size_t>(params_.candidates));
   const std::uint64_t base_seed = MixSeed(MixSeed(params_.seed) + calls_++);
   // With an empty bag the opponent's rack is known: one playout is exact.
   const int max_iterations = game.bag_size() == 0 ? 1 : std::max(1, params_.max_iterations);
@@ -116,6 +115,24 @@ Move SimBot::Choose(const Game& game) {
   const bool to_end =
       params_.end_unseen > 0 &&
       UnseenTiles(game.board(), game.rack(game.to_move())).Size() <= params_.end_unseen;
+  std::size_t want = static_cast<std::size_t>(params_.candidates);
+  if (to_end && params_.late_candidates > 0)
+    want = static_cast<std::size_t>(params_.late_candidates);
+  std::size_t n = std::min(ranked.size(), want);
+  // With tiles in the bag, the best moves that leave some there (and so do not
+  // hand the opponent the first move of the endgame) are simulated too.
+  if (to_end && game.bag_size() > 0 && params_.keep_bag_candidates > 0) {
+    int added = 0;
+    for (std::size_t i = n; i < ranked.size() && added < params_.keep_bag_candidates; ++i) {
+      const Move& m = ranked[i].move;
+      if (m.kind == Move::Kind::kExchange || m.TilesPlayed() >= game.bag_size()) continue;
+      std::rotate(ranked.begin() + static_cast<std::ptrdiff_t>(n),
+                  ranked.begin() + static_cast<std::ptrdiff_t>(i),
+                  ranked.begin() + static_cast<std::ptrdiff_t>(i) + 1);
+      ++n;
+      ++added;
+    }
+  }
   const int plies = to_end ? 1000 : params_.plies;
 
   // Grown batch by batch: a time limit usually stops far from max_iterations.

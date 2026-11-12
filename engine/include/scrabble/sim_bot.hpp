@@ -52,6 +52,12 @@ struct SimParams {
   bool halving = false;
   // Move generation by anagram lookup for every bot inside (null: GADDAG walk).
   const AnagramIndex* anagram_index = nullptr;
+  // With at most end_unseen tiles unseen (the pre-endgame and endgame), this
+  // many candidates instead of `candidates` (0: the same), plus up to
+  // keep_bag_candidates more: the best by static equity beyond them that leave
+  // tiles in the bag.
+  int late_candidates = 0;
+  int keep_bag_candidates = 0;
 };
 
 // Picks the move of the player to move inside a playout (e.g. from a model of
