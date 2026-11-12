@@ -175,6 +175,7 @@ void MoveGenerator::Generate(const Board& board, const Rack& rack, std::vector<M
       line_ = line;
       sq_ = squares_[static_cast<int>(dir)][line];
       if (index_) {
+        if (dir == Direction::kHorizontal && line == 0) PrepareSubracks();
         ForEachRun(rack.Size(), [&](int l, int r, int k) { GenRun(l, r, k); });
       } else {
         GenLine(dir, line);
@@ -248,6 +249,7 @@ long MoveGenerator::GenerateBest(const Board& board, const Rack& rack, Evaluator
 
   for (int i = 0; i < kBoardDim; ++i) placed_[i] = 0;
   if (index_) {
+    PrepareSubracks();
     // Runs by their bound, highest first, until no placement can beat the best.
     struct Run {
       double bound;
@@ -661,7 +663,11 @@ void MoveGenerator::GenRun(int l, int r, int k) {
   for (int j = 0; j < m; ++j) run_coef_[j] = lm[j] * word_mult + (cross[j] ? lm[j] * wm[j] : 0);
   SortDescending(run_coef_, m);
   run_const_ = existing * word_mult + cross_const + (k == kRackSize ? kBingoBonus : 0);
-  // The rack's distinct tiles, to take sub-racks of k tiles from.
+  for (const Subrack& sub : subracks_[k]) TrySubrack(sub);
+}
+
+void MoveGenerator::PrepareSubracks() {
+  for (auto& list : subracks_) list.clear();
   sub_n_ = 0;
   for (int t = 0; t < kNumTileTypes; ++t) {
     const int c = rack_.Count(Tile(t));
@@ -671,76 +677,83 @@ void MoveGenerator::GenRun(int l, int r, int k) {
     sub_take_[sub_n_] = 0;
     ++sub_n_;
   }
-  TakeSubracks(0, k);
+  TakeSubracks(0, 0);
 }
 
-void MoveGenerator::TakeSubracks(int j, int left) {
+void MoveGenerator::TakeSubracks(int j, int size) {
   if (j == sub_n_) {
-    if (left != 0) return;
-    // A sub-rack of run_k_ tiles: its naturals with the run's board letters
-    // (and a letter for each blank) are the letters of the words to place.
-    AnagramIndex::Key key = run_key_;
-    int blanks = 0, index = 0, values[kRackSize], nv = 0;
-    for (int t = 0; t < kNumTileTypes; ++t) nat_left_[t] = 0;
+    if (size == 0) return;
+    Subrack sub;
     for (int i = 0; i < sub_n_; ++i) {
       const Tile t = sub_tile_[i];
       if (t == kBlank) {
-        blanks = sub_take_[i];
+        sub.blanks = sub_take_[i];
       } else {
-        nat_left_[t] = sub_take_[i];
         for (int c = 0; c < sub_take_[i]; ++c) {
-          key.Add(t);
-          values[nv++] = kScores[t];
+          sub.key.Add(t);
+          sub.letters[sub.nv] = t;
+          sub.values[sub.nv++] = kScores[t];
         }
       }
-      index += (sub_count_[i] - sub_take_[i]) * radix_[t];
+      sub.leave += (sub_count_[i] - sub_take_[i]) * radix_[t];
     }
-    if (eval_) {
-      // Its tiles' best score here plus the exact value of what it leaves.
-      SortDescending(values, nv);
-      int score = run_const_;
-      for (int i = 0; i < nv; ++i) score += values[i] * run_coef_[i];
-      if (found_ && score + leave_value_[index] < *best_value_) return;
-      leave_index_ = index;
-    }
-    blanks_left_ = blanks;
-    const int length = run_r_ - run_l_ + 1;
-    auto try_key = [&](const AnagramIndex::Key& k) {
-      int count = 0;
-      const std::uint8_t* words = index_->Find(k, length, count);
-      for (int w = 0; w < count; ++w) PlaceWord(words + w * length, 0);
-    };
-    // Each blank stands for a letter: every multiset of them, in order. The
-    // last blank's letters come from one lookup of the blank table.
-    auto blank_letters = [&](auto& self, int left_blanks, std::uint8_t from) -> void {
-      if (left_blanks == 0) {
-        try_key(key);
-        return;
-      }
-      if (left_blanks == 1) {
-        const std::uint32_t letters = index_->BlankLetters(key) & ~((1u << from) - 1);
-        for (std::uint32_t bits = letters; bits; bits &= bits - 1) {
-          const auto x = static_cast<std::uint8_t>(std::countr_zero(bits));
-          key.Add(x);
-          try_key(key);
-          key.Remove(x);
-        }
-        return;
-      }
-      for (std::uint8_t x = from; x <= 26; ++x) {
-        key.Add(x);
-        self(self, left_blanks - 1, x);
-        key.Remove(x);
-      }
-    };
-    blank_letters(blank_letters, blanks, 1);
+    SortDescending(sub.values, sub.nv);
+    subracks_[size].push_back(sub);
     return;
   }
-  for (int take = std::min(sub_count_[j], left); take >= 0; --take) {
+  for (int take = sub_count_[j]; take >= 0; --take) {
     sub_take_[j] = take;
-    TakeSubracks(j + 1, left - take);
+    TakeSubracks(j + 1, size + take);
   }
   sub_take_[j] = 0;
+}
+
+// A sub-rack of run_k_ tiles: its naturals with the run's board letters (and a
+// letter for each blank) are the letters of the words to place.
+void MoveGenerator::TrySubrack(const Subrack& sub) {
+  if (eval_) {
+    // Its tiles' best score here plus the exact value of what it leaves.
+    int score = run_const_;
+    for (int i = 0; i < sub.nv; ++i) score += sub.values[i] * run_coef_[i];
+    if (found_ && score + leave_value_[sub.leave] < *best_value_) return;
+    leave_index_ = sub.leave;
+  }
+  AnagramIndex::Key key = run_key_;
+  key.lo += sub.key.lo;
+  key.hi += sub.key.hi;
+  for (int i = 0; i < sub.nv; ++i) ++nat_left_[sub.letters[i]];
+  blanks_left_ = sub.blanks;
+  const int length = run_r_ - run_l_ + 1;
+  auto try_key = [&](const AnagramIndex::Key& k) {
+    int count = 0;
+    const std::uint8_t* words = index_->Find(k, length, count);
+    for (int w = 0; w < count; ++w) PlaceWord(words + w * length, 0);
+  };
+  // Each blank stands for a letter: every multiset of them, in order. The
+  // last blank's letters come from one lookup of the blank table.
+  auto blank_letters = [&](auto& self, int left_blanks, std::uint8_t from) -> void {
+    if (left_blanks == 0) {
+      try_key(key);
+      return;
+    }
+    if (left_blanks == 1) {
+      const std::uint32_t letters = index_->BlankLetters(key) & ~((1u << from) - 1);
+      for (std::uint32_t bits = letters; bits; bits &= bits - 1) {
+        const auto x = static_cast<std::uint8_t>(std::countr_zero(bits));
+        key.Add(x);
+        try_key(key);
+        key.Remove(x);
+      }
+      return;
+    }
+    for (std::uint8_t x = from; x <= 26; ++x) {
+      key.Add(x);
+      self(self, left_blanks - 1, x);
+      key.Remove(x);
+    }
+  };
+  blank_letters(blank_letters, sub.blanks, 1);
+  for (int i = 0; i < sub.nv; ++i) --nat_left_[sub.letters[i]];
 }
 
 // Places `word` on the run, empty square by empty square from the i-th: each
