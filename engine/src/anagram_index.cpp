@@ -63,7 +63,41 @@ AnagramIndex AnagramIndex::FromGaddag(const Gaddag& gaddag, int max_length) {
     i = j;
   }
   index.num_words_ = words.size();
+  // The blank table: for each group's letters, each distinct letter left out.
+  // Sized for every (group, letter) pair, at most half full.
+  auto has = [](const Key& k, std::uint8_t x) {
+    return x <= 16 ? (k.lo >> (4 * (x - 1)) & 15) != 0 : (k.hi >> (4 * (x - 17)) & 15) != 0;
+  };
+  std::size_t pairs = 0;
+  for (const Slot& slot : index.slots_)
+    if (slot.count)
+      for (std::uint8_t x = 1; x <= 26; ++x) pairs += has(slot.key, x);
+  std::size_t bsize = 1024;
+  while (bsize < 2 * pairs) bsize *= 2;
+  index.blank_slots_.assign(bsize, BlankSlot());
+  index.blank_mask_ = bsize - 1;
+  for (const Slot& slot : index.slots_) {
+    if (!slot.count) continue;
+    for (std::uint8_t x = 1; x <= 26; ++x) {
+      if (!has(slot.key, x)) continue;
+      Key less = slot.key;
+      less.Remove(x);
+      std::uint64_t b = Hash(less) & index.blank_mask_;
+      while (index.blank_slots_[b].letters != 0 && !(index.blank_slots_[b].key == less))
+        b = (b + 1) & index.blank_mask_;
+      if (index.blank_slots_[b].letters == 0) index.blank_slots_[b].key = less;
+      index.blank_slots_[b].letters |= 1u << x;
+    }
+  }
   return index;
+}
+
+std::uint32_t AnagramIndex::BlankLetters(const Key& key) const {
+  for (std::uint64_t b = Hash(key) & blank_mask_;; b = (b + 1) & blank_mask_) {
+    const BlankSlot& slot = blank_slots_[b];
+    if (slot.letters == 0) return 0;
+    if (slot.key == key) return slot.letters;
+  }
 }
 
 const std::uint8_t* AnagramIndex::Find(const Key& key, [[maybe_unused]] int length,

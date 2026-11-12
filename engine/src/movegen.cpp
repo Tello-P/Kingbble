@@ -710,10 +710,21 @@ void MoveGenerator::TakeSubracks(int j, int left) {
       const std::uint8_t* words = index_->Find(k, length, count);
       for (int w = 0; w < count; ++w) PlaceWord(words + w * length, 0);
     };
-    // Each blank stands for a letter: every multiset of them, in order.
+    // Each blank stands for a letter: every multiset of them, in order. The
+    // last blank's letters come from one lookup of the blank table.
     auto blank_letters = [&](auto& self, int left_blanks, std::uint8_t from) -> void {
       if (left_blanks == 0) {
         try_key(key);
+        return;
+      }
+      if (left_blanks == 1) {
+        const std::uint32_t letters = index_->BlankLetters(key) & ~((1u << from) - 1);
+        for (std::uint32_t bits = letters; bits; bits &= bits - 1) {
+          const auto x = static_cast<std::uint8_t>(std::countr_zero(bits));
+          key.Add(x);
+          try_key(key);
+          key.Remove(x);
+        }
         return;
       }
       for (std::uint8_t x = from; x <= 26; ++x) {
