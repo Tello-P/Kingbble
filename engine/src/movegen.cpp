@@ -663,27 +663,11 @@ void MoveGenerator::GenRun(int l, int r, int k) {
   for (int j = 0; j < m; ++j) run_coef_[j] = lm[j] * word_mult + (cross[j] ? lm[j] * wm[j] : 0);
   SortDescending(run_coef_, m);
   run_const_ = existing * word_mult + cross_const + (k == kRackSize ? kBingoBonus : 0);
-  if (k == r - l + 1) {
-    // No board tile in the run: some sub-rack of k tiles must be a word.
-    if (alone_[k] < 0) {
-      alone_[k] = 0;
-      for (const Subrack& sub : subracks_[k]) {
-        int count = 0;
-        if (sub.blanks == 0 ? index_->Find(sub.key, k, count) != nullptr
-                            : sub.blanks > 1 || index_->BlankLetters(sub.key) != 0) {
-          alone_[k] = 1;
-          break;
-        }
-      }
-    }
-    if (!alone_[k]) return;
-  }
   for (const Subrack& sub : subracks_[k]) TrySubrack(sub);
 }
 
 void MoveGenerator::PrepareSubracks() {
   for (auto& list : subracks_) list.clear();
-  std::fill(alone_, alone_ + kRackSize + 1, -1);
   sub_n_ = 0;
   for (int t = 0; t < kNumTileTypes; ++t) {
     const int c = rack_.Count(Tile(t));
