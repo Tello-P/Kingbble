@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <unordered_map>
 #include <vector>
 
 #include "scrabble/gaddag.hpp"
@@ -42,16 +41,19 @@ class AnagramIndex {
   std::size_t NumWords() const { return num_words_; }
 
  private:
-  struct KeyHash {
-    std::size_t operator()(const Key& k) const {
-      return static_cast<std::size_t>((k.lo * 0x9E3779B97F4A7C15ULL) ^
-                                      (k.hi * 0xC2B2AE3D27D4EB4FULL));
-    }
-  };
-  struct Range {
+  // Open addressing over a power-of-two table (a slot with count 0 is free),
+  // so a lookup is a hash and usually one cache line.
+  struct Slot {
+    Key key;
     std::uint32_t first = 0, count = 0;  // offset in letters_, number of words
   };
-  std::unordered_map<Key, Range, KeyHash> map_;
+  static std::uint64_t Hash(const Key& k) {
+    std::uint64_t h =
+        k.lo * 0x9E3779B97F4A7C15ULL ^ (k.hi + 0x632BE59BD9B4E019ULL) * 0xC2B2AE3D27D4EB4FULL;
+    return h ^ (h >> 31);
+  }
+  std::vector<Slot> slots_;
+  std::uint64_t slot_mask_ = 0;
   std::vector<std::uint8_t> letters_;
   std::size_t num_words_ = 0;
 };
