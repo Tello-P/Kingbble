@@ -41,15 +41,25 @@ AnagramIndex AnagramIndex::FromGaddag(const Gaddag& gaddag, int max_length) {
     return *a.second < *b.second;
   });
   AnagramIndex index;
+  std::size_t groups = 0;
+  for (std::size_t i = 0; i < keyed.size(); ++i)
+    groups += i == 0 || !(keyed[i].first == keyed[i - 1].first);
+  std::size_t size = 1024;
+  while (size < 2 * groups) size *= 2;
+  index.slots_.assign(size, Slot());
+  index.slot_mask_ = size - 1;
   for (std::size_t i = 0; i < keyed.size();) {
+    Slot slot;
+    slot.key = keyed[i].first;
+    slot.first = static_cast<std::uint32_t>(index.letters_.size());
     std::size_t j = i;
-    Range r;
-    r.first = static_cast<std::uint32_t>(index.letters_.size());
     for (; j < keyed.size() && keyed[j].first == keyed[i].first; ++j) {
       index.letters_.insert(index.letters_.end(), keyed[j].second->begin(), keyed[j].second->end());
-      ++r.count;
+      ++slot.count;
     }
-    index.map_.emplace(keyed[i].first, r);
+    std::uint64_t s = Hash(slot.key) & index.slot_mask_;
+    while (index.slots_[s].count != 0) s = (s + 1) & index.slot_mask_;
+    index.slots_[s] = slot;
     i = j;
   }
   index.num_words_ = words.size();
@@ -58,13 +68,16 @@ AnagramIndex AnagramIndex::FromGaddag(const Gaddag& gaddag, int max_length) {
 
 const std::uint8_t* AnagramIndex::Find(const Key& key, [[maybe_unused]] int length,
                                        int& count) const {
-  const auto it = map_.find(key);
-  if (it == map_.end()) {
-    count = 0;
-    return nullptr;
+  for (std::uint64_t s = Hash(key) & slot_mask_;; s = (s + 1) & slot_mask_) {
+    const Slot& slot = slots_[s];
+    if (slot.count == 0) break;
+    if (slot.key == key) {
+      count = static_cast<int>(slot.count);
+      return letters_.data() + slot.first;
+    }
   }
-  count = static_cast<int>(it->second.count);
-  return letters_.data() + it->second.first;  // offsets are in letters, words share a length
+  count = 0;
+  return nullptr;
 }
 
 }  // namespace scrabble
