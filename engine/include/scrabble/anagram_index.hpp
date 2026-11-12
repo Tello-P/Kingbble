@@ -38,6 +38,10 @@ class AnagramIndex {
   // one after another; nullptr and 0 if there are none.
   const std::uint8_t* Find(const Key& key, int length, int& count) const;
 
+  // Letters x for which `key` plus x has words (bit x set): one lookup answers
+  // a blank, instead of one per letter.
+  std::uint32_t BlankLetters(const Key& key) const;
+
   std::size_t NumWords() const { return num_words_; }
 
  private:
@@ -54,6 +58,13 @@ class AnagramIndex {
   }
   std::vector<Slot> slots_;
   std::uint64_t slot_mask_ = 0;
+  // Every word's letters less one, with the bit of the letter left out.
+  struct BlankSlot {
+    Key key;
+    std::uint32_t letters = 0;  // 0: free
+  };
+  std::vector<BlankSlot> blank_slots_;
+  std::uint64_t blank_mask_ = 0;
   std::vector<std::uint8_t> letters_;
   std::size_t num_words_ = 0;
 };
