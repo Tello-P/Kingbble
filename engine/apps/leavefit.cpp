@@ -283,8 +283,9 @@ int main(int argc, char** argv) {
       "noise sd %.2f\n",
       target, full.samples, full.racks, full.acc.size(), full.empty_mean, std::sqrt(full.noise));
   std::printf(
-      "scale %.3f; halves: %ld common leaves, split-half r %.3f, true sd of differences %.3f\n",
-      scale, common, split_r, std::sqrt(tau2));
+      "scale %.3f; halves: %ld common leaves, split-half r %.3f (weighted by use %.3f), true sd "
+      "of differences %.3f\n",
+      scale, common, split_r, weighted_r, std::sqrt(tau2));
   std::printf(
       "deltas written %ld (|delta| >= %.2f), mean |delta| %.3f, capped %ld, mean shrink %.3f\n",
       written, min_delta, written ? abs_sum / written : 0.0, capped,
