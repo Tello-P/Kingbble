@@ -238,6 +238,23 @@ int main(int argc, char** argv) {
     sxy += (x - ma) * (y - mb);
   }
   const double split_r = sxx > 0 && syy > 0 ? sxy / std::sqrt(sxx * syy) : 0;
+  // The same, weighting each leave by how much it is measured (its effective
+  // samples, a proxy for how often it is kept): the common leaves matter most.
+  double wsum = 0, wxx = 0, wyy = 0, wxy = 0;
+  {
+    std::size_t i = 0;
+    for (const auto& [key, a] : fa.acc) {
+      const auto it = fb.acc.find(key);
+      if (it == fb.acc.end()) continue;
+      const double w = a.w * a.w / a.q + it->second.w * it->second.w / it->second.q;
+      const auto& [x, y] = pairs[i++];
+      wsum += w;
+      wxx += w * (x - ma) * (x - ma);
+      wyy += w * (y - mb) * (y - mb);
+      wxy += w * (x - ma) * (y - mb);
+    }
+  }
+  const double weighted_r = wxx > 0 && wyy > 0 ? wxy / std::sqrt(wxx * wyy) : 0;
 
   std::ofstream out(out_path);
   out << "leave,delta\n";

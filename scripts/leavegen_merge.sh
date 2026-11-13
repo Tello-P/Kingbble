@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
 # Merges a leavegen run's shards into two independent halves (even and odd
 # shards) for kingbble_leavefit's split-half estimate. Sums only.
-#   scripts/leavegen_merge.sh DATA_RUN
+#   scripts/leavegen_merge.sh DATA_RUN...   (several runs' sums add up)
 set -euo pipefail
-run=$1
 repo=$GITHUB_REPOSITORY
-until [[ $(gh run view "$run" -R "$repo" --json status -q .status) == completed ]]; do
-  sleep 60
+for run in "$@"; do
+  until [[ $(gh run view "$run" -R "$repo" --json status -q .status) == completed ]]; do
+    sleep 60
+  done
+  gh run download "$run" -R "$repo" -D "data/$run" --pattern "shard-*"
 done
-gh run download "$run" -R "$repo" -D data --pattern "shard-*"
 even=() odd=()
-for d in data/shard-*; do
+for d in data/*/shard-*; do
   n=${d##*-}
   for f in "$d"/lg-*.bin; do
     [[ -s $f ]] || { echo "::error::$f is empty"; exit 1; }
