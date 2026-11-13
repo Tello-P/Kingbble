@@ -286,7 +286,10 @@ int main(int argc, char** argv) {
             << gaddag.NumEdges() << " edges, built in " << build_s << " s\n";
 
   std::unique_ptr<Leaves> leaves, a_leaves;
-  if (!a_leaves_path.empty()) a_leaves = std::make_unique<Leaves>(Leaves::FromFile(a_leaves_path));
+  if (!a_leaves_path.empty()) {
+    a_leaves = std::make_unique<Leaves>(Leaves::FromFile(a_leaves_path));
+    if (!a_deltas_path.empty()) a_leaves->AddDeltas(a_deltas_path);  // on bot a's own table
+  }
   if (!leaves_path.empty()) {
     leaves = std::make_unique<Leaves>(Leaves::FromFile(leaves_path));
     if (!a_deltas_path.empty() && !a_leaves) {
