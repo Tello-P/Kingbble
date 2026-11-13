@@ -169,10 +169,21 @@ int main(int argc, char** argv) {
   }
   Leaves prior = Leaves::FromFile(leaves_path);
   if (!deltas_path.empty()) prior.AddDeltas(deltas_path);
-  std::vector<std::string> both = half_a;
-  both.insert(both.end(), half_b.begin(), half_b.end());
   const Fit fa = Accumulate(half_a, target), fb = Accumulate(half_b, target);
-  const Fit full = Accumulate(both, target);
+  // The whole data is the two halves together: their sums add up.
+  Fit full;
+  full.samples = fa.samples + fb.samples;
+  full.racks = fa.racks + fb.racks;
+  full.noise =
+      full.samples > 0 ? (fa.noise * fa.samples + fb.noise * fb.samples) / full.samples : 0;
+  full.empty_mean = (fa.empty_mean + fb.empty_mean) / 2;
+  full.acc = fa.acc;
+  for (const auto& [key, a] : fb.acc) {
+    Acc& f = full.acc[key];
+    f.w += a.w;
+    f.s += a.s;
+    f.q += a.q;
+  }
 
   auto leave_of = [](std::uint64_t key) {
     // Leaves::Key: 5 bits a tile (tile + 1), first tile highest, padded to 12 tiles.
