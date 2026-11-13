@@ -23,6 +23,7 @@ add_library(scrabble_engine
   src/gcg.cpp
   src/wordmap.cpp
   src/anagram_index.cpp
+  src/win_table.cpp
   src/kwg.cpp
   src/cgp.cpp
   src/wordprune.cpp
@@ -48,6 +49,8 @@ target_link_libraries(kingbble_risk_diag PRIVATE scrabble_engine)
 add_executable(kingbble_position_bank apps/position_bank.cpp)
 target_link_libraries(kingbble_position_bank PRIVATE scrabble_engine)
 add_executable(kingbble_duel_judge apps/duel_judge.cpp)
+add_executable(kingbble_leavegen apps/leavegen.cpp)
+target_link_libraries(kingbble_leavegen PRIVATE scrabble_engine)
 target_link_libraries(kingbble_duel_judge PRIVATE scrabble_engine)
 add_executable(kingbble_macondo_match apps/macondo_match.cpp)
 target_link_libraries(kingbble_macondo_match PRIVATE scrabble_engine)
