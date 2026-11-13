@@ -20,16 +20,20 @@ class Leaves {
   static Leaves FromBytes(std::string_view bytes);
   static Leaves FromCsv(std::string_view text);
   static Leaves FromFile(const std::string& path);
+  // Adds "LEAVE,delta" lines (as FromCsv reads them) to this table's values,
+  // in memory: a refit is shipped as corrections to a published table, never
+  // as a table of its own. Throws on a leave the table lacks.
+  void AddDeltas(const std::string& path);
 
   // Value in points of keeping `leave`; 0 for the empty leave or one the table lacks.
   double Value(const Rack& leave) const;
   std::size_t Size() const { return keys_.size(); }
 
- private:
   // Up to 12 tiles, 5 bits each (tile + 1), first tile in the highest bits, so
   // keys sort like the leaves themselves.
   static std::uint64_t Key(const Rack& leave);
 
+ private:
   std::vector<std::uint64_t> keys_;  // ascending
   std::vector<float> values_;
   // Open-addressing index of keys_ (0 marks a free slot; no leave key is 0), so

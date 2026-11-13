@@ -99,6 +99,9 @@ void PrintSummary(const ResultsFile& results, int games, const std::string& kind
 }  // namespace
 
 int main(int argc, char** argv) {
+  // --leave-deltas / --a-leave-deltas: corrections added in memory to --leaves
+  // (bot a: to a copy of it, unless --a-leaves).
+  std::string deltas_path, a_deltas_path;
   std::string lexicon, leaves_path, a_leaves_path, kind_a = "greedy", kind_b = "greedy";
   int games = 10;
   std::uint64_t seed = 1;
@@ -137,6 +140,10 @@ int main(int argc, char** argv) {
       leaves_path = value();
     } else if (a == "--a-leaves") {
       a_leaves_path = value();
+    } else if (a == "--leave-deltas") {
+      deltas_path = value();
+    } else if (a == "--a-leave-deltas") {
+      a_deltas_path = value();
     } else if (a == "--a") {
       kind_a = value();
     } else if (a == "--b") {
@@ -282,6 +289,11 @@ int main(int argc, char** argv) {
   if (!a_leaves_path.empty()) a_leaves = std::make_unique<Leaves>(Leaves::FromFile(a_leaves_path));
   if (!leaves_path.empty()) {
     leaves = std::make_unique<Leaves>(Leaves::FromFile(leaves_path));
+    if (!a_deltas_path.empty() && !a_leaves) {
+      a_leaves = std::make_unique<Leaves>(*leaves);
+      a_leaves->AddDeltas(a_deltas_path);
+    }
+    if (!deltas_path.empty()) leaves->AddDeltas(deltas_path);
     std::cout << "leaves: " << leaves->Size() << "\n";
   }
   sim.seed = seed;
