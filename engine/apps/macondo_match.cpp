@@ -184,6 +184,7 @@ int main(int argc, char** argv) {
   int duel_rollouts = 200;
   int games = 40;
   bool status_only = false, progress = false, wmp = false;
+  std::string deltas_path;  // --leave-deltas: corrections added to --leaves in memory
   std::uint64_t seed = 1;
   double move_time = 5;
   SimParams sim;
@@ -245,6 +246,8 @@ int main(int argc, char** argv) {
       sim.late_candidates = std::stoi(value());
     } else if (a == "--keep-bag-candidates") {
       sim.keep_bag_candidates = std::stoi(value());
+    } else if (a == "--leave-deltas") {
+      deltas_path = value();
     } else if (a == "--gcg-dir") {
       gcg_dir = value();
     } else if (a == "--results") {
@@ -282,6 +285,7 @@ int main(int argc, char** argv) {
     sim.anagram_index = &anagrams;
   }
   Leaves leaves = Leaves::FromFile(leaves_path);
+  if (!deltas_path.empty()) leaves.AddDeltas(deltas_path);  // in memory only
   sim.seed = seed;
   sim.time_limit_s = move_time;
   peg.params.candidates = 10;

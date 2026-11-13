@@ -131,6 +131,21 @@ Leaves Leaves::FromCsv(std::string_view text) {
   return l;
 }
 
+void Leaves::AddDeltas(const std::string& path) {
+  std::ifstream in(path, std::ios::binary);
+  if (!in) throw std::runtime_error("cannot open " + path);
+  std::stringstream ss;
+  ss << in.rdbuf();
+  const Leaves deltas = FromCsv(ss.str());
+  for (std::size_t i = 0; i < deltas.keys_.size(); ++i) {
+    const auto it = std::lower_bound(keys_.begin(), keys_.end(), deltas.keys_[i]);
+    if (it == keys_.end() || *it != deltas.keys_[i])
+      throw std::runtime_error("leave delta for a leave the table lacks: " + path);
+    values_[static_cast<std::size_t>(it - keys_.begin())] += deltas.values_[i];
+  }
+  BuildIndex();
+}
+
 Leaves Leaves::FromFile(const std::string& path) {
   std::ifstream in(path, std::ios::binary);
   if (!in) throw std::runtime_error("cannot open KLV: " + path);
