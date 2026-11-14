@@ -144,6 +144,10 @@ int main(int argc, char** argv) {
       deltas_path = value();
     } else if (a == "--a-leave-deltas") {
       a_deltas_path = value();
+    } else if (a == "--end-unseen") {
+      sim.end_unseen = std::stoi(value());
+    } else if (a == "--late-bag") {
+      sim.late_bag = std::stoi(value());
     } else if (a == "--late-candidates") {
       sim.late_candidates = std::stoi(value());
     } else if (a == "--keep-bag-candidates") {
