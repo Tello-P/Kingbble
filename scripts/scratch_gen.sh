@@ -20,14 +20,24 @@ if [[ $prev != none ]]; then
   cp prev/cum.csv cum.csv
   fetch_prev="gh run download $prev -R \$GITHUB_REPOSITORY -D prev -n shard-0 && cp prev/cum.csv cum.csv && "
 fi
-since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-gh workflow run pruebas.yml -R "$repo" --ref "$GITHUB_REF_NAME" -f shards=20 -f seed=$((300000000 + gen * 10000000)) \
-  -f minutos=300 -f csw24=$csw \
-  -f comando="python3 scripts/zero_leaves.py > zero.csv && echo leave,delta > cum.csv && ${fetch_prev}for p in 0 1 2 3; do build/engine/kingbble_leavegen --lexicon lexica/$lex.txt --leaves zero.csv --leave-deltas cum.csv --win-table configs/win_table_csw24.csv --games $games --seed \$((SEED + p * 1000)) --wmp --out \$OUT/lg-\$p.bin & done; wait; for p in 0 1 2 3; do test -s \$OUT/lg-\$p.bin; done"
-sleep 20
-data=$(gh run list -R "$repo" --workflow pruebas.yml --branch "$GITHUB_REF_NAME" --created ">=$since" --limit 5 \
-  --json databaseId,createdAt -q 'sort_by(.createdAt) | .[0].databaseId')
-[[ -n $data ]] || { echo "::error::could not find the data run"; exit 1; }
+# DATA_RUN (optional): an earlier data run of this generation to use instead of a new one.
+if [[ -n ${DATA_RUN:-} ]]; then
+  data=$DATA_RUN
+else
+  since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  gh workflow run pruebas.yml -R "$repo" --ref "$GITHUB_REF_NAME" -f shards=20 -f seed=$((300000000 + gen * 10000000)) \
+    -f minutos=300 -f csw24=$csw \
+    -f comando="python3 scripts/zero_leaves.py > zero.csv && echo leave,delta > cum.csv && ${fetch_prev}for p in 0 1 2 3; do build/engine/kingbble_leavegen --lexicon lexica/$lex.txt --leaves zero.csv --leave-deltas cum.csv --win-table configs/win_table_csw24.csv --games $games --seed \$((SEED + p * 1000)) --wmp --out \$OUT/lg-\$p.bin & done; wait; for p in 0 1 2 3; do test -s \$OUT/lg-\$p.bin; done"
+  # The new run can take a while to be listed: look for it for up to 10 minutes.
+  data=""
+  for try in $(seq 1 20); do
+    sleep 30
+    data=$(gh run list -R "$repo" --workflow pruebas.yml --branch "$GITHUB_REF_NAME" --limit 10 \
+      --json databaseId,createdAt,event -q "[.[] | select(.createdAt >= \"$since\" and .databaseId != $GITHUB_RUN_ID)] | sort_by(.createdAt) | .[0].databaseId // empty")
+    [[ -n $data ]] && break
+  done
+  [[ -n $data ]] || { echo "::error::could not find the data run"; exit 1; }
+fi
 echo "generation $gen data run: $data"
 until [[ $(gh run view "$data" -R "$repo" --json status -q .status) == completed ]]; do sleep 60; done
 [[ $(gh run view "$data" -R "$repo" --json conclusion -q .conclusion) == success ]] || { echo "::error::data run $data failed"; exit 1; }
