@@ -127,6 +127,7 @@ int main(int argc, char** argv) {
   std::vector<std::string> half_a, half_b;
   char target = 'a';
   double cap = 3, min_delta = 0.05;
+  bool smooth6 = false;  // --smooth6: pull 6-tile leaves towards their 5-tile sub-leaves
   for (int i = 1; i < argc; ++i) {
     const std::string a = argv[i];
     auto value = [&]() -> std::string {
@@ -151,6 +152,8 @@ int main(int argc, char** argv) {
       target = value()[0];
     else if (a == "--cap")
       cap = std::stod(value());
+    else if (a == "--smooth6")
+      smooth6 = true;
     else if (a == "--min-delta")
       min_delta = std::stod(value());
     else if (a == "--out")
@@ -256,6 +259,134 @@ int main(int argc, char** argv) {
   }
   const double weighted_r = wxx > 0 && wyy > 0 ? wxy / std::sqrt(wxx * wyy) : 0;
 
+  // --smooth6. A 6-tile leave completes to only some 20 racks, so its own
+  // value is noisy; its 5-tile sub-leaves are measured far better. Predict it
+  // from them (v6 ~ a + b * mean of its sub-leaves + c * mean of its tiles,
+  // fitted on well-measured 6-tile leaves), then keep of its own deviation from
+  // that prediction the share its data supports: empirical Bayes again, the
+  // true spread around the prediction being the covariance of the two halves.
+  // It is used only if it predicts half b from half a better than the plain fit.
+  std::unordered_map<std::uint64_t, double> smoothed;  // final value of 6-tile leaves
+  if (smooth6) {
+    auto value_map = [&](const Fit& f) {
+      std::unordered_map<std::uint64_t, double> m;
+      m.reserve(f.acc.size());
+      for (const auto& [key, a] : f.acc) m[key] = scale * value_of(f, a);
+      return m;
+    };
+    const auto vf = value_map(full), va = value_map(fa), vb = value_map(fb);
+    auto noise_of = [&](const Fit& f, const Acc& a) {
+      return scale * scale * f.noise * a.q / (a.w * a.w);
+    };
+    // Features of each 6-tile leave from the whole data's shorter leaves.
+    struct Six {
+      std::uint64_t key;
+      double m5, s1;
+    };
+    std::vector<Six> sixes;
+    for (const auto& [key, a] : full.acc) {
+      const Rack leave = leave_of(key);
+      if (leave.Size() != 6) continue;
+      double m5 = 0, s1 = 0;
+      int n5 = 0;
+      for (int t = 0; t < kNumTileTypes; ++t) {
+        if (!leave.Count(Tile(t))) continue;
+        Rack sub = leave;
+        sub.Remove(Tile(t));
+        const auto it = vf.find(Leaves::Key(sub));
+        if (it != vf.end()) {
+          m5 += it->second * leave.Count(Tile(t));
+          n5 += leave.Count(Tile(t));
+        }
+        Rack one;
+        one.Add(Tile(t));
+        const auto jt = vf.find(Leaves::Key(one));
+        if (jt != vf.end()) s1 += jt->second * leave.Count(Tile(t));
+      }
+      if (n5 == 0) continue;
+      sixes.push_back({key, m5 / n5, s1 / 6});
+    }
+    // Weighted least squares (weight 1 / noise) of v6 on (1, m5, s1).
+    double A[3][3] = {}, B[3] = {};
+    for (const Six& x : sixes) {
+      const Acc& a = full.acc.at(x.key);
+      const double w = 1 / std::max(noise_of(full, a), 1e-6);
+      const double f[3] = {1, x.m5, x.s1}, y = vf.at(x.key);
+      for (int i = 0; i < 3; ++i) {
+        B[i] += w * f[i] * y;
+        for (int j = 0; j < 3; ++j) A[i][j] += w * f[i] * f[j];
+      }
+    }
+    // Solve the 3x3 system by Cramer's rule.
+    auto det3 = [](double m[3][3]) {
+      return m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) -
+             m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) +
+             m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+    };
+    const double d = det3(A);
+    double coef[3] = {0, 0, 0};
+    if (std::abs(d) > 1e-12) {
+      for (int k = 0; k < 3; ++k) {
+        double m[3][3];
+        for (int i = 0; i < 3; ++i)
+          for (int j = 0; j < 3; ++j) m[i][j] = j == k ? B[i] : A[i][j];
+        coef[k] = det3(m) / d;
+      }
+    }
+    // True spread of the deviations from the prediction, from the halves.
+    std::vector<std::pair<double, double>> dev;
+    for (const Six& x : sixes) {
+      const auto ia = va.find(x.key), ib = vb.find(x.key);
+      if (ia == va.end() || ib == vb.end()) continue;
+      const double pred = coef[0] + coef[1] * x.m5 + coef[2] * x.s1;
+      dev.emplace_back(ia->second - pred, ib->second - pred);
+    }
+    double mx = 0, my = 0, c = 0;
+    for (const auto& [x, y] : dev) {
+      mx += x;
+      my += y;
+    }
+    if (dev.size() > 1) {
+      mx /= dev.size();
+      my /= dev.size();
+      for (const auto& [x, y] : dev) c += (x - mx) * (y - my);
+      c /= dev.size() - 1;
+    }
+    const double tau6 = std::max(0.0, c);
+    // Cross-check: predict half b's value from half a, smoothed or plain.
+    double err_smooth = 0, err_plain = 0;
+    long checked = 0;
+    for (const Six& x : sixes) {
+      const auto ia = fa.acc.find(x.key);
+      const auto ib = vb.find(x.key);
+      if (ia == fa.acc.end() || ib == vb.end()) continue;
+      const double a_val = scale * value_of(fa, ia->second), na = noise_of(fa, ia->second);
+      const double pred = coef[0] + coef[1] * x.m5 + coef[2] * x.s1;
+      const double p0 = prior.Value(leave_of(x.key));
+      const double ls = tau6 > 0 ? tau6 / (tau6 + na) : 0, lp = tau2 > 0 ? tau2 / (tau2 + na) : 0;
+      err_smooth += std::pow(ib->second - (pred + ls * (a_val - pred)), 2);
+      err_plain += std::pow(ib->second - (p0 + lp * (a_val - p0)), 2);
+      ++checked;
+    }
+    std::printf(
+        "smooth6: %zu six-tile leaves, v6 = %.3f + %.3f m5 + %.3f s1, true sd around it %.3f; "
+        "half-b error smoothed %.3f vs plain %.3f over %ld leaves\n",
+        sixes.size(), coef[0], coef[1], coef[2], std::sqrt(tau6),
+        checked ? std::sqrt(err_smooth / checked) : 0.0,
+        checked ? std::sqrt(err_plain / checked) : 0.0, checked);
+    if (checked && err_smooth < err_plain) {
+      for (const Six& x : sixes) {
+        const Acc& a = full.acc.at(x.key);
+        const double pred = coef[0] + coef[1] * x.m5 + coef[2] * x.s1;
+        const double lam = tau6 > 0 ? tau6 / (tau6 + noise_of(full, a)) : 0;
+        smoothed[x.key] = pred + lam * (vf.at(x.key) - pred);
+      }
+      std::printf("smooth6 used\n");
+    } else {
+      std::printf("smooth6 not used: it does not predict half b better\n");
+    }
+  }
+
   std::ofstream out(out_path);
   out << "leave,delta\n";
   long written = 0, capped = 0;
@@ -268,6 +399,7 @@ int main(int argc, char** argv) {
     const double lambda = tau2 > 0 ? tau2 / (tau2 + noise) : 0;
     lambda_sum += lambda;
     double delta = lambda * d;
+    if (const auto it = smoothed.find(key); it != smoothed.end()) delta = it->second - p;
     if (std::abs(delta) > cap) {
       delta = std::copysign(cap, delta);
       ++capped;

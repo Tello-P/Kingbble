@@ -39,8 +39,20 @@ else
   [[ -n $data ]] || { echo "::error::could not find the data run"; exit 1; }
 fi
 echo "generation $gen data run: $data"
-until [[ $(gh run view "$data" -R "$repo" --json status -q .status) == completed ]]; do sleep 60; done
-[[ $(gh run view "$data" -R "$repo" --json conclusion -q .conclusion) == success ]] || { echo "::error::data run $data failed"; exit 1; }
+# Wait for the data jobs themselves: the run's final gather job can sit in the
+# queue for hours behind other runs, and nothing here needs it.
+shards_left() {
+  gh run view "$data" -R "$repo" --json jobs \
+    -q '[.jobs[] | select(.name | startswith("Shard")) | select(.status != "completed")] | length'
+}
+shards_failed() {
+  gh run view "$data" -R "$repo" --json jobs \
+    -q '[.jobs[] | select(.name | startswith("Shard")) | select(.conclusion != "success")] | length'
+}
+until [[ $(gh run view "$data" -R "$repo" --json jobs -q '[.jobs[] | select(.name | startswith("Shard"))] | length') -ge 20 && $(shards_left) == 0 ]]; do
+  sleep 60
+done
+[[ $(shards_failed) == 0 ]] || { echo "::error::data run $data has failed shards"; exit 1; }
 gh run download "$data" -R "$repo" -D data --pattern "shard-*"
 even=() odd=()
 for d in data/shard-*; do

@@ -40,6 +40,7 @@
 #include "scrabble/equity_bot.hpp"
 #include "scrabble/gaddag.hpp"
 #include "scrabble/game.hpp"
+#include "scrabble/inference.hpp"
 #include "scrabble/leaves.hpp"
 #include "scrabble/win_table.hpp"
 
@@ -48,6 +49,13 @@ using namespace leavegen;
 
 int main(int argc, char** argv) {
   std::string lexicon, leaves_path, win_path, out_path, deltas_path;
+  // Rare racks (wolges' min_samples_per_rack, Magpie's rare partition): with
+  // probability --force-share, a counted turn is dealt instead one of the full
+  // racks this process has seen fewer than --min-samples times, when the
+  // mover's rack and the bag hold its tiles. Its sample feeds only that rack's
+  // sums, as any turn's does.
+  double force_share = 0;
+  std::uint32_t min_samples = 0;
   std::vector<std::string> merge;
   long games = 1000;
   std::uint64_t seed = 1;
@@ -83,6 +91,10 @@ int main(int argc, char** argv) {
       wmp = true;
     else if (a == "--leave-deltas")
       deltas_path = value();
+    else if (a == "--force-share")
+      force_share = std::stod(value());
+    else if (a == "--min-samples")
+      min_samples = static_cast<std::uint32_t>(std::stoul(value()));
     else if (a == "--merge") {
       while (i + 1 < argc && std::string(argv[i + 1]).rfind("--", 0) != 0)
         merge.push_back(argv[++i]);
@@ -122,6 +134,30 @@ int main(int argc, char** argv) {
   }
   std::mt19937_64 rng(Mix(seed ^ 0x1EAFULL));
   std::uniform_real_distribution<double> unit(0, 1);
+  // Every full rack the bag allows, as RackKey keys, for the rare-rack draws.
+  std::vector<std::uint64_t> rare;
+  if (force_share > 0 && min_samples > 0) {
+    const auto& tiles = EnglishTiles();
+    std::array<int, kNumTileTypes> c{};
+    auto all = [&](auto& self, int t, int left) -> void {
+      if (left == 0) {
+        Rack r;
+        for (int u = 0; u < kNumTileTypes; ++u)
+          for (int k = 0; k < c[u]; ++k) r.Add(Tile(u));
+        rare.push_back(RackKey(r));
+        return;
+      }
+      if (t == kNumTileTypes) return;
+      for (int k = std::min<int>(left, tiles[t].count); k >= 0; --k) {
+        c[t] = k;
+        self(self, t + 1, left - k);
+      }
+      c[t] = 0;
+    };
+    all(all, 0, kRackSize);
+    std::cout << "rare-rack pool: " << rare.size() << " full racks" << std::endl;
+  }
+  long forced = 0;
   struct Turn {
     std::uint64_t key;
     int bucket, player, before;
@@ -135,6 +171,30 @@ int main(int argc, char** argv) {
     turns.clear();
     while (!game.over()) {
       const int p = game.to_move();
+      if (!rare.empty() && game.bag_size() >= min_bag && game.rack(p).Size() == kRackSize &&
+          unit(rng) < force_share) {
+        // Deal an under-sampled rack in place of this one, if its tiles are at hand.
+        const Rack pool = MinusTiles(UnseenTiles(game.board(), Rack()), game.rack(1 - p));
+        for (int attempt = 0; attempt < 16 && !rare.empty(); ++attempt) {
+          const std::size_t i = std::uniform_int_distribution<std::size_t>(0, rare.size() - 1)(rng);
+          const std::uint64_t key = rare[i];
+          const auto it = racks.find(key);
+          if (it != racks.end() && it->second.n >= min_samples) {
+            rare[i] = rare.back();
+            rare.pop_back();
+            continue;
+          }
+          Rack want;
+          for (std::uint64_t k = key; k; k >>= 5) want.Add(Tile((k & 31) - 1));
+          if (!ContainsTiles(pool, want)) continue;
+          std::array<Rack, 2> deal{game.rack(0), game.rack(1)};
+          deal[p] = want;
+          game = Game::FromPosition(game.board(), deal, {game.score(0), game.score(1)}, p,
+                                    MinusTiles(pool, want), game.scoreless_turns(), rng());
+          ++forced;
+          break;
+        }
+      }
       const Rack rack = game.rack(p);
       const int bag = game.bag_size();
       const bool counted = bag >= min_bag && rack.Size() == kRackSize;
@@ -188,6 +248,8 @@ int main(int argc, char** argv) {
   Write(out_path, racks, totals);
   const double secs =
       std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+  if (forced)
+    std::cout << "forced turns " << forced << ", racks still rare " << rare.size() << "\n";
   std::cout << "games " << games << " samples " << samples << " racks " << racks.size() << " in "
             << secs << " s (" << games / secs << " games/s)\n";
   return 0;
