@@ -8,6 +8,7 @@
 # two halves, fits target a (equity) anchored only to the current table, writes
 # OUT/cum.csv and, before the last generation, starts the next one.
 set -euo pipefail
+started=$(date +%s)
 lex=$1 gen=$2 last=$3 prev=$4 games=$5
 repo=$GITHUB_REPOSITORY
 # FORCE="P M" (optional): leavegen --force-share P --min-samples M. SMOOTH6=1: leavefit --smooth6.
@@ -58,6 +59,13 @@ shards_failed() {
     -q '[.jobs[] | select(.name | startswith("Shard")) | select(.conclusion != "success")] | length'
 }
 until [[ $(gh run view "$data" -R "$repo" --json jobs -q '[.jobs[] | select(.name | startswith("Shard"))] | length') -ge 20 && $(shards_left) == 0 ]]; do
+  # Near this job's time limit: hand the wait to a fresh run of this script.
+  if (($(date +%s) - started > 280 * 60)); then
+    gh workflow run pruebas.yml -R "$repo" --ref "$GITHUB_REF_NAME" -f shards=1 -f seed=1 -f minutos=330 -f csw24=$csw \
+      -f comando="${chain_env}DATA_RUN=$data scripts/scratch_gen.sh $lex $gen $last $prev $games"
+    echo "generation $gen: still waiting for $data, handed over to a new run"
+    exit 0
+  fi
   sleep 60
 done
 [[ $(shards_failed) == 0 ]] || { echo "::error::data run $data has failed shards"; exit 1; }
