@@ -10,6 +10,14 @@
 set -euo pipefail
 lex=$1 gen=$2 last=$3 prev=$4 games=$5
 repo=$GITHUB_REPOSITORY
+# FORCE="P M" (optional): leavegen --force-share P --min-samples M. SMOOTH6=1: leavefit --smooth6.
+# Both are passed on to the next generation.
+force_args="" smooth_args=""
+[[ -n ${FORCE:-} ]] && force_args="--force-share ${FORCE% *} --min-samples ${FORCE#* } "
+[[ ${SMOOTH6:-} == 1 ]] && smooth_args="--smooth6 "
+chain_env=""
+[[ -n ${FORCE:-} ]] && chain_env+="FORCE='$FORCE' "
+[[ ${SMOOTH6:-} == 1 ]] && chain_env+="SMOOTH6=1 "
 csw=false
 [[ $lex == CSW24 ]] && csw=true
 python3 scripts/zero_leaves.py > zero.csv
@@ -27,7 +35,7 @@ else
   since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   gh workflow run pruebas.yml -R "$repo" --ref "$GITHUB_REF_NAME" -f shards=20 -f seed=$((300000000 + gen * 10000000)) \
     -f minutos=300 -f csw24=$csw \
-    -f comando="python3 scripts/zero_leaves.py > zero.csv && echo leave,delta > cum.csv && ${fetch_prev}for p in 0 1 2 3; do build/engine/kingbble_leavegen --lexicon lexica/$lex.txt --leaves zero.csv --leave-deltas cum.csv --win-table configs/win_table_csw24.csv --games $games --seed \$((SEED + p * 1000)) --wmp --out \$OUT/lg-\$p.bin & done; wait; for p in 0 1 2 3; do test -s \$OUT/lg-\$p.bin; done"
+    -f comando="python3 scripts/zero_leaves.py > zero.csv && echo leave,delta > cum.csv && ${fetch_prev}for p in 0 1 2 3; do build/engine/kingbble_leavegen --lexicon lexica/$lex.txt --leaves zero.csv --leave-deltas cum.csv --win-table configs/win_table_csw24.csv --games $games --seed \$((SEED + p * 1000)) ${force_args}--wmp --out \$OUT/lg-\$p.bin & done; wait; for p in 0 1 2 3; do test -s \$OUT/lg-\$p.bin; done"
   # The new run can take a while to be listed: look for it for up to 10 minutes.
   data=""
   for try in $(seq 1 20); do
@@ -62,7 +70,7 @@ done
 build/engine/kingbble_leavegen --merge "${even[@]}" --out half-a.bin
 build/engine/kingbble_leavegen --merge "${odd[@]}" --out half-b.bin
 build/engine/kingbble_leavefit --leaves zero.csv --leave-deltas cum.csv --half-a half-a.bin --half-b half-b.bin \
-  --target a --cap 100 --min-delta 0.01 --out new.csv | tee "$OUT/fit_gen$gen.txt"
+  --target a --cap 100 --min-delta 0.01 ${smooth_args}--out new.csv | tee "$OUT/fit_gen$gen.txt"
 python3 - <<'PY'
 import csv, os
 tot = {}
@@ -83,6 +91,6 @@ print("generation change: %d leaves moved, mean |change| %.3f, table entries %d"
 PY
 if ((gen < last)); then
   gh workflow run pruebas.yml -R "$repo" --ref "$GITHUB_REF_NAME" -f shards=1 -f seed=1 -f minutos=330 -f csw24=$csw \
-    -f comando="scripts/scratch_gen.sh $lex $((gen + 1)) $last $GITHUB_RUN_ID $games"
+    -f comando="${chain_env}scripts/scratch_gen.sh $lex $((gen + 1)) $last $GITHUB_RUN_ID $games"
   echo "generation $((gen + 1)) started"
 fi
