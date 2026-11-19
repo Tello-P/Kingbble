@@ -21,6 +21,8 @@
 // same deals (duel.hpp) and a line goes to FILE: game, bag, unseen, spread, moves,
 // scores, tiles played, static equities, then win and spread differences (Kingbble's
 // move minus Macondo's) with their standard errors. Both moves are shown as text.
+// --late-candidates N and --keep-bag-candidates K: with at most --end-unseen tiles
+// unseen, N candidates plus the K best moves that leave tiles in the bag.
 
 #include <sys/wait.h>
 #include <unistd.h>
@@ -181,7 +183,8 @@ int main(int argc, char** argv) {
   std::string macondo_lexicon = "CSW24", results_path, gcg_dir, stats_path, duel_path;
   int duel_rollouts = 200;
   int games = 40;
-  bool status_only = false, progress = false;
+  bool status_only = false, progress = false, wmp = false;
+  std::string deltas_path;  // --leave-deltas: corrections added to --leaves in memory
   std::uint64_t seed = 1;
   double move_time = 5;
   SimParams sim;
@@ -237,6 +240,14 @@ int main(int argc, char** argv) {
       sim.late_bag = std::stoi(value());
     } else if (a == "--peg-bag") {
       peg.max_bag = std::stoi(value());
+    } else if (a == "--wmp") {
+      wmp = true;
+    } else if (a == "--late-candidates") {
+      sim.late_candidates = std::stoi(value());
+    } else if (a == "--keep-bag-candidates") {
+      sim.keep_bag_candidates = std::stoi(value());
+    } else if (a == "--leave-deltas") {
+      deltas_path = value();
     } else if (a == "--gcg-dir") {
       gcg_dir = value();
     } else if (a == "--results") {
@@ -267,7 +278,14 @@ int main(int argc, char** argv) {
   }
 
   Gaddag gaddag = Gaddag::FromFile(lexicon);
+  // --wmp: our bot generates moves by anagram lookup.
+  AnagramIndex anagrams;
+  if (wmp) {
+    anagrams = AnagramIndex::FromGaddag(gaddag);
+    sim.anagram_index = &anagrams;
+  }
   Leaves leaves = Leaves::FromFile(leaves_path);
+  if (!deltas_path.empty()) leaves.AddDeltas(deltas_path);  // in memory only
   sim.seed = seed;
   sim.time_limit_s = move_time;
   peg.params.candidates = 10;

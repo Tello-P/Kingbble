@@ -60,6 +60,7 @@
 #include "manifest.hpp"
 #include "results_file.hpp"
 #include "run_seeds.hpp"
+#include "scrabble/anagram_index.hpp"
 #include "scrabble/gaddag.hpp"
 #include "scrabble/game.hpp"
 
@@ -98,6 +99,9 @@ void PrintSummary(const ResultsFile& results, int games, const std::string& kind
 }  // namespace
 
 int main(int argc, char** argv) {
+  // --leave-deltas / --a-leave-deltas: corrections added in memory to --leaves
+  // (bot a: to a copy of it, unless --a-leaves).
+  std::string deltas_path, a_deltas_path;
   std::string lexicon, leaves_path, a_leaves_path, kind_a = "greedy", kind_b = "greedy";
   int games = 10;
   std::uint64_t seed = 1;
@@ -106,6 +110,7 @@ int main(int argc, char** argv) {
   std::string results_path, gcg_dir, human_path, freq_path, alt_path;
   int human_rating = 0;
   bool status_only = false;
+  bool wmp = false;
   bool paired = false;
   bool endgame_fallback = false;  // "+eg" bots play the inner move when not solved exactly
   bool endgame_stats = false;     // per "+eg" bot: solves, exact ones, moves changed vs inner
@@ -135,6 +140,18 @@ int main(int argc, char** argv) {
       leaves_path = value();
     } else if (a == "--a-leaves") {
       a_leaves_path = value();
+    } else if (a == "--leave-deltas") {
+      deltas_path = value();
+    } else if (a == "--a-leave-deltas") {
+      a_deltas_path = value();
+    } else if (a == "--end-unseen") {
+      sim.end_unseen = std::stoi(value());
+    } else if (a == "--late-bag") {
+      sim.late_bag = std::stoi(value());
+    } else if (a == "--late-candidates") {
+      sim.late_candidates = std::stoi(value());
+    } else if (a == "--keep-bag-candidates") {
+      sim.keep_bag_candidates = std::stoi(value());
     } else if (a == "--a") {
       kind_a = value();
     } else if (a == "--b") {
@@ -193,6 +210,8 @@ int main(int argc, char** argv) {
       endgame_stats = true;
     } else if (a == "--endgame-fallback") {
       endgame_fallback = true;
+    } else if (a == "--wmp") {
+      wmp = true;
     } else if (a == "--paired") {
       paired = true;
     } else if (a == "--per-game-seeds") {
@@ -264,14 +283,28 @@ int main(int argc, char** argv) {
   using Clock = std::chrono::steady_clock;
   auto t0 = Clock::now();
   Gaddag gaddag = Gaddag::FromFile(lexicon);
+  // --wmp: every simulating bot generates moves by anagram lookup.
+  AnagramIndex anagrams;
+  if (wmp) {
+    anagrams = AnagramIndex::FromGaddag(gaddag);
+    sim.anagram_index = &anagrams;
+  }
   double build_s = std::chrono::duration<double>(Clock::now() - t0).count();
   std::cout << "lexicon: " << gaddag.NumWords() << " words, " << gaddag.NumNodes() << " nodes, "
             << gaddag.NumEdges() << " edges, built in " << build_s << " s\n";
 
   std::unique_ptr<Leaves> leaves, a_leaves;
-  if (!a_leaves_path.empty()) a_leaves = std::make_unique<Leaves>(Leaves::FromFile(a_leaves_path));
+  if (!a_leaves_path.empty()) {
+    a_leaves = std::make_unique<Leaves>(Leaves::FromFile(a_leaves_path));
+    if (!a_deltas_path.empty()) a_leaves->AddDeltas(a_deltas_path);  // on bot a's own table
+  }
   if (!leaves_path.empty()) {
     leaves = std::make_unique<Leaves>(Leaves::FromFile(leaves_path));
+    if (!a_deltas_path.empty() && !a_leaves) {
+      a_leaves = std::make_unique<Leaves>(*leaves);
+      a_leaves->AddDeltas(a_deltas_path);
+    }
+    if (!deltas_path.empty()) leaves->AddDeltas(deltas_path);
     std::cout << "leaves: " << leaves->Size() << "\n";
   }
   sim.seed = seed;
