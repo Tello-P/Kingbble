@@ -41,6 +41,16 @@ seeds, threads, flags). Report: `build/issue_runs/m7/tournament.{md,csv,svg}`, w
 p-values Holm-corrected across the four experiments. About 22 h for the four
 (`--only NAME` runs one, about 5-6 h).
 
+Last result (400 paired games each, 2 cores, GitHub Actions in 10 shards of 40, commit
+2bad49a; full bot = bot a, Holm-corrected p):
+
+| Experiment | a win % (95 % CI) | p | a spread (95 % CI) | p | Significant |
+|---|---|---:|---|---:|---|
+| `inference` | 49.8 (45.2-54.3) | 0.914 | +6.2 (-2.0..+14.4) | 0.136 | no |
+| `human_vs_rangefinder` | 53.5 (49.3-57.7) | 0.205 | +10.7 (+3.5..+17.8) | 0.007 | spread only |
+| `sim_vs_equity` | 55.1 (50.7-59.5) | 0.068 | +14.4 (+5.8..+23.0) | 0.003 | spread only |
+| `endgame` | 52.1 (50.7-53.5) | 0.011 | +3.6 (+2.8..+4.4) | <0.001 | win % and spread |
+
 ## Quackle match (#34)
 
 `sim+peg+eg` against Quackle's Championship Player on CSW24; v0.2 exit criterion:
@@ -54,6 +64,15 @@ KINGBBLE_MAX_THREADS=2 scripts/issues/issue_34_quackle_and_smp.sh --match-only -
 file, apart from the fixed-iteration games. Builds the Quackle helper from
 `~/src/quackle` on first use. About 30 h for 300 games. Without `--match-only` it also
 runs the Lazy SMP endgame check (several threads vs one).
+
+Level check (5 s per move, 2 cores): Championship Player about 4 min per game, Kingbble
+won 19 of 52; Five Minute Championship Player about 14 min per game, Kingbble won 7 of
+15. The 300-game match runs against Five Minute Championship Player (the one with the
+most thinking time).
+
+Last result (300 games vs Five Minute Championship Player, 5 s per move, 2 cores, run
+43852945550): Kingbble 49.7 % wins (95 % CI 44.0-55.3), spread +15.0 (+2.9..+27.1); meets
+the >= 45 % criterion on the point estimate.
 
 ## Macondo match (#60)
 
