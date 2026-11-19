@@ -131,7 +131,10 @@ def stats_table(folders: list[Path]) -> list[str]:
     for folder in folders:
         for path in sorted(folder.rglob("stats.txt")):
             for row in path.read_text().splitlines():
-                _game, side, bag, seconds, iterations = row.split()
+                fields = row.split()
+                if len(fields) != 5:  # a run stopped in the middle of a line
+                    continue
+                _game, side, bag, seconds, iterations = fields
                 cell = totals.setdefault((int(side), phase(int(bag))), [0, 0.0, 0])
                 cell[0] += 1
                 cell[1] += float(seconds)
