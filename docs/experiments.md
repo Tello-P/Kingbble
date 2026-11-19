@@ -123,3 +123,40 @@ Last result (600 paired games): +4.8 spread per game (95 % CI +4.0..+5.6), 51.4 
      --seed 2 --threads 2 --progress --results build/issue_runs/results/issue_49_compare.txt
    python -m ml.eval.tournament build/issue_runs/results/issue_49_compare.txt
    ```
+
+## Leaves from scratch (CSW24 check, ENABLE table)
+
+Each generation plays full-rack equity self-play with the current table on GitHub (20 shards x
+4 processes), fits target a (equity) on two data halves and adds the corrections. The chain
+starts itself again for the next generation and hands its wait to a fresh run before the job
+time limit:
+
+```bash
+# from the Long runs workflow, one shard; FORCE/SMOOTH6 carry over to later generations
+FORCE='0.1 10' SMOOTH6=1 scripts/scratch_gen.sh ENABLE 8 10 <previous run> 3000000
+```
+
+Results:
+
+| Lexicon | Generations | Mean change, last gen | Final run |
+|---|---|---|---|
+| CSW24 | 10 | 0.066 | 44452797218 |
+| ENABLE | 10 | 0.060 | 44477949803 |
+
+CSW24 gen 10 against the Woogles CSW24 table, sim 1 s + A2 + pre-endgame, 12,000 pairs (runs
+44519678728 and 44519683430, seeds 201000000 and 211000000), criterion fixed before the run:
+
+| | Result | 95 % CI | Criterion | Verdict |
+|---|---|---|---|---|
+| Points per game | -0.50 +-0.96 | -1.46 .. +0.47 | > -0.5 | fails |
+| Wins | -0.24 +-0.54 pp | -0.78 .. +0.29 | > -1 pp | passes |
+
+Earlier steps: gen 5 static (20k pairs) +0.12 pts, -0.03 pp; gen 5 sim (3k) -2.00 +-1.93 pts;
+gen 8 sim (3k) +0.53 +-1.96 pts, -0.16 +-1.07 pp. Accepted as equal on wins; the ENABLE gen 10
+table is configs/enable_leaves_gen10.csv.gz.
+
+```bash
+gunzip -k configs/enable_leaves_gen10.csv.gz
+build/engine/kingbble_selfplay --lexicon lexica/ENABLE.txt --leaves configs/enable_leaves_gen10.csv \
+  --a sim+peg+eg --b equity --games 2 --seed 7 --sim-time 1 --threads 2 --results build/enable_check.txt
+```
