@@ -1,0 +1,14 @@
+/* Additions of the web demo to the interface's own style.css. */
+.demo-back { margin-right: auto;
+  margin-left: 12px; padding: 3px 8px; border: 1px solid var(--line-2); border-radius: 3px;
+  font-size: 12px; font-weight: 500; color: var(--ink-2); text-decoration: none; white-space: nowrap;
+}
+.demo-back:hover { background: var(--bg-2); color: var(--ink); }
+.locked-note { margin: 8px 0 0; font-size: 12px; line-height: 1.45; color: var(--muted); grid-column: 1 / -1; }
+.locked-note a { color: var(--gold-ink); font-weight: 600; text-decoration: none; white-space: nowrap; }
+.locked-note a:hover { text-decoration: underline; }
+#demo-loading {
+  position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 90;
+  padding: 8px 14px; border-radius: 4px; background: var(--ink); color: var(--bg);
+  font-size: 13px; max-width: calc(100vw - 32px); text-align: center;
+}

@@ -26,3 +26,13 @@ mlruns/
 .vscode/
 .idea/
 .DS_Store
+
+# Desktop app
+desktop/node_modules/
+desktop/package-lock.json
+
+# Website
+web/data/
+web/dist/
+web/static/demo/engine.js
+web/static/demo/engine.wasm
