@@ -10,7 +10,8 @@
 // With --results FILE every finished game is appended to FILE and a rerun skips
 // the games already there (stop it any time and run the same command again);
 // --status prints the summary of FILE and exits. Bot options as kingbble_selfplay: --threads,
-// --endgame-time, --peg-bag,
+// --late-candidates N and --keep-bag-candidates K (pre-endgame candidates), --wmp
+// (move generation by anagram lookup), --endgame-time, --peg-bag,
 // --peg-candidates, --peg-time, --apeg-*, --sim-* (--sim-time S: seconds per
 // simulated move, with --sim-iterations as a cap), --sim-halving, --end-unseen and
 // --late-bag (14 and 7 by default, 0: off).
@@ -152,7 +153,7 @@ int main(int argc, char** argv) {
   SimParams sim;
   sim.end_unseen = 14;
   sim.late_bag = 7;
-  bool paired = false;
+  bool paired = false, wmp = false;
   double endgame_time = 5;
   PegOptions peg;
   peg.params.candidates = 10;
@@ -201,6 +202,12 @@ int main(int argc, char** argv) {
       sim.time_limit_s = std::stod(value());
     } else if (a == "--sim-halving") {
       sim.halving = true;
+    } else if (a == "--late-candidates") {
+      sim.late_candidates = std::stoi(value());
+    } else if (a == "--keep-bag-candidates") {
+      sim.keep_bag_candidates = std::stoi(value());
+    } else if (a == "--wmp") {
+      wmp = true;
     } else if (a == "--end-unseen") {
       sim.end_unseen = std::stoi(value());
     } else if (a == "--late-bag") {
@@ -242,6 +249,12 @@ int main(int argc, char** argv) {
   }
 
   Gaddag gaddag = Gaddag::FromFile(lexicon);
+  // --wmp: our bot generates moves by anagram lookup.
+  AnagramIndex anagrams;
+  if (wmp) {
+    anagrams = AnagramIndex::FromGaddag(gaddag);
+    sim.anagram_index = &anagrams;
+  }
   std::unique_ptr<Leaves> leaves;
   if (!leaves_path.empty()) leaves = std::make_unique<Leaves>(Leaves::FromFile(leaves_path));
   sim.seed = seed;

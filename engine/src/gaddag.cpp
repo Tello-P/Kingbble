@@ -71,9 +71,9 @@ class GaddagBuilder {
       if (letters >> e.letter) throw std::logic_error("gaddag edges out of order");
       letters |= 1u << e.letter;
     }
-    g_.nodes_.push_back({static_cast<std::uint32_t>(g_.edges_.size()), letters,
-                         static_cast<std::uint8_t>(n.edges.size()), n.terminal});
-    g_.edges_.insert(g_.edges_.end(), n.edges.begin(), n.edges.end());
+    g_.nodes_.push_back({static_cast<std::uint32_t>(g_.targets_.size()),
+                         letters | (n.terminal ? Gaddag::kTerminalBit : 0u)});
+    for (const auto& e : n.edges) g_.targets_.push_back(e.target);
     register_.emplace(std::move(key), id);
     return id;
   }
@@ -133,18 +133,10 @@ Gaddag Gaddag::FromFile(const std::string& path) {
   return FromWords(words);
 }
 
-Gaddag::Node Gaddag::Next(Node node, std::uint8_t letter) const {
-  const FrozenNode& n = nodes_[node];
-  const std::uint32_t bit = 1u << letter;
-  if (!(n.letters & bit)) return kNone;
-  return edges_[n.first_edge + std::popcount(n.letters & (bit - 1))].target;
-}
-
 std::vector<std::uint8_t> Gaddag::Letters(Node node) const {
-  const FrozenNode& n = nodes_[node];
   std::vector<std::uint8_t> out;
-  for (std::uint32_t i = n.first_edge; i < n.first_edge + n.num_edges; ++i)
-    out.push_back(edges_[i].letter);
+  for (std::uint32_t bits = LetterMask(node); bits; bits &= bits - 1)
+    out.push_back(static_cast<std::uint8_t>(std::countr_zero(bits)));
   return out;
 }
 
