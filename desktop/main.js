@@ -40,6 +40,8 @@ async function createWindow() {
     backgroundColor: "#0b0b10",
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     autoHideMenuBar: true,
+    // the intro plays its sound before any click
+    webPreferences: { autoplayPolicy: "no-user-gesture-required" },
   });
   try {
     win.loadURL(await startServer());

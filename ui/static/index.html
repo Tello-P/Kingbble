@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Kingbble</title>
 <link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="preload" href="fonts/young-serif-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -54,13 +55,14 @@
 </div>
 
 <header class="top">
-  <div class="brand"><img src="logo.svg" alt="" width="30" height="33"> <span>Kingbble</span></div>
+  <h1 class="sr-only">Kingbble</h1>
+  <div class="brand" aria-hidden="true"><img src="logo.svg" alt="" width="30" height="33"> <span>Kingbble</span></div>
   <nav class="top-actions">
-    <button id="btn-new" class="primary small" data-i18n="newGame">New game</button>
-    <button id="btn-gcg" class="icon" data-i18n-title="exportGcg" aria-label="GCG">
+    <button id="btn-new" class="primary small"><span class="long" data-i18n="newGame">New game</span><span class="short" aria-hidden="true">+</span></button>
+    <button id="btn-gcg" class="icon" data-i18n-title="exportGcg" data-i18n-aria="exportGcg">
       <svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M5 19h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
-    <button id="btn-settings" class="icon" data-i18n-title="settings" aria-label="Settings">
+    <button id="btn-settings" class="icon" data-i18n-title="settings" data-i18n-aria="settings">
       <svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z M19.4 13a7.6 7.6 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.4 7.4 0 0 0-1.7-1L15 3.5h-4l-.4 2.5a7.4 7.4 0 0 0-1.7 1l-2.4-1-2 3.4L6.6 11a7.6 7.6 0 0 0 0 2l-2 1.6 2 3.4 2.4-1c.5.4 1.1.8 1.7 1l.4 2.5h4l.4-2.5c.6-.2 1.2-.6 1.7-1l2.4 1 2-3.4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
     </button>
   </nav>
@@ -73,13 +75,15 @@
     <div class="board-wrap" id="board-wrap">
       <div class="coords cols" id="coords-cols"></div>
       <div class="coords rows" id="coords-rows"></div>
-      <div class="board" id="board" role="grid" aria-label="Board"></div>
+      <div class="board" id="board" tabindex="0" role="application" data-i18n-aria="boardLabel" aria-describedby="board-help"></div>
+      <p class="sr-only" id="board-help" data-i18n="boardHelp"></p>
+      <p class="sr-only" id="board-cursor" aria-live="polite"></p>
     </div>
 
     <div class="bar" id="bar-bottom"></div>
 
     <div class="rack-row">
-      <div class="rack" id="rack"></div>
+      <div class="rack" id="rack" role="group" data-i18n-aria="rackLabel"></div>
       <div class="preview" id="preview" aria-live="polite"></div>
     </div>
 
@@ -106,17 +110,16 @@
       <span class="spacer"></span>
       <button id="btn-pause" class="primary" data-i18n="pause">Pause</button>
     </div>
-    <p class="help" id="help"></p>
   </section>
 
   <aside class="panel">
-    <div class="tabs" role="tablist">
-      <button class="tab on" data-tab="moves" data-i18n="moves">Moves</button>
-      <button class="tab" data-tab="analysis" data-i18n="analysis">Analysis</button>
-      <button class="tab" data-tab="tiles" data-i18n="tiles">Tiles</button>
-      <button class="tab" data-tab="scoring" data-i18n="scoring">Scoring</button>
+    <div class="tabs" role="tablist" data-i18n-aria="panelLabel">
+      <button class="tab on" data-tab="moves" role="tab" id="tab-moves" aria-controls="pane-moves" data-i18n="moves">Moves</button>
+      <button class="tab" data-tab="analysis" role="tab" id="tab-analysis" aria-controls="pane-analysis" data-i18n="analysis">Analysis</button>
+      <button class="tab" data-tab="tiles" role="tab" id="tab-tiles" aria-controls="pane-tiles" data-i18n="tiles">Tiles</button>
+      <button class="tab" data-tab="scoring" role="tab" id="tab-scoring" aria-controls="pane-scoring" data-i18n="scoring">Scoring</button>
     </div>
-    <div class="tabpane" data-pane="moves">
+    <div class="tabpane" data-pane="moves" role="tabpanel" id="pane-moves" aria-labelledby="tab-moves" tabindex="0">
       <div class="review-nav">
         <button class="icon" id="rv-first" data-i18n-title="first"><svg viewBox="0 0 24 24"><path d="M6 5v14M18 6l-8 6 8 6z"/></svg></button>
         <button class="icon" id="rv-prev" data-i18n-title="prev"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
@@ -126,14 +129,14 @@
       </div>
       <ol class="history" id="history"></ol>
     </div>
-    <div class="tabpane" data-pane="analysis" hidden>
+    <div class="tabpane" data-pane="analysis" role="tabpanel" id="pane-analysis" aria-labelledby="tab-analysis" tabindex="0" hidden>
       <div class="pane-head">
         <span class="muted" data-i18n="analysisHelp">Moves ranked by static equity.</span>
         <button id="btn-hint" class="secondary small" data-i18n="bestMoves">Best moves</button>
       </div>
       <ol class="hints" id="hints"></ol>
     </div>
-    <div class="tabpane" data-pane="tiles" hidden>
+    <div class="tabpane" data-pane="tiles" role="tabpanel" id="pane-tiles" aria-labelledby="tab-tiles" tabindex="0" hidden>
       <div id="card-racks" hidden>
         <div class="pane-title" data-i18n="racks">Racks</div>
         <div id="racks"></div>
@@ -141,7 +144,7 @@
       <div class="pane-title"><span data-i18n="unseen">Unseen</span> <span id="unseen-count"></span><span class="muted right" id="bag-count"></span></div>
       <div class="unseen" id="unseen"></div>
     </div>
-    <div class="tabpane" data-pane="scoring" hidden>
+    <div class="tabpane" data-pane="scoring" role="tabpanel" id="pane-scoring" aria-labelledby="tab-scoring" tabindex="0" hidden>
       <div class="pane-title" data-i18n="squares">Squares</div>
       <ul class="legend" id="legend"></ul>
       <div class="pane-title" data-i18n="howToScore">How a move scores</div>
@@ -150,16 +153,17 @@
       <div class="values" id="values"></div>
     </div>
     <div class="panel-foot" id="status">—</div>
+    <p class="help" id="help"></p>
   </aside>
 </main>
 
 <dialog id="dlg-new">
   <form method="dialog" class="dlg">
     <h2 data-i18n="newGame">New game</h2>
-    <div class="segmented" id="mode" role="radiogroup">
-      <button type="button" data-mode="vs" data-i18n="modeVs">You vs Kingbble</button>
-      <button type="button" data-mode="watch" data-i18n="modeWatch">Bot vs bot</button>
-      <button type="button" data-mode="analysis" data-i18n="modeAnalysis">Analysis</button>
+    <div class="segmented" id="mode" role="radiogroup" data-i18n-aria="mode">
+      <button type="button" data-mode="vs" role="radio" data-i18n="modeVs">You vs Kingbble</button>
+      <button type="button" data-mode="watch" role="radio" data-i18n="modeWatch">Bot vs bot</button>
+      <button type="button" data-mode="analysis" role="radio" data-i18n="modeAnalysis">Analysis</button>
     </div>
     <p class="mode-help" id="mode-help"></p>
     <div id="bot-cfg"></div>
@@ -203,7 +207,25 @@
       <label class="row"><span data-i18n="clock">Game clock</span>
         <select data-set="clock"><option value="0" data-i18n="off">Off</option><option value="10">10 min</option><option value="15">15 min</option><option value="20">20 min</option><option value="25">25 min</option></select></label>
       <label class="switch"><span data-i18n="intro">Intro animation</span><input type="checkbox" data-set="intro"></label>
+      <div class="row"><span id="lbl-intro-sound" data-i18n="introSound">Intro sound</span>
+        <span class="row-ctl"><button type="button" class="small" id="try-intro" data-i18n="tryIt">Play</button>
+        <select data-set="introSound" aria-labelledby="lbl-intro-sound"><option value="calm" data-i18n="isCalm">Calm</option><option value="musicbox" data-i18n="isMusicbox">Music box</option><option value="breath" data-i18n="isBreath">Breath</option><option value="none" data-i18n="isNone">None</option></select></span></div>
     </div>
+    <section id="leaves-section" hidden>
+      <h3 data-i18n="leaves">Leaves</h3>
+      <div class="group">
+        <label class="row"><span data-i18n="lexicon">Word list</span><select id="lv-lex"></select></label>
+        <div class="row"><span data-i18n="leavesNow">In use</span><span id="lv-now" class="muted"></span></div>
+        <label class="row" id="lv-use-row" hidden><span data-i18n="leavesUse">Use</span>
+          <select id="lv-use"><option value="own" data-i18n="leavesOwn">Own (trained here)</option><option value="default" data-i18n="leavesDefault">Included</option></select></label>
+        <label class="row"><span data-i18n="leavesLevel">Training</span>
+          <select id="lv-level"><option value="fast" data-i18n="lvFast">Fast (minutes)</option><option value="normal" data-i18n="lvNormal">Normal (1-2 h)</option><option value="max" data-i18n="lvMax">Maximum (overnight)</option></select></label>
+        <div class="row"><span id="lv-msg" class="muted"></span>
+          <span><button type="button" id="lv-train" data-i18n="leavesTrain">Train leaves</button><button type="button" id="lv-cancel" hidden data-i18n="cancel">Cancel</button></span></div>
+        <div class="progress" id="lv-bar" hidden><i></i></div>
+        <p class="note" data-i18n="leavesNote">Changing the leaves restarts the engine for this word list: a game in progress is lost.</p>
+      </div>
+    </section>
     <div class="dlg-actions"><button value="ok" class="primary" data-i18n="done">Done</button></div>
   </form>
 </dialog>

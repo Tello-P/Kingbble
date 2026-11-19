@@ -10,6 +10,18 @@ const COLS = "ABCDEFGHIJKLMNO";
 
 const TEXT = {
   en: {
+    leaves: "Leaves", lexicon: "Word list", leavesNow: "In use", leavesUse: "Use", leavesOwn: "Own (trained here)",
+    leavesDefault: "Included", leavesLevel: "Training", lvFast: "Fast (minutes)", lvNormal: "Normal (1-2 h)",
+    lvMax: "Maximum (overnight)", leavesTrain: "Train leaves", lvNone: "none", lvOwnNow: "own", lvDefaultNow: "included",
+    lvRunning: "Training {0}…", lvDone: "Done", lvFailed: "Failed", lvStopped: "Stopped (progress kept)",
+    lvBetter: "better than the current ones", lvEqual: "as good as the current ones", lvWorse: "worse than the current ones",
+    lvResult: "{0}% wins in {1} games ({2}–{3}%): {4}", lvEta: "{0} left",
+    leavesNote: "Changing the leaves restarts the engine for this word list: a game in progress is lost.",
+    enter: "Start", boardLabel: "Board", rackLabel: "Your rack", panelLabel: "Game panel", mode: "Game mode",
+    boardHelp: "Arrow keys move the cursor, Space changes the direction, letters place tiles, Backspace takes the last one back, Enter plays.",
+    cellTW: "triple word", cellDW: "double word", cellTL: "triple letter", cellDL: "double letter", cellCenter: "centre",
+    cellEmpty: "empty", cellPending: "{0}, placed this turn", dirH: "across", dirV: "down", tilePts: "{0} points", tilePtsOne: "1 point",
+    blankTile: "blank", tileUsed: "on the board", tilePicked: "chosen to exchange",
     newGame: "New game", exportGcg: "Download game (GCG)", settings: "Settings", play: "Play",
     recall: "Recall", shuffle: "Shuffle", exchange: "Exchange", confirmExchange: "Exchange selected",
     cancel: "Cancel", pass: "Pass", undo: "Undo", pause: "Pause", resume: "Resume", step: "Next move",
@@ -23,13 +35,13 @@ const TEXT = {
     sqCenter: "Centre: the first move must cover it. It is a double word.",
     rules: [
       "Add up the values of every letter in the word. Blanks are worth 0.",
-      "Letter bonuses (DL, TL) apply first, then word bonuses (DW, TW) multiply the word. Two word bonuses multiply each other (×4, ×9).",
+      "Letter bonuses (2L, 3L) apply first, then word bonuses (×2, ×3, gold squares) multiply the word. Two word bonuses multiply each other (×4, ×9).",
       "Bonuses count only for tiles placed this turn. Squares already covered count at face value.",
       "Every new word you form across counts too, with the bonuses under your new tiles.",
       "Playing all 7 tiles is a bingo: +50.",
       "Going out with the bag empty earns twice the tiles left on the opponent's rack. After six scoreless turns in a row, the game ends and each player loses the value of their own rack.",
     ],
-    rulesEx: ["E.g. FAR = 4 + 1 + 1 = 6", "A on DL: 1 × 2 = 2; then the word on TW: × 3", "", "", "", ""],
+    rulesEx: ["E.g. FAR = 4 + 1 + 1 = 6", "A on 2L: 1 × 2 = 2; then the word on ×3: × 3", "", "", "", ""],
     bingo: "bingo", points2: "{0} pts", analysisHelp: "Moves ranked by static equity.", analysis: "Analysis", bestMoves: "Best moves", racks: "Racks",
     moves: "Moves", modeVs: "You vs Kingbble", modeWatch: "Bot vs bot", modeAnalysis: "Analysis",
     helpVs: "Play a game against the engine.", helpWatch: "Watch two bots play each other.",
@@ -39,7 +51,7 @@ const TEXT = {
     dark: "Dark", input: "Placing tiles", inputBoth: "Drag, click and type", inputDrag: "Drag only",
     inputType: "Click and type only", assists: "Assists", showHints: "Best moves panel",
     showPreview: "Score preview", showUnseen: "Unseen tiles", showCoords: "Coordinates",
-    extras: "Extras", sound: "Sound", clock: "Game clock", off: "Off", intro: "Intro animation",
+    extras: "Extras", sound: "Sound", clock: "Game clock", off: "Off", intro: "Intro animation", introSound: "Intro sound", isCalm: "Calm", isMusicbox: "Music box", isBreath: "Breath", isNone: "None", tryIt: "Play",
     done: "Done", blankTitle: "Which letter is the blank?", seeBoard: "See board", again: "Play again",
     opponent: "Opponent", bot: "Bot", player: "Player", strength: "Thinking time", instant: "instant",
     yourTurn: "Your turn", turnOf: "{0} to move", thinking: "{0} is thinking", paused: "Paused",
@@ -70,6 +82,18 @@ const TEXT = {
     ],
   },
   es: {
+    leaves: "Leaves", lexicon: "Lista de palabras", leavesNow: "En uso", leavesUse: "Usar", leavesOwn: "Propias (entrenadas aquí)",
+    leavesDefault: "Incluidas", leavesLevel: "Entrenamiento", lvFast: "Rápido (minutos)", lvNormal: "Normal (1-2 h)",
+    lvMax: "Máximo (de noche)", leavesTrain: "Entrenar leaves", lvNone: "ninguna", lvOwnNow: "propias", lvDefaultNow: "incluidas",
+    lvRunning: "Entrenando {0}…", lvDone: "Hecho", lvFailed: "Falló", lvStopped: "Parado (se conserva el progreso)",
+    lvBetter: "mejores que las actuales", lvEqual: "igual de buenas que las actuales", lvWorse: "peores que las actuales",
+    lvResult: "{0}% de victorias en {1} partidas ({2}–{3}%): {4}", lvEta: "faltan {0}",
+    leavesNote: "Cambiar las leaves reinicia el motor de esta lista: se pierde la partida en curso.",
+    enter: "Iniciar", boardLabel: "Tablero", rackLabel: "Tu atril", panelLabel: "Panel de la partida", mode: "Modo de juego",
+    boardHelp: "Las flechas mueven el cursor, Espacio cambia la dirección, las letras ponen fichas, Retroceso quita la última e Intro juega.",
+    cellTW: "triple palabra", cellDW: "doble palabra", cellTL: "triple letra", cellDL: "doble letra", cellCenter: "centro",
+    cellEmpty: "vacía", cellPending: "{0}, puesta este turno", dirH: "horizontal", dirV: "vertical", tilePts: "{0} puntos", tilePtsOne: "1 punto",
+    blankTile: "comodín", tileUsed: "en el tablero", tilePicked: "elegida para cambiar",
     newGame: "Nueva partida", exportGcg: "Descargar partida (GCG)", settings: "Ajustes", play: "Jugar",
     recall: "Recoger", shuffle: "Mezclar", exchange: "Cambiar", confirmExchange: "Cambiar selección",
     cancel: "Cancelar", pass: "Pasar", undo: "Deshacer", pause: "Pausa", resume: "Seguir",
@@ -83,13 +107,13 @@ const TEXT = {
     sqCenter: "Centro: la primera jugada debe pasar por aquí. Es doble palabra.",
     rules: [
       "Suma el valor de cada letra de la palabra. El comodín vale 0.",
-      "Primero se aplican los bonus de letra (DL, TL) y luego los de palabra (DP, TP) multiplican la palabra. Dos bonus de palabra se multiplican entre sí (×4, ×9).",
+      "Primero se aplican los bonus de letra (2L, 3L) y luego los de palabra (×2, ×3, casillas doradas) multiplican la palabra. Dos bonus de palabra se multiplican entre sí (×4, ×9).",
       "Los bonus solo cuentan para las fichas que pones en ese turno. Las casillas ya ocupadas valen lo que la ficha.",
       "Cada palabra nueva que formes en perpendicular también suma, con los bonus de tus fichas nuevas.",
       "Poner las 7 fichas del atril es un bingo: +50.",
       "Si acabas tus fichas con la bolsa vacía, sumas el doble de lo que le queda al rival. Tras seis turnos seguidos sin puntos, la partida termina y cada uno resta lo que tiene en el atril.",
     ],
-    rulesEx: ["Ej.: FAR = 4 + 1 + 1 = 6", "A en DL: 1 × 2 = 2; luego la palabra en TP: × 3", "", "", "", ""],
+    rulesEx: ["Ej.: FAR = 4 + 1 + 1 = 6", "A en 2L: 1 × 2 = 2; luego la palabra en ×3: × 3", "", "", "", ""],
     bingo: "bingo", points2: "{0} ptos",
     analysisHelp: "Jugadas ordenadas por equity estática.", analysis: "Análisis",
     bestMoves: "Mejores jugadas", racks: "Atriles", moves: "Jugadas", modeVs: "Tú vs Kingbble",
@@ -102,7 +126,7 @@ const TEXT = {
     inputDrag: "Solo arrastrar", inputType: "Solo clic y escribir", assists: "Ayudas",
     showHints: "Panel de mejores jugadas", showPreview: "Puntos antes de jugar",
     showUnseen: "Fichas sin ver", showCoords: "Coordenadas", extras: "Extras", sound: "Sonido",
-    clock: "Reloj de partida", off: "No", intro: "Animación de entrada", done: "Hecho",
+    clock: "Reloj de partida", off: "No", intro: "Animación de entrada", introSound: "Sonido de entrada", isCalm: "Sereno", isMusicbox: "Caja de música", isBreath: "Aire", isNone: "Ninguno", tryIt: "Probar", done: "Hecho",
     blankTitle: "¿Qué letra es el comodín?", seeBoard: "Ver tablero", again: "Otra partida",
     opponent: "Rival", bot: "Bot", player: "Jugador", strength: "Tiempo de reflexión",
     instant: "instantáneo", yourTurn: "Tu turno", turnOf: "Turno de {0}", thinking: "{0} está pensando",
@@ -134,7 +158,7 @@ const TEXT = {
   },
 };
 const BONUS = { T: "tw", D: "dw", t: "tl", d: "dl" };
-const BONUS_LABEL = { en: { T: "TW", D: "DW", t: "TL", d: "DL" }, es: { T: "TP", D: "DP", t: "TL", d: "DL" } };
+const BONUS_LABEL = { en: { T: "×3", D: "×2", t: "3L", d: "2L" }, es: { T: "×3", D: "×2", t: "3L", d: "2L" } };
 
 function t(k, ...a) {
   const s = (TEXT[settings.lang] || TEXT.en)[k] ?? TEXT.en[k] ?? k;
@@ -154,7 +178,7 @@ function tr(msg) {
 const DEFAULTS = {
   lang: (navigator.language || "en").startsWith("es") ? "es" : "en",
   theme: "auto", input: "both", hints: true, preview: true, unseen: true, coords: true,
-  sound: true, clock: "0", intro: true,
+  sound: true, clock: "0", intro: true, introSound: "calm",
   // last new-game choices
   mode: "vs", bots: ["sim+eg", "equity"], secs: [5, 5], first: "0", lexicon: "",
 };
@@ -185,6 +209,96 @@ function tone(freq, dur = 0.08, type = "sine", gain = 0.06, delay = 0) {
     o.start(t0);
     o.stop(t0 + dur);
   } catch {}
+}
+function noise(dur, { gain = 0.05, delay = 0, type = "bandpass", f0 = 1200, f1 = f0, q = 1 } = {}) {
+  if (!settings.sound) return;
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    const len = Math.ceil(audio.sampleRate * dur);
+    const buf = audio.createBuffer(1, len, audio.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    const src = audio.createBufferSource(), flt = audio.createBiquadFilter(), g = audio.createGain();
+    const t0 = audio.currentTime + delay;
+    src.buffer = buf;
+    flt.type = type;
+    flt.Q.value = q;
+    flt.frequency.setValueAtTime(f0, t0);
+    flt.frequency.exponentialRampToValueAtTime(f1, t0 + dur);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(gain, t0 + Math.min(0.02, dur / 3));
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(flt).connect(g).connect(audio.destination);
+    src.start(t0);
+    src.stop(t0 + dur);
+  } catch {}
+}
+// The intro, in step with the CSS animation: the tile lands (a wooden knock),
+// the cape unfurls (cloth swish), the crown drops on (metal clink) and the
+// glint passes (a soft shimmer).
+// A soft voice: slow attack, long release, so nothing clicks or knocks.
+function pad(freq, dur, gain, delay, { type = "sine", attack = 0.08, detune = 0 } = {}) {
+  if (!settings.sound) return;
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    const o = audio.createOscillator(), g = audio.createGain();
+    const t0 = audio.currentTime + delay;
+    o.type = type;
+    o.frequency.value = freq;
+    o.detune.value = detune;
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(gain, t0 + attack);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g).connect(audio.destination);
+    o.start(t0);
+    o.stop(t0 + dur + 0.05);
+  } catch {}
+}
+// Intro sounds, each in step with the animation: the tile lands at ~0.45 s,
+// the cape unfurls from 0.5 s, the crown settles at ~1.35 s, the glint at 1.6 s.
+const INTRO_SOUNDS = {
+  // Calm swell: a low warm note under the tile, a chord that opens with the
+  // cape, and one quiet bell for the crown.
+  calm: () => {
+    pad(98, 2.8, 0.05, 0.42, { attack: 0.25 });
+    [196, 247, 294].forEach((f, i) => pad(f, 2.4, 0.022, 0.55 + i * 0.12, { attack: 0.5, detune: i ? 4 : -4 }));
+    pad(784, 1.8, 0.016, 1.45, { attack: 0.02 });
+    pad(1175, 1.4, 0.008, 1.6, { attack: 0.3 });
+  },
+  // Music box: soft plucks rising with the logo, slow and sparse.
+  musicbox: () => {
+    [[523, 0.4], [659, 0.62], [784, 0.95], [1047, 1.45], [1319, 1.75]]
+      .forEach(([f, d]) => { pad(f, 1.3, 0.03, d, { attack: 0.01 }); pad(f * 2, 0.6, 0.006, d, { attack: 0.01 }); });
+  },
+  // Breath: air rising with the cape and a single low hum; almost nothing.
+  breath: () => {
+    noise(1.1, { gain: 0.025, delay: 0.45, f0: 300, f1: 1400, q: 0.5 });
+    pad(131, 2.6, 0.04, 0.42, { attack: 0.6 });
+    pad(196, 2.2, 0.018, 1.45, { attack: 0.05 });
+  },
+};
+
+// Resolves when the audio context runs (or after 400 ms, whatever happens).
+function audioReady() {
+  if (!settings.sound) return Promise.resolve();
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    if (audio.state === "running") return Promise.resolve();
+    return Promise.race([audio.resume(), new Promise((r) => setTimeout(r, 400))]).catch(() => {});
+  } catch {
+    return Promise.resolve();
+  }
+}
+
+function introSound(force = false) {
+  const kind = settings.introSound;
+  if (!settings.sound || !INTRO_SOUNDS[kind]) return;
+  if (!force && matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    if (audio.state === "suspended") audio.resume();
+  } catch {}
+  INTRO_SOUNDS[kind]();
 }
 const sfx = {
   place: () => tone(880, 0.05, "triangle", 0.05),
@@ -432,6 +546,25 @@ function renderBoard() {
   }
   animate.clear();
   $("board-wrap").classList.toggle("coords-on", settings.coords);
+  announceCursor();
+}
+
+// What a screen reader says about the cursor square, when the board has the focus.
+let spoken = "";
+function announceCursor() {
+  const out = $("board-cursor");
+  if (!cursor || document.activeElement !== $("board")) {
+    spoken = "";
+    return;
+  }
+  const { r, c, dir } = cursor;
+  const k = key(r, c), ch = boardAt(r, c), p = pending.get(k);
+  const bonus = S ? S.bonus[r][c] : ".";
+  const what = ch !== "." ? ch.toUpperCase()
+    : p ? t("cellPending", p.letter.toUpperCase())
+    : [r === 7 && c === 7 ? t("cellCenter") : "", { T: t("cellTW"), D: t("cellDW"), t: t("cellTL"), d: t("cellDL") }[bonus] || "", t("cellEmpty")].filter(Boolean).join(", ");
+  const text = `${COLS[c]}${r + 1}, ${what}, ${t(dir === "h" ? "dirH" : "dirV")}`;
+  if (text !== spoken) out.textContent = spoken = text;
 }
 
 function renderRack() {
@@ -446,6 +579,15 @@ function renderRack() {
     if (used.has(tile.id)) te.classList.add("used");
     if (selected === tile.id) te.classList.add("selected");
     if (exchange && exchange.has(tile.id)) te.classList.add("picked");
+    te.tabIndex = 0;
+    te.setAttribute("role", "button");
+    const state = used.has(tile.id) ? t("tileUsed") : exchange && exchange.has(tile.id) ? t("tilePicked") : "";
+    // The name is the letter shown plus hidden words, so it starts with what is seen.
+    const v = (S && S.values[tile.ch]) || 0;
+    const words = [tile.ch === "?" ? t("blankTile") : v === 1 ? t("tilePtsOne") : t("tilePts", v), state].filter(Boolean);
+    te.querySelector(".v").setAttribute("aria-hidden", "true");
+    te.insertAdjacentHTML("beforeend", `<span class="sr-only">${tile.ch === "?" ? "" : ", "}${words.join(", ")}</span>`);
+    te.setAttribute("aria-pressed", String(selected === tile.id || !!(exchange && exchange.has(tile.id))));
     el.appendChild(te);
   }
   for (let i = rack.length; i < 7; i++) el.appendChild(Object.assign(document.createElement("div"), { className: "slot" }));
@@ -470,6 +612,8 @@ function showTabs() {
   for (const b of document.querySelectorAll(".tab")) {
     b.hidden = !show[b.dataset.tab];
     b.classList.toggle("on", b.dataset.tab === tab);
+    b.setAttribute("aria-selected", String(b.dataset.tab === tab));
+    b.tabIndex = b.dataset.tab === tab ? 0 : -1;
   }
   for (const pane of document.querySelectorAll(".tabpane")) pane.hidden = pane.dataset.pane !== tab;
 }
@@ -602,7 +746,9 @@ function placementArgs() {
 function schedulePreview() {
   clearTimeout(checkTimer);
   const pv = $("preview");
+  const gain = (n) => document.querySelectorAll(".player .gain").forEach((el) => { el.textContent = n != null && el.closest(".player").id === `p${S && S.to_move}` ? `+${n}` : ""; });
   if (!pending.size || !myTurn() || !settings.preview) {
+    gain(null);
     pv.textContent = "";
     pv.className = "preview";
     return;
@@ -612,6 +758,7 @@ function schedulePreview() {
     const r = await api("check", args).catch(() => null);
     if (!r || placementArgs().join() !== args.join()) return;
     pv.className = `preview ${r.ok ? "ok" : "bad"}`;
+    gain(r.ok ? r.score : null);
     pv.textContent = r.ok ? `${r.move.text.replace(/ \(\d+\)$/, "").split(" ")[0]} · ${breakdownText(r.breakdown) || t("points", r.score)}` : tr(r.error);
   }, 120);
 }
@@ -698,6 +845,10 @@ function onPointerMove(e) {
     const p = drag.pkey && pending.get(drag.pkey);
     const ch = p ? p.letter : rack.find((x) => x.id === drag.id).ch;
     drag.ghost = tileEl(ch, p && p.blank, "ghost-tile");
+    // The size of a board square, the size it will have once dropped.
+    const w = Math.round($("board").firstElementChild.getBoundingClientRect().width) || 40;
+    Object.assign(drag.ghost.style, { width: `${w}px`, height: `${w}px`, fontSize: `${Math.round(w * 0.6)}px` });
+    drag.ghost.querySelector(".v")?.style.setProperty("font-size", `${Math.max(8, Math.round(w * 0.24))}px`);
     document.body.appendChild(drag.ghost);
     drag.el.style.opacity = ".3";
     sfx.lift();
@@ -715,7 +866,7 @@ function dropTarget(e) {
   const under = document.elementFromPoint(e.clientX, e.clientY);
   if (!under) return null;
   const cell = under.closest(".cell");
-  if (cell && isFree(+cell.dataset.r, +cell.dataset.c)) return cell;
+  if (cell && (isFree(+cell.dataset.r, +cell.dataset.c) || pending.has(key(+cell.dataset.r, +cell.dataset.c)))) return cell;
   return under.closest(".rack");
 }
 
@@ -731,8 +882,19 @@ async function onPointerUp(e) {
   const p = d.pkey && pending.get(d.pkey);
   const id = p ? p.id : d.id;
   if (target && target.classList.contains("cell")) {
+    const r = +target.dataset.r, c = +target.dataset.c, tk = key(r, c);
+    if (tk === d.pkey) return render();
+    // A tile not yet played is covered: from the rack it goes back to the rack,
+    // from the board the two swap squares (blanks keep their letter).
+    const other = pending.get(tk);
+    if (other) unplace(tk);
     if (p) unplace(d.pkey);
-    if (!(await place(id, +target.dataset.r, +target.dataset.c, p && p.blank ? p.letter : null))) render();
+    const ok = await place(id, r, c, p && p.blank ? p.letter : null);
+    if (ok && other && p) {
+      const [sr, sc] = d.pkey.split(",").map(Number);
+      await place(other.id, sr, sc, other.blank ? other.letter : null);
+    }
+    if (!ok) render();
   } else {
     if (p) unplace(d.pkey);
     else if (target) reorder(id, e.clientX);
@@ -783,6 +945,15 @@ async function onBoardClick(e) {
 
 async function onKey(e) {
   if (document.querySelector("dialog[open]") || e.target.matches("input, select, textarea")) return;
+  // Keys meant for a focused button, tab or rack tile stay theirs.
+  if (e.target.closest("button, a, [role=tab], #rack") && ["Enter", " ", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) return;
+  const onBoard = e.target === $("board");
+  if (onBoard && e.key === " " && cursor && !reviewing() && mode() !== "watch") {
+    cursor = { ...cursor, dir: cursor.dir === "h" ? "v" : "h" };
+    renderBoard();
+    e.preventDefault();
+    return;
+  }
   if (S && (e.key === "ArrowLeft" || e.key === "ArrowRight") && (!cursor || reviewing())) {
     view(S.viewing + (e.key === "ArrowLeft" ? -1 : 1));
     e.preventDefault();
@@ -801,7 +972,7 @@ async function onKey(e) {
   }
   if (e.key === "Enter") return void play();
   if (e.key === "Escape") return void recall();
-  if (!canType()) return;
+  if (!canType() && !onBoard) return;
   if (e.key === "Backspace") {
     const k = order[order.length - 1];
     if (!k) return;
@@ -815,7 +986,9 @@ async function onKey(e) {
   const arrows = { ArrowLeft: [0, -1], ArrowRight: [0, 1], ArrowUp: [-1, 0], ArrowDown: [1, 0] };
   if (arrows[e.key] && cursor) {
     const [dr, dc] = arrows[e.key];
-    cursor = { r: Math.min(N - 1, Math.max(0, cursor.r + dr)), c: Math.min(N - 1, Math.max(0, cursor.c + dc)), dir: dc ? "h" : "v" };
+    // From the keyboard the arrows only move; Space changes the direction.
+    const dir = onBoard ? cursor.dir : dc ? "h" : "v";
+    cursor = { r: Math.min(N - 1, Math.max(0, cursor.r + dr)), c: Math.min(N - 1, Math.max(0, cursor.c + dc)), dir };
     renderBoard();
     e.preventDefault();
     return;
@@ -970,7 +1143,7 @@ function renderBotCfg() {
     const opts = lex.bots.map((b) => `<option value="${b}">${t("bots")[b] || b}</option>`).join("");
     const secs = settings.secs[i] ?? 5;
     const idx = Math.max(0, STEPS.findIndex((s) => s >= secs));
-    div.innerHTML = `<span class="title">${title}</span><select data-bot="${i}">${opts}</select>
+    div.innerHTML = `<span class="title" id="bot-title-${i}">${title}</span><select data-bot="${i}" aria-labelledby="bot-title-${i}">${opts}</select>
       <label class="strength"><span>${t("strength")}</span><input type="range" min="0" max="${STEPS.length - 1}" value="${idx}" data-secs="${i}"><output></output></label>`;
     box.appendChild(div);
     const sel = div.querySelector("select");
@@ -988,7 +1161,10 @@ function renderBotCfg() {
   }
   $("first-row").hidden = dlgMode !== "vs";
   $("mode-help").textContent = t({ vs: "helpVs", watch: "helpWatch", analysis: "helpAnalysis" }[dlgMode]);
-  for (const b of $("mode").querySelectorAll("button")) b.classList.toggle("on", b.dataset.mode === dlgMode);
+  for (const b of $("mode").querySelectorAll("button")) {
+    b.classList.toggle("on", b.dataset.mode === dlgMode);
+    b.setAttribute("aria-checked", String(b.dataset.mode === dlgMode));
+  }
 }
 
 function newGame() {
@@ -1089,6 +1265,7 @@ function applySettings() {
   for (const el of document.querySelectorAll("[data-i18n]")) el.textContent = t(el.dataset.i18n);
   for (const el of document.querySelectorAll("[data-i18n-title]")) el.title = t(el.dataset.i18nTitle);
   for (const el of document.querySelectorAll("[data-i18n-placeholder]")) el.placeholder = t(el.dataset.i18nPlaceholder);
+  for (const el of document.querySelectorAll("[data-i18n-aria]")) el.setAttribute("aria-label", t(el.dataset.i18nAria));
   if (settings.input === "drag") cursor = null;
   render();
 }
@@ -1107,32 +1284,188 @@ function openSettings() {
       if (k === "clock" && old !== settings.clock) resetClocks();
     };
   }
+  $("try-intro").onclick = () => introSound(true);
   d.showModal();
+  refreshLeaves();
+}
+
+// ---------- leaves training (local only; the server hides it elsewhere) ----------
+
+let leavesTimer = null;
+const leavesPost = (path, body) =>
+  fetch("/api/leaves" + path, { method: "POST", body: JSON.stringify(body || {}) }).then((r) => r.json());
+
+function fmtEta(s) {
+  if (s == null) return "";
+  const m = Math.round(s / 60);
+  return m < 90 ? `${Math.max(m, 1)} min` : `${(m / 60).toFixed(1)} h`;
+}
+
+function renderLeaves(info) {
+  const sec = $("leaves-section");
+  sec.hidden = !info || !info.ok || !info.enabled;
+  if (sec.hidden) return false;
+  const sel = $("lv-lex");
+  const job = info.job || { state: "idle" };
+  const want = sel.value || job.lexicon || settings.lexicon || info.lexica[0]?.name;
+  if (sel.options.length !== info.lexica.length) {
+    sel.innerHTML = "";
+    for (const l of info.lexica) sel.add(new Option(l.name, l.name));
+  }
+  sel.value = want;
+  const cur = info.lexica.find((l) => l.name === sel.value);
+  const names = { own: t("lvOwnNow"), default: t("lvDefaultNow"), none: t("lvNone") };
+  $("lv-now").textContent = cur ? names[cur.leaves] : "";
+  $("lv-use-row").hidden = !cur || !cur.has_own;
+  if (cur && cur.has_own) $("lv-use").value = cur.leaves === "own" ? "own" : "default";
+  const running = job.state === "running";
+  $("lv-train").hidden = running;
+  $("lv-cancel").hidden = !running;
+  $("lv-lex").disabled = $("lv-level").disabled = running;
+  $("lv-bar").hidden = !running;
+  $("lv-bar").firstElementChild.style.width = `${job.pct || 0}%`;
+  let msg = "";
+  if (running) {
+    msg = t("lvRunning", job.lexicon) + (job.eta_s != null ? ` ${t("lvEta", fmtEta(job.eta_s))}` : "");
+  } else if (job.state === "done" && job.result) {
+    const r = job.result;
+    msg = t("lvResult", r.win_pct.toFixed(1), r.games, r.ci_lo.toFixed(1), r.ci_hi.toFixed(1),
+      t({ better: "lvBetter", equal: "lvEqual", worse: "lvWorse" }[r.verdict]));
+  } else if (job.state === "done") msg = t("lvDone");
+  else if (job.state === "failed") msg = `${t("lvFailed")}${job.message ? ": " + job.message : ""}`;
+  else if (job.state === "cancelled") msg = t("lvStopped");
+  $("lv-msg").textContent = msg;
+  return running;
+}
+
+async function refreshLeaves() {
+  clearTimeout(leavesTimer);
+  let info = null;
+  try {
+    info = await fetch("/api/leaves", { cache: "no-store" }).then((r) => r.json());
+  } catch {}
+  const running = renderLeaves(info);
+  if ($("dlg-settings").open && info && info.ok && info.enabled) {
+    leavesTimer = setTimeout(refreshLeaves, running ? 2000 : 10000);
+  }
+}
+
+function initLeaves() {
+  $("lv-lex").onchange = refreshLeaves;
+  $("lv-train").onclick = async () => {
+    const r = await leavesPost("/train", { lexicon: $("lv-lex").value, level: $("lv-level").value });
+    if (!r.ok) toast(r.error || "error");
+    refreshLeaves();
+  };
+  $("lv-cancel").onclick = async () => {
+    await leavesPost("/cancel");
+    refreshLeaves();
+  };
+  $("lv-use").onchange = async () => {
+    const r = await leavesPost("/use", { lexicon: $("lv-lex").value, which: $("lv-use").value });
+    if (!r.ok) toast(r.error || "error");
+    refreshLeaves();
+  };
+  $("dlg-settings").addEventListener("close", () => clearTimeout(leavesTimer));
 }
 
 // ---------- start ----------
 
+// Things waiting for the intro to end, such as the first New game dialog.
+let splashing = true;
+const afterSplash = [];
+function whenSplashDone(fn) {
+  splashing ? afterSplash.push(fn) : fn();
+}
+function splashEnded() {
+  splashing = false;
+  afterSplash.splice(0).forEach((fn) => fn());
+}
+
 function splash() {
   const el = $("splash");
-  if (!settings.intro) return el.remove();
+  if (!settings.intro || matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    el.remove();
+    return splashEnded();
+  }
   const end = () => {
     el.classList.add("done");
     setTimeout(() => el.remove(), 600);
+    splashEnded();
   };
-  const timer = setTimeout(end, 3000);
-  el.addEventListener("click", () => {
-    clearTimeout(timer);
-    end();
+  const start = async () => {
+    // Start the animation only once the sound can really play, so both share t = 0.
+    await audioReady();
+    el.classList.remove("wait");
+    introSound();
+    const timer = setTimeout(end, 3000);
+    el.addEventListener("click", () => {
+      clearTimeout(timer);
+      end();
+    }, { once: true });
+  };
+  // A browser only lets a page play sound after a click: on the web, with a sound
+  // chosen, the intro waits for one so the sound starts with the animation.
+  // The desktop app may play it at once.
+  const sound = settings.sound && INTRO_SOUNDS[settings.introSound];
+  if (!sound || navigator.userAgent.includes("Electron")) return start();
+  el.classList.add("wait");
+  el.removeAttribute("aria-hidden");
+  const gate = splashGate();
+  el.appendChild(gate);
+  const btn = gate.querySelector(".splash-enter");
+  btn.focus({ focusVisible: false }); // Enter works at once; no ring until the keyboard is used
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    btn.disabled = true;
+    gate.classList.add("out");
+    el.setAttribute("aria-hidden", "true");
+    audioReady(); // unlock now, inside the click
+    setTimeout(() => {
+      gate.remove();
+      start();
+    }, 380);
   }, { once: true });
+}
+
+// The waiting screen: the name in tiles, the Start button, and tiles drifting
+// slowly behind them, a few near and sharp, more far, small and faint.
+const TILE_POINTS = { A: 1, B: 3, C: 3, D: 2, E: 1, F: 4, G: 2, H: 4, I: 1, J: 8, K: 5, L: 1, M: 3, N: 1, O: 1, P: 3, Q: 10, R: 1, S: 1, T: 1, U: 1, V: 4, W: 4, X: 8, Y: 4, Z: 10 };
+function splashGate() {
+  const gate = document.createElement("div");
+  gate.className = "splash-gate";
+  const tile = (ch, extra = "") => `<span class="gtile${extra}">${ch}<i>${TILE_POINTS[ch] || ""}</i></span>`;
+  const bag = "EEEEAAAIIIOOONNRRTTLSSUDGBCMPFHVWYKJXQZ";
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  let drift = "";
+  for (let i = 0; i < 22; i++) {
+    const near = i < 5;
+    const size = near ? rnd(46, 64) : rnd(22, 40);
+    const style = [
+      `left:${rnd(-2, 96).toFixed(1)}%`, `top:${rnd(-2, 94).toFixed(1)}%`, `--s:${size.toFixed(0)}px`,
+      `--o:${(near ? rnd(0.16, 0.24) : rnd(0.06, 0.13)).toFixed(2)}`, `--b:${near ? 0 : rnd(0, 1.6).toFixed(1)}px`,
+      `--r0:${rnd(-18, 18).toFixed(0)}deg`, `--r1:${rnd(-18, 18).toFixed(0)}deg`,
+      `--dx:${rnd(-9, 9).toFixed(1)}vw`, `--dy:${rnd(-9, 9).toFixed(1)}vh`,
+      `animation-duration:${rnd(38, 80).toFixed(0)}s`, `animation-delay:-${rnd(0, 60).toFixed(0)}s`,
+    ].join(";");
+    drift += tile(bag[Math.floor(Math.random() * bag.length)]).replace('class="gtile"', `class="gtile drift" style="${style}"`);
+  }
+  gate.innerHTML = `<div class="gate-drift" aria-hidden="true">${drift}</div>
+    <div class="gate-center">
+      <div class="gate-word" role="img" aria-label="Kingbble">${[..."KINGBBLE"].map((c) => tile(c)).join("")}</div>
+      <button class="splash-enter"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.2v9.6L12.6 8z"/></svg><span>${t("enter")}</span></button>
+    </div>`;
+  return gate;
 }
 
 async function init() {
   splash();
+  initLeaves();
   for (const p of [0, 1]) {
     const el = document.createElement("div");
     el.className = "player";
     el.id = `p${p}`;
-    el.innerHTML = `<div class="avatar"></div><div class="pinfo"><span class="name"></span><span class="sub"></span></div><span class="turn-dot"></span><div class="pnums"><span class="clock"></span><span class="score">0</span></div>`;
+    el.innerHTML = `<div class="avatar"></div><div class="pinfo"><span class="name"></span><span class="sub"></span></div><span class="turn-dot"></span><div class="pnums"><span class="clock"></span><span class="gain"></span><span class="score">0</span></div>`;
     $(p ? "bar-top" : "bar-bottom").appendChild(el);
   }
   for (const b of document.querySelectorAll(".tab"))
@@ -1153,6 +1486,47 @@ async function init() {
     drag = null;
   });
   $("board").addEventListener("click", onBoardClick);
+  // Keyboard play: focusing the board puts the cursor on the centre, or where play left off.
+  $("board").addEventListener("focus", () => {
+    // Only for keyboard focus: a mouse click on a square already sets the cursor,
+    // and redrawing here would swallow that click.
+    if (!$("board").matches(":focus-visible")) return;
+    if (!cursor && S && myTurn() && !reviewing()) {
+      const k = order[order.length - 1];
+      const p = k && pending.get(k);
+      cursor = p ? { ...(advance(p.r, p.c, "h") || p), dir: "h" } : { r: 7, c: 7, dir: "h" };
+    }
+    renderBoard();
+  });
+  $("board").addEventListener("blur", () => {
+    spoken = "";
+    $("board-cursor").textContent = "";
+  });
+  $("rack").addEventListener("keydown", (e) => {
+    const tile = e.target.closest(".tile[data-id]");
+    if (!tile) return;
+    const tiles = [...$("rack").querySelectorAll(".tile[data-id]")];
+    const i = tiles.indexOf(tile);
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      if (tile.classList.contains("used")) return;
+      const id = +tile.dataset.id;
+      tapTile({ id });
+      $("rack").querySelector(`.tile[data-id="${id}"]`)?.focus();
+    } else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+      e.preventDefault();
+      tiles[(i + (e.key === "ArrowLeft" ? -1 : 1) + tiles.length) % tiles.length].focus();
+    }
+  });
+  $("board").closest("main").querySelector(".tabs").addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight" && e.key !== "Home" && e.key !== "End") return;
+    const tabs = [...document.querySelectorAll(".tab")].filter((b) => !b.hidden);
+    let i = tabs.indexOf(document.activeElement);
+    i = e.key === "Home" ? 0 : e.key === "End" ? tabs.length - 1 : (i + (e.key === "ArrowLeft" ? -1 : 1) + tabs.length) % tabs.length;
+    tabs[i].click();
+    tabs[i].focus();
+    e.preventDefault();
+  });
   document.addEventListener("keydown", onKey);
   $("btn-play").onclick = play;
   $("btn-recall").onclick = recall;
@@ -1200,7 +1574,7 @@ async function init() {
     setState(r.state);
     resetClocks();
     botLoop();
-  } else setTimeout(newGame, settings.intro ? 2900 : 0);
+  } else whenSplashDone(newGame);
 }
 
 init();
