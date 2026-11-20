@@ -11,8 +11,9 @@ lexicon (LEX.klv2) is never written. When there is one (or --default-leaves), th
 new table plays paired equity games against it and the verdict is printed.
 
 Every step resumes from build/leaves/LEX/LEVEL: stop the script and run it again
-to go on (once a run has finished, the next one starts afresh). Threads: KINGBBLE_MAX_THREADS (default 2). Wolges: KINGBBLE_WOLGES
-(default ~/src/wolges); its binaries are built when missing. English tiles only.
+to go on (once a run has finished, the next one starts afresh).
+Threads: KINGBBLE_MAX_THREADS (default 2). Wolges: KINGBBLE_WOLGES (default ~/src/wolges);
+its binaries are built when missing. English tiles only.
 
 Lines for the server on stdout, the rest on stderr:
     @progress PCT ETA_SECONDS|- MESSAGE
@@ -128,10 +129,14 @@ def paired_ci(results: Path, games: int) -> tuple[float, float, float, int]:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("lexicon", type=Path, help="word list (.txt or .kwg)")
     ap.add_argument("level", choices=sorted(LEVELS))
-    ap.add_argument("--default-leaves", type=Path, help="table to measure against (default: LEX.klv2)")
+    ap.add_argument(
+        "--default-leaves", type=Path, help="table to measure against (default: LEX.klv2)"
+    )
     ap.add_argument("--out", type=Path, help="where the table goes (default: LEX.own.klv2)")
     a = ap.parse_args()
 
@@ -190,11 +195,17 @@ def main() -> int:
                 k, n = int(m[1]), int(m[2])
                 if k == n:
                     stage["base"] += n
-                prog.report("census", (stage["base"] + (k if k < n else 0)) / boards,
-                            f"census: board {min(stage['base'] + (k if k < n else 0), boards)}/{boards}")
+                prog.report(
+                    "census",
+                    (stage["base"] + (k if k < n else 0)) / boards,
+                    f"census: board {min(stage['base'] + (k if k < n else 0), boards)}/{boards}",
+                )
 
-            run_streaming([str(leave), *threads_opt, "census", str(kwg), "-", "-", level["recipe"]],
-                          tmp, on_census)
+            run_streaming(
+                [str(leave), *threads_opt, "census", str(kwg), "-", "-", level["recipe"]],
+                tmp,
+                on_census,
+            )
             made = sorted(tmp.glob("census-leaves-*.klv2"), key=lambda p: p.stat().st_mtime)
             if not made:
                 raise RuntimeError("the census wrote no leave table")
@@ -221,15 +232,32 @@ def main() -> int:
                 tmp.mkdir()
                 logged_re = re.compile(r"have logged (\d+) games")
 
-                def on_play(line: str, k=k, size=size) -> None:
+                def on_play(
+                    line: str, k=k, i=i, step=step, games=games, logged_re=logged_re
+                ) -> None:
                     m = logged_re.search(line)
                     if m:
                         played = k * CHUNK + int(m[1])
-                        prog.report(step, 0.98 * played / games,
-                                    f"self-play generation {i}: {played:,} of {games:,} games")
+                        prog.report(
+                            step,
+                            0.98 * played / games,
+                            f"self-play generation {i}: {played:,} of {games:,} games",
+                        )
 
-                run_streaming([str(leave), *threads_opt, "autoplay-summarize-only", str(kwg),
-                               str(last), str(last), str(size), "0"], tmp, on_play)
+                run_streaming(
+                    [
+                        str(leave),
+                        *threads_opt,
+                        "autoplay-summarize-only",
+                        str(kwg),
+                        str(last),
+                        str(last),
+                        str(size),
+                        "0",
+                    ],
+                    tmp,
+                    on_play,
+                )
                 summaries = list(tmp.glob("summary-log-*"))
                 if not summaries:
                     raise RuntimeError("self-play wrote no summary")
@@ -241,8 +269,15 @@ def main() -> int:
                 for k in range(chunks):
                     dst.write((gen_dir / f"chunk{k}.csv").read_text())
             run([str(leave), "resummarize", "--quiet", str(joined), str(gen_dir / "summary.csv")])
-            run([str(leave), *threads_opt, "generate", str(gen_dir / "summary.csv"),
-                 str(gen_dir / "leaves.csv")])
+            run(
+                [
+                    str(leave),
+                    *threads_opt,
+                    "generate",
+                    str(gen_dir / "summary.csv"),
+                    str(gen_dir / "leaves.csv"),
+                ]
+            )
             run([str(buildlex), "klv", str(gen_dir / "leaves.csv"), str(table) + ".tmp"])
             os.replace(str(table) + ".tmp", table)
             shutil.rmtree(gen_dir, ignore_errors=True)
@@ -263,11 +298,31 @@ def main() -> int:
             results = work / "eval.txt"
             games = level["eval"]
             proc = subprocess.Popen(
-                [str(apps / "kingbble_selfplay"), "--lexicon", str(lexicon), "--leaves", str(default),
-                 "--a-leaves", str(final), "--a", "equity", "--b", "equity", "--paired",
-                 "--games", str(games), "--seed", "22", "--threads", str(threads),
-                 "--results", str(results)],
-                stdout=sys.stderr, stderr=sys.stderr)
+                [
+                    str(apps / "kingbble_selfplay"),
+                    "--lexicon",
+                    str(lexicon),
+                    "--leaves",
+                    str(default),
+                    "--a-leaves",
+                    str(final),
+                    "--a",
+                    "equity",
+                    "--b",
+                    "equity",
+                    "--paired",
+                    "--games",
+                    str(games),
+                    "--seed",
+                    "22",
+                    "--threads",
+                    str(threads),
+                    "--results",
+                    str(results),
+                ],
+                stdout=sys.stderr,
+                stderr=sys.stderr,
+            )
             while proc.poll() is None:
                 time.sleep(1)
                 played = len(results.read_text().splitlines()) if results.is_file() else 0

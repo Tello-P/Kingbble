@@ -17,8 +17,8 @@ Only the standard library is used.
 from __future__ import annotations
 
 import argparse
-import json
 import ipaddress
+import json
 import os
 import secrets
 import signal
@@ -102,7 +102,9 @@ def command_line(body: dict) -> str:
     return " ".join([cmd, *args])
 
 
-def find_lexica(directory: Path, explicit: list[str], use: dict[str, str] | None = None) -> dict[str, dict]:
+def find_lexica(
+    directory: Path, explicit: list[str], use: dict[str, str] | None = None
+) -> dict[str, dict]:
     """Word lists (.txt or .kwg) by name, each with its leaves: the published table beside
     it (same name, .klv2, .klv or .csv) or our own (NAME.own.klv2), as `use` picks."""
     out: dict[str, dict] = {}
@@ -110,7 +112,12 @@ def find_lexica(directory: Path, explicit: list[str], use: dict[str, str] | None
     if directory.is_dir():
         paths += sorted(p for p in directory.iterdir() if p.suffix in (".txt", ".kwg"))
     for path in paths:
-        if not path.is_file() or path.stem in out or "freq" in path.stem or path.stem.endswith(".own"):
+        if (
+            not path.is_file()
+            or path.stem in out
+            or "freq" in path.stem
+            or path.stem.endswith(".own")
+        ):
             continue
         default = next(
             (q for ext in (".klv2", ".klv", ".csv") if (q := path.with_suffix(ext)).is_file()), None
@@ -118,7 +125,9 @@ def find_lexica(directory: Path, explicit: list[str], use: dict[str, str] | None
         own = path.with_name(f"{path.stem}.own.klv2")
         own = own if own.is_file() else None
         choice = (use or {}).get(path.stem)
-        kind = "own" if own and (choice == "own" or not default) else "default" if default else "none"
+        kind = (
+            "own" if own and (choice == "own" or not default) else "default" if default else "none"
+        )
         leaves = own if kind == "own" else default
         out[path.stem] = {
             "path": str(path),
@@ -169,8 +178,9 @@ class Engines:
 
     def reload(self, lexica: dict[str, dict]) -> None:
         """New leaves for some lexica: their games restart when next used."""
-        changed = [n for n, lex in lexica.items()
-                   if self.lexica.get(n, {}).get("leaves") != lex["leaves"]]
+        changed = [
+            n for n, lex in lexica.items() if self.lexica.get(n, {}).get("leaves") != lex["leaves"]
+        ]
         self.lexica = lexica
         for name in changed:
             self.restart(name)
@@ -270,8 +280,15 @@ class LeavesTrainer:
         self.enabled = enabled
         self.lock = threading.Lock()
         self.proc: subprocess.Popen[str] | None = None
-        self.job: dict = {"state": "idle", "lexicon": None, "level": None, "pct": 0,
-                          "eta_s": None, "message": "", "result": None}
+        self.job: dict = {
+            "state": "idle",
+            "lexicon": None,
+            "level": None,
+            "pct": 0,
+            "eta_s": None,
+            "message": "",
+            "result": None,
+        }
         try:
             self.use: dict[str, str] = json.loads(USE_FILE.read_text())
         except (OSError, ValueError):
@@ -289,8 +306,11 @@ class LeavesTrainer:
             "ok": True,
             "enabled": self.enabled,
             "lexica": [
-                {"name": n, "leaves": v.get("kind", "default" if v["leaves"] else "none"),
-                 "has_own": v.get("has_own", False)}
+                {
+                    "name": n,
+                    "leaves": v.get("kind", "default" if v["leaves"] else "none"),
+                    "has_own": v.get("has_own", False),
+                }
                 for n, v in self.engines.lexica.items()
             ],
             "job": job,
@@ -316,13 +336,28 @@ class LeavesTrainer:
             log_dir.mkdir(parents=True, exist_ok=True)
             with open(log_dir / f"{lexicon}-{level}.log", "a") as log:
                 self.proc = subprocess.Popen(
-                    [str(ROOT / "scripts/train_leaves.sh"), self.engines.lexica[lexicon]["path"], level],
-                    stdout=subprocess.PIPE, stderr=log, text=True, bufsize=1,
-                    env=env, start_new_session=True,
+                    [
+                        str(ROOT / "scripts/train_leaves.sh"),
+                        self.engines.lexica[lexicon]["path"],
+                        level,
+                    ],
+                    stdout=subprocess.PIPE,
+                    stderr=log,
+                    text=True,
+                    bufsize=1,
+                    env=env,
+                    start_new_session=True,
                 )
             proc = self.proc
-            self.job = {"state": "running", "lexicon": lexicon, "level": level, "pct": 0,
-                        "eta_s": None, "message": "starting", "result": None}
+            self.job = {
+                "state": "running",
+                "lexicon": lexicon,
+                "level": level,
+                "pct": 0,
+                "eta_s": None,
+                "message": "starting",
+                "result": None,
+            }
         threading.Thread(target=self._follow, args=(proc, lexicon), daemon=True).start()
 
     def cancel(self) -> None:
@@ -344,11 +379,18 @@ class LeavesTrainer:
                     continue
                 if kind == "@progress":
                     pct, eta, msg = (rest.split(" ", 2) + ["", "", ""])[:3]
-                    self.job.update(pct=float(pct), eta_s=None if eta == "-" else int(eta), message=msg)
+                    self.job.update(
+                        pct=float(pct), eta_s=None if eta == "-" else int(eta), message=msg
+                    )
                 elif kind == "@result":
                     win, lo, hi, games, verdict = rest.split()
-                    self.job["result"] = {"win_pct": float(win), "ci_lo": float(lo),
-                                          "ci_hi": float(hi), "games": int(games), "verdict": verdict}
+                    self.job["result"] = {
+                        "win_pct": float(win),
+                        "ci_lo": float(lo),
+                        "ci_hi": float(hi),
+                        "games": int(games),
+                        "verdict": verdict,
+                    }
                 elif kind == "@error":
                     error = rest
         code = proc.wait()
@@ -451,10 +493,13 @@ def main() -> None:
     p.add_argument("--threads", type=int, default=2)
     p.add_argument("--port", type=int, default=8765)
     p.add_argument("--host", default="127.0.0.1")
-    p.add_argument("--bridge", default=str(ROOT / "build/engine/kingbble_bridge"))
+    exe = "kingbble_bridge.exe" if os.name == "nt" else "kingbble_bridge"
+    p.add_argument("--bridge", default=str(ROOT / "build/engine" / exe))
     p.add_argument("--max-sessions", type=int, default=8, help="games open at once (default 8)")
     p.add_argument("--idle-minutes", type=float, default=30, help="close a game unused this long")
-    p.add_argument("--max-busy", type=int, default=0, help="commands at once (default CPUs/threads)")
+    p.add_argument(
+        "--max-busy", type=int, default=0, help="commands at once (default CPUs/threads)"
+    )
     a = p.parse_args()
 
     if not Path(a.bridge).exists():
