@@ -1,10 +1,11 @@
 {
   "name": "kingbble-desktop",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Kingbble desktop app: the web interface in its own window",
   "main": "main.js",
+  "keywords": ["word game", "crossword game", "board game", "bot"],
   "private": true,
-  "license": "MIT",
+  "license": "GPL-3.0-only",
   "scripts": {
     "start": "electron ."
   },
