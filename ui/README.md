@@ -6,9 +6,8 @@ through `kingbble_bridge` (one text command per line in, one JSON line out), so 
 changes do not touch it.
 
 ```
-engine (C++)  <-- stdin/stdout -->  kingbble_bridge  <-- HTTP -->  ui/server.py  <-->  ui/static (page)
-                                                                        ^
-                                                    desktop/main.js (Electron window)
+engine (C++)  <-- stdin/stdout -->  kingbble_bridge  <-- HTTP -->  ui/server.py       <-->  ui/static (page)
+                                                     <-- HTTP -->  desktop/server.js  <-->  (Electron window)
 ```
 
 ## Web
@@ -30,10 +29,17 @@ test list in `lexica/fixtures/`.
 ```bash
 cd desktop
 npm install
-npm start -- --human-params ../models/human_model.txt --threads 2
+node stage.js --build ../build             # bridge, ENABLE and its leaves into desktop/staging
+mkdir -p ../lexica && cp staging/lexica/* ../lexica/
+npm start -- --threads 4 [--human-params ../models/human_model.txt] [--lexica DIR]
+npm run dist:linux                         # AppImage and .deb in desktop/dist (dist:win on Windows)
 ```
 
-The app starts `ui/server.py` on a free port and opens it in its own window.
+The app needs no Python: `desktop/server.js` (Node, same API as `ui/server.py`) serves
+the page on a free port of 127.0.0.1 and starts the bridge, and the window opens it.
+Packaged, the bridge, the page and the word lists are in the app's resources; leaves
+training needs the research tools, so it is only offered by `ui/server.py`.
+`.github/workflows/release.yml` builds the Linux and Windows packages on a tag.
 
 ## What is in the page
 
