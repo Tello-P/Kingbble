@@ -3,12 +3,14 @@ name: Release
 # Builds the desktop app for Linux (AppImage, .deb) and Windows (installer, portable
 # .zip) with the engine, ENABLE and Kingbble's own ENABLE leaves inside, so it needs
 # no Python and no compiler. A tag vX.Y.Z also makes a DRAFT release with the files
-# and their SHA-256; publish it by hand after a look. Run it from the Actions tab
-# (workflow_dispatch) to only build the files.
+# and their SHA-256; publish it by hand after a look. Pull requests and the Actions
+# tab (workflow_dispatch) only build the files.
 
 on:
   push:
     tags: ["v*"]
+  pull_request:
+    paths: ["desktop/**", "engine/**", "CMakeLists.txt", ".github/workflows/release.yml"]
   workflow_dispatch:
 
 permissions:
