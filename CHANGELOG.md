@@ -2,6 +2,33 @@
 
 Milestones of the bachelor's thesis. Each section lists what the milestone added.
 
+## [1.1.0] - 2026-11-20
+
+Desktop app ready to install and play, for Linux and Windows.
+
+### Added
+- Linux AppImage and .deb, Windows installer and portable .zip, built by
+  `.github/workflows/release.yml` on a tag. Each carries the bridge, ENABLE and
+  Kingbble's own ENABLE leaves (`configs/enable_leaves_gen10`), so every level plays
+  from the first game.
+- `desktop/server.js`: the local service in Node, with the API of `ui/server.py`, so
+  the app needs no Python. `desktop/stage.js` gathers the files (ENABLE checked by
+  SHA-256) and `desktop/smoke.js` plays a few moves through the API.
+- Windows build of the engine and the bridge (MinGW, static) and CI jobs for Windows
+  and for the desktop service.
+
+### Changed
+- Release packages target x86-64-v2 (any x86-64 CPU from about 2009), measured as
+  fast as x86-64-v3; the Linux bridge links the C++ runtime statically.
+- The research tools (`KINGBBLE_TOOLS`, POSIX only) are off on Windows.
+- Code names: namespace, headers (`engine/include/kingbble/`), library target and
+  CMake options (`KINGBBLE_ARCH`, `KINGBBLE_BUILD_TESTS`) renamed to `kingbble`.
+- Website sources updated (download page for the installers, new footer).
+
+### Fixed
+- `ui/server.py` finds `kingbble_bridge.exe` on Windows.
+- Lint errors in `scripts/train_leaves.py` and `ui/server.py` that failed CI.
+
 ## [1.0.0] - 2026-11-20
 
 Source release (desktop binaries in 1.1). Thesis results in `docs/experiments.md`.

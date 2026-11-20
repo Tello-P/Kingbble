@@ -1,6 +1,6 @@
 [project]
 name = "kingbble"
-version = "1.0.0"
+version = "1.1.0"
 description = "Crossword word-game engine and bot with Bayesian opponent-rack inference and RL"
 requires-python = ">=3.11"
 dependencies = []
