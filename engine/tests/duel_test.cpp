@@ -4,7 +4,7 @@
 
 #include <string>
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -55,4 +55,4 @@ TEST_F(DuelTest, ResultsDoNotDependOnThreads) {
 
 }  // namespace
 
-}  // namespace scrabble
+}  // namespace kingbble

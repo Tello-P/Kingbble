@@ -1,8 +1,8 @@
-#include "scrabble/board.hpp"
+#include "kingbble/board.hpp"
 
 #include <cassert>
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -48,4 +48,4 @@ void Board::Place(int row, int col, Tile letter, bool from_blank) {
   cells_[row][col] = static_cast<std::uint8_t>(letter | (from_blank ? kBlankBit : 0));
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

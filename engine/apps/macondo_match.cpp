@@ -43,10 +43,10 @@
 #include "duel.hpp"
 #include "game_record.hpp"
 #include "results_file.hpp"
-#include "scrabble/cgp.hpp"
-#include "scrabble/gcg.hpp"
+#include "kingbble/cgp.hpp"
+#include "kingbble/gcg.hpp"
 
-using namespace scrabble;
+using namespace kingbble;
 
 namespace {
 

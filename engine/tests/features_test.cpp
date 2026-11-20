@@ -1,4 +1,4 @@
-#include "scrabble/features.hpp"
+#include "kingbble/features.hpp"
 
 #include <gtest/gtest.h>
 
@@ -6,10 +6,10 @@
 #include <set>
 #include <string>
 
-#include "scrabble/equity.hpp"
-#include "scrabble/gaddag.hpp"
+#include "kingbble/equity.hpp"
+#include "kingbble/gaddag.hpp"
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -250,4 +250,4 @@ TEST(Features, LeaveBingoProbabilityIsExact) {
   EXPECT_EQ(FeatureComputer(leaves, nullptr).LeaveBingoProbability(*Rack::FromString("EINRST")), 0);
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

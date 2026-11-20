@@ -16,12 +16,12 @@
 #include <thread>
 #include <vector>
 
-#include "scrabble/endgame.hpp"
-#include "scrabble/equity.hpp"
-#include "scrabble/equity_bot.hpp"
-#include "scrabble/game.hpp"
+#include "kingbble/endgame.hpp"
+#include "kingbble/equity.hpp"
+#include "kingbble/equity_bot.hpp"
+#include "kingbble/game.hpp"
 
-namespace scrabble {
+namespace kingbble {
 
 struct DuelResult {
   double win = 0;     // mean of (first move's points - second's), ties count half
@@ -103,4 +103,4 @@ inline DuelResult Duel(const Game& game, const Move& first, const Move& second,
   return out;
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

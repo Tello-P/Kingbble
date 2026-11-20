@@ -1,4 +1,4 @@
-#include "scrabble/preendgame.hpp"
+#include "kingbble/preendgame.hpp"
 
 #include <gtest/gtest.h>
 
@@ -6,13 +6,13 @@
 #include <set>
 #include <string>
 
-#include "scrabble/endgame.hpp"
-#include "scrabble/endgame_bot.hpp"
-#include "scrabble/equity.hpp"
-#include "scrabble/equity_bot.hpp"
-#include "scrabble/preendgame_bot.hpp"
+#include "kingbble/endgame.hpp"
+#include "kingbble/endgame_bot.hpp"
+#include "kingbble/equity.hpp"
+#include "kingbble/equity_bot.hpp"
+#include "kingbble/preendgame_bot.hpp"
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -317,4 +317,4 @@ TEST_F(PreEndgameTest, BotPlaysLegalGames) {
   }
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

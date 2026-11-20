@@ -6,11 +6,11 @@
 #include <array>
 #include <string>
 
-#include "scrabble/game.hpp"
-#include "scrabble/gcg.hpp"
-#include "scrabble/movegen.hpp"
+#include "kingbble/game.hpp"
+#include "kingbble/gcg.hpp"
+#include "kingbble/movegen.hpp"
 
-namespace scrabble {
+namespace kingbble {
 
 class GameRecord {
  public:
@@ -62,4 +62,4 @@ class GameRecord {
   std::array<int, 2> cumulative_{};
 };
 
-}  // namespace scrabble
+}  // namespace kingbble

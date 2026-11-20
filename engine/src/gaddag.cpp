@@ -1,4 +1,4 @@
-#include "scrabble/gaddag.hpp"
+#include "kingbble/gaddag.hpp"
 
 #include <algorithm>
 #include <bit>
@@ -7,7 +7,7 @@
 #include <unordered_map>
 #include <utility>
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -151,4 +151,4 @@ bool Gaddag::Contains(std::string_view word) const {
   return n != kNone && IsTerminal(n);
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

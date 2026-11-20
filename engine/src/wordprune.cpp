@@ -1,11 +1,11 @@
-#include "scrabble/wordprune.hpp"
+#include "kingbble/wordprune.hpp"
 
 #include <algorithm>
 #include <array>
 #include <bit>
 #include <unordered_set>
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -91,4 +91,4 @@ Gaddag PruneLexicon(const Gaddag& gaddag, const Board& board, const Rack& pool) 
   return Gaddag::FromWords(PlayableWords(gaddag, board, pool));
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

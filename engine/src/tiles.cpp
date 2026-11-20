@@ -1,6 +1,6 @@
-#include "scrabble/tiles.hpp"
+#include "kingbble/tiles.hpp"
 
-namespace scrabble {
+namespace kingbble {
 
 const std::array<TileInfo, kNumTileTypes>& EnglishTiles() {
   static constexpr std::array<TileInfo, kNumTileTypes> kTiles = {{
@@ -28,4 +28,4 @@ std::optional<Tile> TileFromChar(char c) {
 
 char TileToChar(Tile t) { return t == kBlank ? '?' : static_cast<char>('A' + t - 1); }
 
-}  // namespace scrabble
+}  // namespace kingbble

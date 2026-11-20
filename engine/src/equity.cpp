@@ -1,10 +1,10 @@
-#include "scrabble/equity.hpp"
+#include "kingbble/equity.hpp"
 
 #include <cctype>
 
-#include "scrabble/game.hpp"
+#include "kingbble/game.hpp"
 
-namespace scrabble {
+namespace kingbble {
 
 Rack UnseenTiles(const Board& board, const Rack& own) {
   std::array<int, kNumTileTypes> counts{};
@@ -75,4 +75,4 @@ double StaticEquity(const Move& move, const Rack& rack, int bag_size, const Rack
   return move.score - 2 * RackValue(leave) - 10;
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

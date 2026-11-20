@@ -1,4 +1,4 @@
-#include "scrabble/endgame.hpp"
+#include "kingbble/endgame.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -8,9 +8,9 @@
 #include <stdexcept>
 #include <thread>
 
-#include "scrabble/wordprune.hpp"
+#include "kingbble/wordprune.hpp"
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -365,4 +365,4 @@ EndgameResult EndgameSolver::Solve(const Game& game, int max_plies, double time_
   return result;
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

@@ -1,11 +1,11 @@
-#include "scrabble/wordmap.hpp"
+#include "kingbble/wordmap.hpp"
 
 #include <algorithm>
 #include <fstream>
 #include <stdexcept>
 #include <utility>
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -130,4 +130,4 @@ bool WordMap::Contains(std::string_view word) const {
          std::binary_search(it->second.begin(), it->second.end(), std::string(word));
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

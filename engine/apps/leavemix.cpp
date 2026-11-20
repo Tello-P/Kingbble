@@ -9,10 +9,10 @@
 #include <set>
 #include <string>
 
-#include "scrabble/leaves.hpp"
-#include "scrabble/rack.hpp"
+#include "kingbble/leaves.hpp"
+#include "kingbble/rack.hpp"
 
-using namespace scrabble;
+using namespace kingbble;
 
 int main(int argc, char** argv) {
   std::string base_path, ours_path, ours_deltas, list_path, out_path, sizes = "6";

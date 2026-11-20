@@ -1,8 +1,8 @@
-#include "scrabble/board.hpp"
+#include "kingbble/board.hpp"
 
 #include <gtest/gtest.h>
 
-namespace scrabble {
+namespace kingbble {
 
 TEST(Board, CenterIsDoubleWord) { EXPECT_EQ(Board::BonusAt(7, 7), Bonus::kDoubleWord); }
 
@@ -44,4 +44,4 @@ TEST(Board, PlaceBlank) {
   EXPECT_EQ(b.At(7, 7), 5 | Board::kBlankBit);
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

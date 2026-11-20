@@ -33,10 +33,10 @@
 #include "bot_factory.hpp"
 #include "game_record.hpp"
 #include "results_file.hpp"
-#include "scrabble/gcg.hpp"
-#include "scrabble/movegen.hpp"
+#include "kingbble/gcg.hpp"
+#include "kingbble/movegen.hpp"
 
-using namespace scrabble;
+using namespace kingbble;
 
 namespace {
 

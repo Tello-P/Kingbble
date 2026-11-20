@@ -11,11 +11,11 @@
 #include <string>
 #include <unordered_map>
 
-#include "scrabble/rack.hpp"
+#include "kingbble/rack.hpp"
 
 namespace leavegen {
 
-using namespace scrabble;
+using namespace kingbble;
 
 constexpr int kBuckets = 4;
 // Bag ranges: 7-20, 21-40, 41-60, 61 and more.

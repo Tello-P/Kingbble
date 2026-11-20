@@ -1,11 +1,11 @@
-#include "scrabble/risk_bot.hpp"
+#include "kingbble/risk_bot.hpp"
 
 #include <algorithm>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -127,4 +127,4 @@ Move RiskBot::Choose(const Game& game) {
   return results_.empty() ? best : results_.front().sim.move;
 }
 
-}  // namespace scrabble
+}  // namespace kingbble
