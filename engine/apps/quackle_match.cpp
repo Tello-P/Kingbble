@@ -32,9 +32,9 @@
 
 #include "bot_factory.hpp"
 #include "game_record.hpp"
-#include "results_file.hpp"
 #include "kingbble/gcg.hpp"
 #include "kingbble/movegen.hpp"
+#include "results_file.hpp"
 
 using namespace kingbble;
 

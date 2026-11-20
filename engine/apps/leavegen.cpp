@@ -34,7 +34,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include "leavegen_io.hpp"
 #include "kingbble/anagram_index.hpp"
 #include "kingbble/equity.hpp"
 #include "kingbble/equity_bot.hpp"
@@ -43,6 +42,7 @@
 #include "kingbble/inference.hpp"
 #include "kingbble/leaves.hpp"
 #include "kingbble/win_table.hpp"
+#include "leavegen_io.hpp"
 
 using namespace kingbble;
 using namespace leavegen;

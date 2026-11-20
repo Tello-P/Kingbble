@@ -22,10 +22,10 @@
 #include <unordered_map>
 #include <vector>
 
-#include "leavegen_io.hpp"
 #include "kingbble/leaves.hpp"
 #include "kingbble/rack.hpp"
 #include "kingbble/tiles.hpp"
+#include "leavegen_io.hpp"
 
 using namespace kingbble;
 using namespace leavegen;

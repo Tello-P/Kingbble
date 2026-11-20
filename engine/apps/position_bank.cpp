@@ -42,7 +42,6 @@
 #include <string>
 #include <vector>
 
-#include "results_file.hpp"
 #include "kingbble/endgame_bot.hpp"
 #include "kingbble/equity.hpp"
 #include "kingbble/equity_bot.hpp"
@@ -55,6 +54,7 @@
 #include "kingbble/preendgame_bot.hpp"
 #include "kingbble/risk_bot.hpp"
 #include "kingbble/sim_bot.hpp"
+#include "results_file.hpp"
 
 using namespace kingbble;
 

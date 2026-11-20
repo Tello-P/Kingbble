@@ -57,12 +57,12 @@
 
 #include "bot_factory.hpp"
 #include "game_record.hpp"
-#include "manifest.hpp"
-#include "results_file.hpp"
-#include "run_seeds.hpp"
 #include "kingbble/anagram_index.hpp"
 #include "kingbble/gaddag.hpp"
 #include "kingbble/game.hpp"
+#include "manifest.hpp"
+#include "results_file.hpp"
+#include "run_seeds.hpp"
 
 using namespace kingbble;
 
