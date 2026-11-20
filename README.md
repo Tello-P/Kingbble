@@ -5,8 +5,25 @@ calibrated on human players, and risk-sensitive move selection. Bachelor's thesi
 
 ## Status
 
-**v1.0** (M7: reproducible tournaments and ablations). Source release; desktop binaries
-come in v1.1. History: [CHANGELOG.md](CHANGELOG.md).
+**v1.1**: desktop app for Linux and Windows, ready to install and play. History:
+[CHANGELOG.md](CHANGELOG.md).
+
+## Install and play
+
+Download from the [latest release](https://github.com/Tello-P/Kingbble/releases/latest):
+
+| System | File | How |
+|---|---|---|
+| Linux, any distribution | `Kingbble-*-x86_64.AppImage` | `chmod +x Kingbble-*.AppImage` and run it |
+| Debian, Ubuntu, Mint | `kingbble_*_amd64.deb` | `sudo apt install ./kingbble_*_amd64.deb` |
+| Windows 10/11 | `Kingbble-Setup-*.exe` | run it (no administrator rights needed) |
+| Windows, portable | `Kingbble-*-portable.zip` | unpack and run `Kingbble.exe` |
+
+Everything is inside: the engine, the ENABLE word list and Kingbble's own leave table
+for it. No Python, no compiler, no connection. Any 64-bit x86 CPU from about 2009 on
+(x86-64-v2). `SHA256SUMS.txt` beside the files lists their checksums. The Windows
+installer is not signed, so Windows may warn about an unknown publisher: *More info*,
+*Run anyway*.
 
 The tournament word lists (CSW24, NWL23) and their leave tables are licensed by their
 owners and are not distributed: the thesis runs use them from a local copy. The public
@@ -42,6 +59,12 @@ approximate pre-endgame, pre-endgame and endgame solvers, e.g. `sim+inf:human+eg
 cmake -S . -B build
 cmake --build build -j
 ctest --test-dir build --output-on-failure
+
+# the desktop app from source (Node 22): the bridge, ENABLE and its leaves, then a window
+cd desktop && npm install && node stage.js --build ../build && node smoke.js
+mkdir -p ../lexica && cp staging/lexica/* ../lexica/ && npm start
+npm run dist:linux        # or dist:win on Windows: the installers in desktop/dist/
+cd ..
 
 pip install -e ".[dev,eval]"
 ruff check . && pytest -q
