@@ -1,18 +1,105 @@
 {
-  "name": "kingbble-desktop",
-  "version": "1.0.0",
-  "description": "Kingbble desktop app: the web interface in its own window",
+  "name": "kingbble",
+  "productName": "Kingbble",
+  "version": "1.1.0",
+  "description": "Kingbble: a crossword word game engine and bot, in its own window",
+  "homepage": "https://github.com/Tello-P/Kingbble",
+  "author": {
+    "name": "Tello-P",
+    "email": "181756925+Tello-P@users.noreply.github.com"
+  },
   "main": "main.js",
-  "keywords": ["word game", "crossword game", "board game", "bot"],
+  "keywords": [
+    "word game",
+    "crossword game",
+    "board game",
+    "bot"
+  ],
   "private": true,
   "license": "GPL-3.0-only",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "stage": "node stage.js",
+    "dist:linux": "electron-builder --linux AppImage deb --publish never",
+    "dist:win": "electron-builder --win nsis zip --publish never",
+    "smoke": "node smoke.js"
   },
   "devDependencies": {
-    "electron": "^33.2.1"
+    "electron": "33.4.11",
+    "electron-builder": "25.1.8"
   },
   "allowScripts": {
     "electron@33.4.11": true
+  },
+  "build": {
+    "appId": "io.github.tello-p.kingbble",
+    "productName": "Kingbble",
+    "copyright": "Copyright © 2026 Tello-P. GPL-3.0-only.",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "server.js",
+      "icon.png",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../ui/static",
+        "to": "ui"
+      },
+      {
+        "from": "staging/engine",
+        "to": "engine"
+      },
+      {
+        "from": "staging/lexica",
+        "to": "lexica"
+      },
+      {
+        "from": "staging/legal",
+        "to": "legal"
+      }
+    ],
+    "asar": true,
+    "artifactName": "Kingbble-${version}-${arch}.${ext}",
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "icon.png",
+      "category": "Game",
+      "synopsis": "Word game engine and bot",
+      "executableName": "kingbble",
+      "artifactName": "Kingbble-${version}-x86_64.${ext}"
+    },
+    "deb": {
+      "packageName": "kingbble",
+      "artifactName": "kingbble_${version}_amd64.${ext}"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "zip"
+      ],
+      "icon": "icon.png",
+      "artifactName": "Kingbble-${version}-portable.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": false,
+      "allowToChangeInstallationDirectory": true,
+      "license": "staging/legal/LICENSE.txt",
+      "shortcutName": "Kingbble",
+      "artifactName": "Kingbble-Setup-${version}.${ext}"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "Tello-P",
+      "repo": "Kingbble"
+    }
   }
 }
