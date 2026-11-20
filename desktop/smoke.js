@@ -6,7 +6,7 @@
 "use strict";
 
 const path = require("path");
-const { createServer, bridgeName } = require("./server");
+const { createServer, bridgeName, EXTREME } = require("./server");
 
 (async () => {
   const staging = path.join(__dirname, "staging");
@@ -26,10 +26,10 @@ const { createServer, bridgeName } = require("./server");
 
   const info = await (await fetch(url + "/api/info")).json();
   const enable = info.lexica.find((l) => l.name === "ENABLE");
-  if (!enable || !enable.leaves || !enable.bots.includes("sim+eg")) fail("ENABLE or its leaves missing: " + JSON.stringify(info));
+  if (!enable || !enable.leaves || !enable.bots.includes(EXTREME)) fail("ENABLE or its leaves missing: " + JSON.stringify(info));
   if ((await fetch(url + "/")).status !== 200) fail("the page does not load");
 
-  let r = await post({ cmd: "new", args: ["11", "sim+eg", "equity", "1", "0"], lexicon: "ENABLE" });
+  let r = await post({ cmd: "new", args: ["11", EXTREME, "equity", "1", "0"], lexicon: "ENABLE" });
   if (!r.ok) fail("new game: " + r.error);
   for (let i = 0; i < 6; i++) {
     r = await post({ cmd: "bot" });

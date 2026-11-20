@@ -10,6 +10,10 @@ const http = require("http");
 const path = require("path");
 const { spawn } = require("child_process");
 
+// The Extreme level: simulation with the exact pre-endgame and the endgame solver,
+// built only from parts that need no human data. The human-model bot is offered
+// too when a model is given with --human-params (from source only).
+const EXTREME = "sim+peg+eg";
 // Commands the page may send; anything else is refused before reaching the engine.
 const COMMANDS = new Set([
   "new", "state", "play", "check", "exchange", "pass", "bot", "hint", "undo", "view", "rewind", "gcg",
@@ -132,7 +136,7 @@ function createServer(opts) {
   const bots = (name) => {
     const b = ["greedy"];
     if (lexica[name].leaves) {
-      b.push("equity", "sim", "sim+eg");
+      b.push("equity", "sim", "sim+eg", EXTREME);
       if (opts.human) b.push("sim+inf:human+eg");
     }
     return b;
@@ -242,4 +246,4 @@ function createServer(opts) {
   };
 }
 
-module.exports = { createServer, findLexica, commandLine, bridgeName };
+module.exports = { createServer, findLexica, commandLine, bridgeName, EXTREME };
