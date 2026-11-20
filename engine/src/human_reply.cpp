@@ -1,10 +1,10 @@
-#include "scrabble/human_reply.hpp"
+#include "kingbble/human_reply.hpp"
 
 #include <algorithm>
 
-#include "scrabble/equity.hpp"
+#include "kingbble/equity.hpp"
 
-namespace scrabble {
+namespace kingbble {
 
 Move HumanReplyPolicy::Pick(const Game& game, std::mt19937_64& rng) {
   const int me = game.to_move();
@@ -24,4 +24,4 @@ Move HumanReplyPolicy::Pick(const Game& game, std::mt19937_64& rng) {
   return options[std::discrete_distribution<std::size_t>(p.begin(), p.end())(rng)].move;
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

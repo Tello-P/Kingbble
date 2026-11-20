@@ -1,9 +1,9 @@
-#include "scrabble/win_prob.hpp"
+#include "kingbble/win_prob.hpp"
 
 #include <algorithm>
 #include <cmath>
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -47,4 +47,4 @@ std::vector<WinEstimate> WinProbabilities(const Game& game, const std::vector<Si
   return out;
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

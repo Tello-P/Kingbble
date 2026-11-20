@@ -1,4 +1,4 @@
-#include "scrabble/gcg.hpp"
+#include "kingbble/gcg.hpp"
 
 #include <cctype>
 #include <charconv>
@@ -6,9 +6,9 @@
 #include <sstream>
 #include <utility>
 
-#include "scrabble/movegen.hpp"
+#include "kingbble/movegen.hpp"
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -389,4 +389,4 @@ GcgReplay ReplayGcg(const GcgGame& game) {
   return r;
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

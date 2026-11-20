@@ -1,4 +1,4 @@
-#include "scrabble/sim_bot.hpp"
+#include "kingbble/sim_bot.hpp"
 
 #include <gtest/gtest.h>
 
@@ -6,10 +6,10 @@
 #include <chrono>
 #include <string>
 
-#include "scrabble/equity.hpp"
-#include "scrabble/game.hpp"
+#include "kingbble/equity.hpp"
+#include "kingbble/game.hpp"
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -136,9 +136,9 @@ TEST(GameFromPosition, KeepsTheGivenState) {
   EXPECT_EQ(g.to_move(), 0);
 }
 
-}  // namespace scrabble
+}  // namespace kingbble
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -227,4 +227,4 @@ TEST_F(SimBotTest, IgnoresRacksThatDoNotFit) {
     EXPECT_DOUBLE_EQ(bot.last_results()[i].mean, plain.last_results()[i].mean);
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

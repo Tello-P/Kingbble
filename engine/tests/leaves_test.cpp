@@ -1,4 +1,4 @@
-#include "scrabble/leaves.hpp"
+#include "kingbble/leaves.hpp"
 
 #include <gtest/gtest.h>
 
@@ -6,7 +6,7 @@
 #include <stdexcept>
 #include <string>
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -77,4 +77,4 @@ TEST(Leaves, PublishedTableIsPlausible) {
   EXPECT_GT(V(l, "AEINST"), V(l, "AEIOUU"));
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

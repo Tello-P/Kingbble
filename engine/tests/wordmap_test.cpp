@@ -1,4 +1,4 @@
-#include "scrabble/wordmap.hpp"
+#include "kingbble/wordmap.hpp"
 
 #include <gtest/gtest.h>
 
@@ -8,7 +8,7 @@
 #include <random>
 #include <string>
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -86,4 +86,4 @@ TEST(WordMap, MatchesBruteForceOnRandomRacks) {
   }
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

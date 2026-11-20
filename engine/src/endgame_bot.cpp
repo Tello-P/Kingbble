@@ -1,6 +1,6 @@
-#include "scrabble/endgame_bot.hpp"
+#include "kingbble/endgame_bot.hpp"
 
-namespace scrabble {
+namespace kingbble {
 
 Move EndgameBot::Choose(const Game& game) {
   if (game.bag_size() > 0) {
@@ -25,4 +25,4 @@ Move EndgameBot::Choose(const Game& game) {
   return last_.move;
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

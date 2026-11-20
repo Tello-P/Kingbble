@@ -16,18 +16,18 @@
 #include <string>
 
 #include "inference_side.hpp"
-#include "scrabble/approx_preendgame_bot.hpp"
-#include "scrabble/endgame_bot.hpp"
-#include "scrabble/equity_bot.hpp"
-#include "scrabble/gaddag.hpp"
-#include "scrabble/greedy_bot.hpp"
-#include "scrabble/human_reply.hpp"
-#include "scrabble/leaves.hpp"
-#include "scrabble/preendgame_bot.hpp"
-#include "scrabble/risk_bot.hpp"
-#include "scrabble/sim_bot.hpp"
+#include "kingbble/approx_preendgame_bot.hpp"
+#include "kingbble/endgame_bot.hpp"
+#include "kingbble/equity_bot.hpp"
+#include "kingbble/gaddag.hpp"
+#include "kingbble/greedy_bot.hpp"
+#include "kingbble/human_reply.hpp"
+#include "kingbble/leaves.hpp"
+#include "kingbble/preendgame_bot.hpp"
+#include "kingbble/risk_bot.hpp"
+#include "kingbble/sim_bot.hpp"
 
-namespace scrabble {
+namespace kingbble {
 
 struct PegOptions {
   int max_bag = 1;
@@ -169,4 +169,4 @@ inline std::unique_ptr<Bot> MakeBot(const std::string& kind, const Gaddag& gadda
   return std::move(setup.bot);
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

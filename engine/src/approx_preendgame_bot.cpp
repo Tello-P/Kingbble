@@ -1,6 +1,6 @@
-#include "scrabble/approx_preendgame_bot.hpp"
+#include "kingbble/approx_preendgame_bot.hpp"
 
-namespace scrabble {
+namespace kingbble {
 
 Move ApproxPreEndgameBot::Choose(const Game& game) {
   last_.clear();
@@ -16,4 +16,4 @@ Move ApproxPreEndgameBot::Choose(const Game& game) {
   return m;
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

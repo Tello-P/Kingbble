@@ -2,11 +2,11 @@
 
 #include <string>
 
-#include "scrabble/equity_bot.hpp"
-#include "scrabble/human_reply.hpp"
-#include "scrabble/sim_bot.hpp"
+#include "kingbble/equity_bot.hpp"
+#include "kingbble/human_reply.hpp"
+#include "kingbble/sim_bot.hpp"
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -216,4 +216,4 @@ TEST_F(SimDepthTest, ReseedingRestartsTheRandomStreams) {
   EXPECT_EQ(Means(used), Means(fresh));
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

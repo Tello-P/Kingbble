@@ -1,13 +1,13 @@
-#include "scrabble/win_prob.hpp"
+#include "kingbble/win_prob.hpp"
 
 #include <gtest/gtest.h>
 
 #include <numeric>
 #include <string>
 
-#include "scrabble/equity_bot.hpp"
+#include "kingbble/equity_bot.hpp"
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -78,4 +78,4 @@ TEST(WinProbTest, EstimatesEverySimulatedCandidate) {
   }
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

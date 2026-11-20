@@ -1,4 +1,4 @@
-#include "scrabble/gcg.hpp"
+#include "kingbble/gcg.hpp"
 
 #include <gtest/gtest.h>
 
@@ -7,11 +7,11 @@
 #include <fstream>
 #include <string>
 
-#include "scrabble/game.hpp"
-#include "scrabble/greedy_bot.hpp"
-#include "scrabble/movegen.hpp"
+#include "kingbble/game.hpp"
+#include "kingbble/greedy_bot.hpp"
+#include "kingbble/movegen.hpp"
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -208,4 +208,4 @@ TEST(Gcg, SelfPlayGamesRoundTripThroughGcg) {
   }
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

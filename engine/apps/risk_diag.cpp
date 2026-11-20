@@ -15,14 +15,14 @@
 #include <string>
 #include <vector>
 
-#include "scrabble/equity_bot.hpp"
-#include "scrabble/gaddag.hpp"
-#include "scrabble/game.hpp"
-#include "scrabble/leaves.hpp"
-#include "scrabble/risk_bot.hpp"
-#include "scrabble/sim_bot.hpp"
+#include "kingbble/equity_bot.hpp"
+#include "kingbble/gaddag.hpp"
+#include "kingbble/game.hpp"
+#include "kingbble/leaves.hpp"
+#include "kingbble/risk_bot.hpp"
+#include "kingbble/sim_bot.hpp"
 
-using namespace scrabble;
+using namespace kingbble;
 
 namespace {
 

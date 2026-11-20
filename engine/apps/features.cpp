@@ -28,7 +28,7 @@
 // only counts the main words of human placements in the train split, writing
 // "WORD<TAB>count" lines to OUT (the play counts of ml/data/word_freq.py).
 
-#include "scrabble/features.hpp"
+#include "kingbble/features.hpp"
 
 #include <algorithm>
 #include <array>
@@ -44,13 +44,13 @@
 #include <string>
 #include <vector>
 
-#include "scrabble/equity.hpp"
-#include "scrabble/gaddag.hpp"
-#include "scrabble/gcg.hpp"
-#include "scrabble/leaves.hpp"
-#include "scrabble/movegen.hpp"
+#include "kingbble/equity.hpp"
+#include "kingbble/gaddag.hpp"
+#include "kingbble/gcg.hpp"
+#include "kingbble/leaves.hpp"
+#include "kingbble/movegen.hpp"
 
-using namespace scrabble;
+using namespace kingbble;
 namespace fs = std::filesystem;
 
 namespace {

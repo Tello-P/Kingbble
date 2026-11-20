@@ -1,4 +1,4 @@
-#include "scrabble/preendgame.hpp"
+#include "kingbble/preendgame.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -8,10 +8,10 @@
 #include <stdexcept>
 #include <thread>
 
-#include "scrabble/equity.hpp"
-#include "scrabble/wordprune.hpp"
+#include "kingbble/equity.hpp"
+#include "kingbble/wordprune.hpp"
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -592,4 +592,4 @@ PreEndgameResult PreEndgameSolver::Solve(const Game& game, const PreEndgameParam
   return result;
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

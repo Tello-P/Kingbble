@@ -15,15 +15,15 @@
 #include <optional>
 #include <string>
 
-#include "scrabble/equity.hpp"
-#include "scrabble/features.hpp"
-#include "scrabble/gaddag.hpp"
-#include "scrabble/game.hpp"
-#include "scrabble/inference.hpp"
-#include "scrabble/leaves.hpp"
-#include "scrabble/sim_bot.hpp"
+#include "kingbble/equity.hpp"
+#include "kingbble/features.hpp"
+#include "kingbble/gaddag.hpp"
+#include "kingbble/game.hpp"
+#include "kingbble/inference.hpp"
+#include "kingbble/leaves.hpp"
+#include "kingbble/sim_bot.hpp"
 
-namespace scrabble {
+namespace kingbble {
 
 // Every rack explains every move: the posterior is the prior.
 class UniformModel : public MoveModel {
@@ -133,4 +133,4 @@ class RackTracker {
   long long surprises_ = 0;
 };
 
-}  // namespace scrabble
+}  // namespace kingbble

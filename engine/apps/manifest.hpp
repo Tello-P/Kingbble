@@ -16,7 +16,7 @@
 #include <utility>
 #include <vector>
 
-namespace scrabble {
+namespace kingbble {
 
 // FNV-1a 64 of a file's bytes as 16 hex digits, "missing" if it cannot be read.
 inline std::string FileHash(const std::string& path) {
@@ -109,4 +109,4 @@ class Manifest {
   std::vector<std::string> argv_;
 };
 
-}  // namespace scrabble
+}  // namespace kingbble

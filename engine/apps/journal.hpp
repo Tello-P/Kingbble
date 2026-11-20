@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 
-namespace scrabble {
+namespace kingbble {
 
 class Journal {
  public:
@@ -65,4 +65,4 @@ class Journal {
   std::ostringstream buffer_;
 };
 
-}  // namespace scrabble
+}  // namespace kingbble

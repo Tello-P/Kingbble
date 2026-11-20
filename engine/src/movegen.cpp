@@ -1,4 +1,4 @@
-#include "scrabble/movegen.hpp"
+#include "kingbble/movegen.hpp"
 
 #include <algorithm>
 #include <bit>
@@ -9,7 +9,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -788,4 +788,4 @@ void MoveGenerator::PlaceWord(const std::uint8_t* word, int i) {
   placed_[s] = 0;
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

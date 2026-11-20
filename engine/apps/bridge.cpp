@@ -41,14 +41,14 @@
 
 #include "bot_factory.hpp"
 #include "game_record.hpp"
-#include "scrabble/equity.hpp"
-#include "scrabble/game.hpp"
-#include "scrabble/gcg.hpp"
-#include "scrabble/inference.hpp"
-#include "scrabble/kwg.hpp"
-#include "scrabble/movegen.hpp"
+#include "kingbble/equity.hpp"
+#include "kingbble/game.hpp"
+#include "kingbble/gcg.hpp"
+#include "kingbble/inference.hpp"
+#include "kingbble/kwg.hpp"
+#include "kingbble/movegen.hpp"
 
-using namespace scrabble;
+using namespace kingbble;
 
 namespace {
 

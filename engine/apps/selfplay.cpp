@@ -60,11 +60,11 @@
 #include "manifest.hpp"
 #include "results_file.hpp"
 #include "run_seeds.hpp"
-#include "scrabble/anagram_index.hpp"
-#include "scrabble/gaddag.hpp"
-#include "scrabble/game.hpp"
+#include "kingbble/anagram_index.hpp"
+#include "kingbble/gaddag.hpp"
+#include "kingbble/game.hpp"
 
-using namespace scrabble;
+using namespace kingbble;
 
 namespace {
 

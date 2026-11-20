@@ -1,4 +1,4 @@
-#include "scrabble/leaves.hpp"
+#include "kingbble/leaves.hpp"
 
 #include <algorithm>
 #include <bit>
@@ -7,9 +7,9 @@
 #include <sstream>
 #include <stdexcept>
 
-#include "scrabble/kwg.hpp"
+#include "kingbble/kwg.hpp"
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -184,4 +184,4 @@ double Leaves::Value(const Rack& leave) const {
   }
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

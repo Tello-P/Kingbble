@@ -7,7 +7,7 @@
 #include <sstream>
 #include <string>
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -56,4 +56,4 @@ TEST(Journal, StartsFreshWithoutADoneFile) {
   EXPECT_EQ(ReadAll(path), "");
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

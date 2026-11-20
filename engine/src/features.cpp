@@ -1,4 +1,4 @@
-#include "scrabble/features.hpp"
+#include "kingbble/features.hpp"
 
 #include <algorithm>
 #include <bit>
@@ -11,10 +11,10 @@
 #include <stdexcept>
 #include <tuple>
 
-#include "scrabble/equity.hpp"
-#include "scrabble/game.hpp"
+#include "kingbble/equity.hpp"
+#include "kingbble/game.hpp"
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -709,4 +709,4 @@ std::vector<ReplayedTurn> ReplayTurns(const GcgGame& game, std::string* error) {
   return turns;
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

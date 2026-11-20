@@ -1,4 +1,4 @@
-#include "scrabble/equity.hpp"
+#include "kingbble/equity.hpp"
 
 #include <gtest/gtest.h>
 
@@ -6,11 +6,11 @@
 #include <set>
 #include <string>
 
-#include "scrabble/equity_bot.hpp"
-#include "scrabble/game.hpp"
-#include "scrabble/greedy_bot.hpp"
+#include "kingbble/equity_bot.hpp"
+#include "kingbble/game.hpp"
+#include "kingbble/greedy_bot.hpp"
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -147,4 +147,4 @@ TEST(EquityBot, PicksTheHighestStaticEquity) {
   }
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

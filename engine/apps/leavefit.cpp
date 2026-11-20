@@ -23,11 +23,11 @@
 #include <vector>
 
 #include "leavegen_io.hpp"
-#include "scrabble/leaves.hpp"
-#include "scrabble/rack.hpp"
-#include "scrabble/tiles.hpp"
+#include "kingbble/leaves.hpp"
+#include "kingbble/rack.hpp"
+#include "kingbble/tiles.hpp"
 
-using namespace scrabble;
+using namespace kingbble;
 using namespace leavegen;
 
 namespace {

@@ -1,10 +1,10 @@
-#include "scrabble/equity_bot.hpp"
+#include "kingbble/equity_bot.hpp"
 
 #include <algorithm>
 
-#include "scrabble/equity.hpp"
+#include "kingbble/equity.hpp"
 
-namespace scrabble {
+namespace kingbble {
 
 std::vector<Move> EquityBot::Options(const Game& game) {
   const Rack& rack = game.rack(game.to_move());
@@ -80,4 +80,4 @@ std::vector<RankedMove> EquityBot::Rank(const Game& game) {
   return ranked;
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

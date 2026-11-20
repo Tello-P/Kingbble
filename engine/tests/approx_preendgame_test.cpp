@@ -1,15 +1,15 @@
-#include "scrabble/approx_preendgame.hpp"
+#include "kingbble/approx_preendgame.hpp"
 
 #include <gtest/gtest.h>
 
 #include <memory>
 #include <string>
 
-#include "scrabble/approx_preendgame_bot.hpp"
-#include "scrabble/endgame_bot.hpp"
-#include "scrabble/equity_bot.hpp"
+#include "kingbble/approx_preendgame_bot.hpp"
+#include "kingbble/endgame_bot.hpp"
+#include "kingbble/equity_bot.hpp"
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -104,4 +104,4 @@ TEST_F(ApproxPreEndgameTest, BotPlaysLegalGames) {
   }
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

@@ -46,16 +46,16 @@
 
 #include "inference_side.hpp"
 #include "journal.hpp"
-#include "scrabble/equity.hpp"
-#include "scrabble/features.hpp"
-#include "scrabble/gaddag.hpp"
-#include "scrabble/game.hpp"
-#include "scrabble/gcg.hpp"
-#include "scrabble/inference.hpp"
-#include "scrabble/leaves.hpp"
-#include "scrabble/sim_bot.hpp"
+#include "kingbble/equity.hpp"
+#include "kingbble/features.hpp"
+#include "kingbble/gaddag.hpp"
+#include "kingbble/game.hpp"
+#include "kingbble/gcg.hpp"
+#include "kingbble/inference.hpp"
+#include "kingbble/leaves.hpp"
+#include "kingbble/sim_bot.hpp"
 
-using namespace scrabble;
+using namespace kingbble;
 namespace fs = std::filesystem;
 
 namespace {

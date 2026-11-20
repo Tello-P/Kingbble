@@ -1,8 +1,8 @@
-#include "scrabble/cgp.hpp"
+#include "kingbble/cgp.hpp"
 
 #include <gtest/gtest.h>
 
-namespace scrabble {
+namespace kingbble {
 
 TEST(Cgp, EmptyBoard) {
   std::string rows = "15";
@@ -28,4 +28,4 @@ TEST(Cgp, GameLine) {
   EXPECT_EQ(cgp.substr(cgp.size() - tail.size()), tail);
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

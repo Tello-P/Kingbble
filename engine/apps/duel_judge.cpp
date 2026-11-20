@@ -22,15 +22,15 @@
 #include <string>
 #include <vector>
 
-#include "scrabble/equity.hpp"
-#include "scrabble/gaddag.hpp"
-#include "scrabble/game.hpp"
-#include "scrabble/gcg.hpp"
-#include "scrabble/leaves.hpp"
-#include "scrabble/movegen.hpp"
-#include "scrabble/preendgame.hpp"
+#include "kingbble/equity.hpp"
+#include "kingbble/gaddag.hpp"
+#include "kingbble/game.hpp"
+#include "kingbble/gcg.hpp"
+#include "kingbble/leaves.hpp"
+#include "kingbble/movegen.hpp"
+#include "kingbble/preendgame.hpp"
 
-using namespace scrabble;
+using namespace kingbble;
 
 namespace {
 

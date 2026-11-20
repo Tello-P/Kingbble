@@ -1,8 +1,8 @@
-#include "scrabble/tiles.hpp"
+#include "kingbble/tiles.hpp"
 
 #include <gtest/gtest.h>
 
-namespace scrabble {
+namespace kingbble {
 
 TEST(Tiles, EnglishDistributionHas100Tiles) { EXPECT_EQ(TotalTiles(), 100); }
 
@@ -21,4 +21,4 @@ TEST(Tiles, CharRoundTrip) {
   EXPECT_FALSE(TileFromChar('1').has_value());
 }
 
-}  // namespace scrabble
+}  // namespace kingbble
