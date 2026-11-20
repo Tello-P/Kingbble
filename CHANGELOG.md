@@ -2,9 +2,17 @@
 
 Milestones of the bachelor's thesis. Each section lists what the milestone added.
 
-## [1.0.0] - unreleased
+## [1.0.0] - 2026-11-20
 
-Tagged once the thesis runs are done (`docs/experiments.md`).
+Source release (desktop binaries in 1.1). Thesis results in `docs/experiments.md`.
+
+### Added (release)
+- Desktop interface: review past moves, rewind, scoring help, per-move score breakdown,
+  leaves training from the settings, and an About section (license, credits, trademark
+  notice).
+- Website, manual and WASM demo sources in `web/`.
+- `kingbble_endgame_judge`: exact judge of the endgame moves in GCG games.
+- `THIRD_PARTY_NOTICES.md`; "Scrabble" removed from the product name and description.
 
 ### Added (M7: reproducible tournaments and ablations)
 - `sim+inf:human|rf|none` bots: a sim bot that draws its simulated opponent racks
