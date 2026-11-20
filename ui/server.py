@@ -171,7 +171,7 @@ class Engines:
     def bots(self, name: str) -> list[str]:
         bots = ["greedy"]
         if self.lexica[name]["leaves"]:
-            bots += ["equity", "sim", "sim+eg"]
+            bots += ["equity", "sim", "sim+eg", "sim+peg+eg"]
             if self.human:
                 bots += ["sim+inf:human+eg"]
         return bots
