@@ -1,13 +1,16 @@
 # kingbble
 
-English Scrabble bot (CSW / NWL) with Bayesian inference of the opponent's rack,
+Engine and bot for English crossword word games, with Bayesian inference of the opponent's rack,
 calibrated on human players, and risk-sensitive move selection. Bachelor's thesis (TFG).
 
 ## Status
 
-**v1.0 candidate** (M7: reproducible tournaments and ablations). The code is complete;
-v1.0 is tagged once the thesis runs in [docs/experiments.md](docs/experiments.md) are
-done. History: [CHANGELOG.md](CHANGELOG.md).
+**v1.0** (M7: reproducible tournaments and ablations). Source release; desktop binaries
+come in v1.1. History: [CHANGELOG.md](CHANGELOG.md).
+
+The tournament word lists (CSW24, NWL23) and their leave tables are licensed by their
+owners and are not distributed: the thesis runs use them from a local copy. The public
+build plays on ENABLE (public domain) with leaves trained here.
 
 ## What is inside
 
@@ -79,3 +82,11 @@ docs/        experiments behind the thesis tables
 
 Workflow: issue -> branch (`feat/*`, `fix/*`, `exp/*`, `docs/*`) -> PR -> green CI ->
 merge into `main` -> tag per milestone.
+
+## License and trademarks
+
+Kingbble is free software under the GNU General Public License v3 ([LICENSE](LICENSE)).
+Third-party parts and credits: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+Kingbble is not affiliated with or endorsed by Hasbro or Mattel. Scrabble® is a trademark
+of its owners.
