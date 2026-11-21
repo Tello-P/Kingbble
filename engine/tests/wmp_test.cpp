@@ -5,14 +5,14 @@
 #include <string>
 #include <vector>
 
-#include "scrabble/anagram_index.hpp"
-#include "scrabble/equity.hpp"
-#include "scrabble/equity_bot.hpp"
-#include "scrabble/game.hpp"
-#include "scrabble/leaves.hpp"
-#include "scrabble/movegen.hpp"
+#include "kingbble/anagram_index.hpp"
+#include "kingbble/equity.hpp"
+#include "kingbble/equity_bot.hpp"
+#include "kingbble/game.hpp"
+#include "kingbble/leaves.hpp"
+#include "kingbble/movegen.hpp"
 
-namespace scrabble {
+namespace kingbble {
 namespace {
 
 const std::string kFixtures = KINGBBLE_FIXTURES;
@@ -78,4 +78,4 @@ TEST(Wmp, GeneratesExactlyTheSameMoves) {
 }
 
 }  // namespace
-}  // namespace scrabble
+}  // namespace kingbble

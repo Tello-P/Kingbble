@@ -34,17 +34,17 @@
 #include <unordered_map>
 #include <vector>
 
+#include "kingbble/anagram_index.hpp"
+#include "kingbble/equity.hpp"
+#include "kingbble/equity_bot.hpp"
+#include "kingbble/gaddag.hpp"
+#include "kingbble/game.hpp"
+#include "kingbble/inference.hpp"
+#include "kingbble/leaves.hpp"
+#include "kingbble/win_table.hpp"
 #include "leavegen_io.hpp"
-#include "scrabble/anagram_index.hpp"
-#include "scrabble/equity.hpp"
-#include "scrabble/equity_bot.hpp"
-#include "scrabble/gaddag.hpp"
-#include "scrabble/game.hpp"
-#include "scrabble/inference.hpp"
-#include "scrabble/leaves.hpp"
-#include "scrabble/win_table.hpp"
 
-using namespace scrabble;
+using namespace kingbble;
 using namespace leavegen;
 
 int main(int argc, char** argv) {

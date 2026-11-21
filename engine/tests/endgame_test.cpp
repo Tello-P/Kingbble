@@ -1,4 +1,4 @@
-#include "scrabble/endgame.hpp"
+#include "kingbble/endgame.hpp"
 
 #include <gtest/gtest.h>
 
@@ -7,11 +7,11 @@
 #include <string>
 #include <vector>
 
-#include "scrabble/endgame_bot.hpp"
-#include "scrabble/equity_bot.hpp"
-#include "scrabble/greedy_bot.hpp"
+#include "kingbble/endgame_bot.hpp"
+#include "kingbble/equity_bot.hpp"
+#include "kingbble/greedy_bot.hpp"
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -173,4 +173,4 @@ TEST_F(EndgameTest, EndgameBotPlaysFullGames) {
   }
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

@@ -36,3 +36,5 @@ web/data/
 web/dist/
 web/static/demo/engine.js
 web/static/demo/engine.wasm
+desktop/staging/
+desktop/dist/

@@ -1,6 +1,6 @@
-#include "scrabble/rack.hpp"
+#include "kingbble/rack.hpp"
 
-namespace scrabble {
+namespace kingbble {
 
 std::optional<Rack> Rack::FromString(std::string_view s) {
   Rack r;
@@ -31,4 +31,4 @@ std::string Rack::ToString() const {
   return out;
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

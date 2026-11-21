@@ -1,4 +1,4 @@
-#include "scrabble/kwg.hpp"
+#include "kingbble/kwg.hpp"
 
 #include <gtest/gtest.h>
 
@@ -7,7 +7,7 @@
 #include <functional>
 #include <string>
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -114,4 +114,4 @@ TEST(Kwg, ReadsWolgesOutput) {
   EXPECT_EQ(GaddagPaths(Kwg::FromWords(words)), GaddagPaths(k));
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

@@ -20,13 +20,13 @@
 #include <string>
 #include <vector>
 
-#include "scrabble/endgame.hpp"
-#include "scrabble/equity.hpp"
-#include "scrabble/gaddag.hpp"
-#include "scrabble/game.hpp"
-#include "scrabble/gcg.hpp"
+#include "kingbble/endgame.hpp"
+#include "kingbble/equity.hpp"
+#include "kingbble/gaddag.hpp"
+#include "kingbble/game.hpp"
+#include "kingbble/gcg.hpp"
 
-using namespace scrabble;
+using namespace kingbble;
 
 int main(int argc, char** argv) {
   std::string lexicon, input, out_path;

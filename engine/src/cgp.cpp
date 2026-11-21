@@ -1,6 +1,6 @@
-#include "scrabble/cgp.hpp"
+#include "kingbble/cgp.hpp"
 
-namespace scrabble {
+namespace kingbble {
 
 std::string BoardToCgp(const Board& board) {
   std::string out;
@@ -31,4 +31,4 @@ std::string GameToCgp(const Game& game, std::string_view lexicon) {
          " lex " + std::string(lexicon) + ";";
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

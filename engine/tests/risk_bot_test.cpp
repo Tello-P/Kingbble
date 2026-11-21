@@ -1,15 +1,15 @@
-#include "scrabble/risk_bot.hpp"
+#include "kingbble/risk_bot.hpp"
 
 #include <gtest/gtest.h>
 
 #include <fstream>
 #include <string>
 
-#include "scrabble/equity.hpp"
-#include "scrabble/equity_bot.hpp"
-#include "scrabble/inference.hpp"
+#include "kingbble/equity.hpp"
+#include "kingbble/equity_bot.hpp"
+#include "kingbble/inference.hpp"
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -210,4 +210,4 @@ TEST_F(RiskBotTest, MoreIterationsInsideTheWindow) {
   for (const RiskResult& x : bot.last_results()) EXPECT_EQ(x.sim.iterations, 48);
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

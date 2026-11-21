@@ -22,12 +22,12 @@
 #include <unordered_map>
 #include <vector>
 
+#include "kingbble/leaves.hpp"
+#include "kingbble/rack.hpp"
+#include "kingbble/tiles.hpp"
 #include "leavegen_io.hpp"
-#include "scrabble/leaves.hpp"
-#include "scrabble/rack.hpp"
-#include "scrabble/tiles.hpp"
 
-using namespace scrabble;
+using namespace kingbble;
 using namespace leavegen;
 
 namespace {

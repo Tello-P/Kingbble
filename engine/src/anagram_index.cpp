@@ -1,10 +1,10 @@
-#include "scrabble/anagram_index.hpp"
+#include "kingbble/anagram_index.hpp"
 
 #include <algorithm>
 #include <bit>
 #include <string>
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -130,4 +130,4 @@ const std::uint8_t* AnagramIndex::Find(const Key& key, [[maybe_unused]] int leng
   return nullptr;
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

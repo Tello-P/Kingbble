@@ -1,8 +1,8 @@
-#include "scrabble/bag.hpp"
+#include "kingbble/bag.hpp"
 
 #include <gtest/gtest.h>
 
-namespace scrabble {
+namespace kingbble {
 
 TEST(Bag, StartsFull) { EXPECT_EQ(Bag(1).Size(), 100); }
 
@@ -33,4 +33,4 @@ TEST(Bag, DrainingPreservesDistribution) {
   for (int t = 0; t < kNumTileTypes; ++t) EXPECT_EQ(seen[t], EnglishTiles()[t].count);
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

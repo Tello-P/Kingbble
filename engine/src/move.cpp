@@ -1,8 +1,8 @@
-#include "scrabble/move.hpp"
+#include "kingbble/move.hpp"
 
 #include <algorithm>
 
-namespace scrabble {
+namespace kingbble {
 
 int Move::TilesPlayed() const {
   if (kind != Kind::kPlace) return 0;
@@ -41,4 +41,4 @@ std::string Move::ToString() const {
   return coord + " " + tiles + " (" + std::to_string(score) + ")";
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

@@ -22,6 +22,43 @@ jobs:
       - name: Tests
         run: ctest --test-dir build --output-on-failure
 
+  windows:
+    name: C++ engine (Windows, MinGW)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+      - name: Build the bridge and the tests
+        shell: msys2 {0}
+        run: |
+          cmake -S . -B build -G Ninja
+          cmake --build build
+      - name: Tests
+        shell: msys2 {0}
+        run: ctest --test-dir build --output-on-failure -j 4
+
+  desktop:
+    name: Desktop app (Node service smoke test)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: cmake -S . -B build -DKINGBBLE_TOOLS=OFF -DKINGBBLE_BUILD_TESTS=OFF
+      - run: cmake --build build -j --target kingbble_bridge
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Stage and play a few moves
+        working-directory: desktop
+        run: |
+          node stage.js --build ../build
+          node smoke.js
+
   format:
     name: clang-format
     runs-on: ubuntu-24.04

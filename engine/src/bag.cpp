@@ -1,6 +1,6 @@
-#include "scrabble/bag.hpp"
+#include "kingbble/bag.hpp"
 
-namespace scrabble {
+namespace kingbble {
 
 Bag::Bag(std::uint64_t seed) : rng_(seed) {
   const auto& info = EnglishTiles();
@@ -27,4 +27,4 @@ void Bag::Refill(Rack& rack) {
 
 void Bag::Return(Tile t) { tiles_.push_back(t); }
 
-}  // namespace scrabble
+}  // namespace kingbble

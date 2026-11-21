@@ -42,11 +42,11 @@
 #include "bot_factory.hpp"
 #include "duel.hpp"
 #include "game_record.hpp"
+#include "kingbble/cgp.hpp"
+#include "kingbble/gcg.hpp"
 #include "results_file.hpp"
-#include "scrabble/cgp.hpp"
-#include "scrabble/gcg.hpp"
 
-using namespace scrabble;
+using namespace kingbble;
 
 namespace {
 

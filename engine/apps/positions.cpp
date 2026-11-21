@@ -50,17 +50,17 @@
 #include <sstream>
 #include <string>
 
-#include "scrabble/cgp.hpp"
-#include "scrabble/endgame.hpp"
-#include "scrabble/equity.hpp"
-#include "scrabble/gaddag.hpp"
-#include "scrabble/game.hpp"
-#include "scrabble/greedy_bot.hpp"
-#include "scrabble/leaves.hpp"
-#include "scrabble/movegen.hpp"
-#include "scrabble/preendgame.hpp"
+#include "kingbble/cgp.hpp"
+#include "kingbble/endgame.hpp"
+#include "kingbble/equity.hpp"
+#include "kingbble/gaddag.hpp"
+#include "kingbble/game.hpp"
+#include "kingbble/greedy_bot.hpp"
+#include "kingbble/leaves.hpp"
+#include "kingbble/movegen.hpp"
+#include "kingbble/preendgame.hpp"
 
-using namespace scrabble;
+using namespace kingbble;
 
 namespace {
 

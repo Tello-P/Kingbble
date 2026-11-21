@@ -128,7 +128,7 @@ jobs:
 
       - name: Build the engine
         run: |
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DSCRABBLE_BUILD_TESTS=OFF
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DKINGBBLE_BUILD_TESTS=OFF
           cmake --build build -j"$(nproc)"
 
       - name: Install Python dependencies

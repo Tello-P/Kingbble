@@ -1,8 +1,8 @@
-#include "scrabble/gaddag.hpp"
+#include "kingbble/gaddag.hpp"
 
 #include <gtest/gtest.h>
 
-namespace scrabble {
+namespace kingbble {
 
 TEST(Gaddag, ContainsInsertedWords) {
   Gaddag g = Gaddag::FromWords({"AA", "CAT", "CATS", "ACT", "QI"});
@@ -44,4 +44,4 @@ TEST(Gaddag, LoadsFixtureFile) {
   EXPECT_FALSE(g.Contains("HELL"));
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

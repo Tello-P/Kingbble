@@ -1,4 +1,4 @@
-#include "scrabble/sim_bot.hpp"
+#include "kingbble/sim_bot.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -7,9 +7,9 @@
 #include <random>
 #include <thread>
 
-#include "scrabble/equity.hpp"
+#include "kingbble/equity.hpp"
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -236,4 +236,4 @@ Move SimBot::Choose(const Game& game) {
   return results_.front().move;
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

@@ -1,6 +1,6 @@
-#include "scrabble/greedy_bot.hpp"
+#include "kingbble/greedy_bot.hpp"
 
-namespace scrabble {
+namespace kingbble {
 
 Move GreedyBot::Choose(const Game& game) {
   const Rack& rack = game.rack(game.to_move());
@@ -19,4 +19,4 @@ Move GreedyBot::Choose(const Game& game) {
   return m;
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

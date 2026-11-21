@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "scrabble/kwg.hpp"
+#include "kingbble/kwg.hpp"
 
 int main(int argc, char** argv) {
   if (argc != 3) {
@@ -29,7 +29,7 @@ int main(int argc, char** argv) {
   }
   std::sort(words.begin(), words.end());
   words.erase(std::unique(words.begin(), words.end()), words.end());
-  scrabble::Kwg kwg = scrabble::Kwg::FromWords(words);
+  kingbble::Kwg kwg = kingbble::Kwg::FromWords(words);
   kwg.WriteFile(argv[2]);
   std::cout << kwg.Words().size() << " words, " << kwg.NumArcs() << " arcs\n";
   return 0;

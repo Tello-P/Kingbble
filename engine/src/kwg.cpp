@@ -1,4 +1,4 @@
-#include "scrabble/kwg.hpp"
+#include "kingbble/kwg.hpp"
 
 #include <algorithm>
 #include <fstream>
@@ -6,7 +6,7 @@
 #include <stdexcept>
 #include <unordered_map>
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -186,4 +186,4 @@ bool Kwg::GaddagAccepts(std::string_view path) const {
   return arc != kNoChildren && Accepts(arcs_[arc]);
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

@@ -1,10 +1,10 @@
-#include "scrabble/game.hpp"
+#include "kingbble/game.hpp"
 
 #include <gtest/gtest.h>
 
-#include "scrabble/greedy_bot.hpp"
+#include "kingbble/greedy_bot.hpp"
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -51,4 +51,4 @@ TEST(Game, GreedySelfPlayConservesTilesAndTerminates) {
   }
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

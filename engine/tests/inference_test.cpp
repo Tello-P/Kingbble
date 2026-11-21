@@ -1,4 +1,4 @@
-#include "scrabble/inference.hpp"
+#include "kingbble/inference.hpp"
 
 #include <gtest/gtest.h>
 
@@ -6,7 +6,7 @@
 #include <fstream>
 #include <string>
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -111,9 +111,9 @@ TEST_F(InferenceTest, SampledPosteriorMatchesExactOnTheSameQuestion) {
   for (const Hypothesis& h : leaves.hypotheses()) EXPECT_EQ(h.rack.Size(), 2);
 }
 
-}  // namespace scrabble
+}  // namespace kingbble
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -245,9 +245,9 @@ TEST_F(InferenceTest, HumanModelMakesRareRacksUnlikelyButPossible) {
   EXPECT_GT(model.Likelihood(obs, R("ACTX")), 0);
 }
 
-}  // namespace scrabble
+}  // namespace kingbble
 
-namespace scrabble {
+namespace kingbble {
 
 TEST_F(InferenceTest, FilterConditionsOnTheObserversDraw) {
   RangeFinderModel model(gaddag_, leaves_);
@@ -331,9 +331,9 @@ TEST_F(InferenceTest, FilterHandlesABlindExchange) {
   for (const Hypothesis& h : post.hypotheses()) EXPECT_EQ(h.rack.Size(), 4);
 }
 
-}  // namespace scrabble
+}  // namespace kingbble
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -387,4 +387,4 @@ TEST(RackFilter, SurpriseWidensThePosteriorInsteadOfCollapsing) {
   EXPECT_GT(widened, collapsed + 0.2);
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

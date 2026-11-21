@@ -6,7 +6,7 @@
 
 #include "../apps/bot_factory.hpp"
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -44,4 +44,4 @@ TEST(GameRecord, SelfPlayGameReplays) {
   }
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

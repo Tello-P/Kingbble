@@ -1,11 +1,11 @@
-#include "scrabble/game.hpp"
+#include "kingbble/game.hpp"
 
 #include <cctype>
 #include <stdexcept>
 
-#include "scrabble/movegen.hpp"
+#include "kingbble/movegen.hpp"
 
-namespace scrabble {
+namespace kingbble {
 
 int RackValue(const Rack& rack) {
   int v = 0;
@@ -83,4 +83,4 @@ void Game::Finish() {
   over_ = true;
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

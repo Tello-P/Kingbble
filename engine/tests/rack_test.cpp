@@ -1,8 +1,8 @@
-#include "scrabble/rack.hpp"
+#include "kingbble/rack.hpp"
 
 #include <gtest/gtest.h>
 
-namespace scrabble {
+namespace kingbble {
 
 TEST(Rack, CanonicalString) {
   auto r = Rack::FromString("TSENIA?");
@@ -20,4 +20,4 @@ TEST(Rack, RemoveMissingTileFails) {
 
 TEST(Rack, RejectsInvalidChars) { EXPECT_FALSE(Rack::FromString("AB1").has_value()); }
 
-}  // namespace scrabble
+}  // namespace kingbble

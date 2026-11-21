@@ -70,6 +70,7 @@ const TEXT = {
     bots: {
       greedy: "Easy · highest score", equity: "Medium · static equity", sim: "Strong · simulation",
       "sim+eg": "Very strong · simulation + endgame",
+      "sim+peg+eg": "Extreme · simulation + pre-endgame + endgame",
       "sim+inf:human+eg": "Maximum · rack inference + endgame",
     },
     errors: [
@@ -148,6 +149,7 @@ const TEXT = {
     bots: {
       greedy: "Fácil · máxima puntuación", equity: "Medio · equity estática", sim: "Fuerte · simulación",
       "sim+eg": "Muy fuerte · simulación + finales",
+      "sim+peg+eg": "Extremo · simulación + pre-final + finales",
       "sim+inf:human+eg": "Máximo · inferencia del atril + finales",
     },
     errors: [

@@ -1,4 +1,4 @@
-#include "scrabble/movegen.hpp"
+#include "kingbble/movegen.hpp"
 
 #include <gtest/gtest.h>
 
@@ -9,10 +9,10 @@
 #include <tuple>
 #include <utility>
 
-#include "scrabble/game.hpp"
-#include "scrabble/greedy_bot.hpp"
+#include "kingbble/game.hpp"
+#include "kingbble/greedy_bot.hpp"
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -221,4 +221,4 @@ TEST(MoveGenerator, MatchesBruteForceDuringSelfPlay) {
   EXPECT_GT(positions, 25);
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

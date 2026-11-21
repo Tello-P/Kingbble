@@ -1,4 +1,4 @@
-#include "scrabble/inference.hpp"
+#include "kingbble/inference.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -8,7 +8,7 @@
 #include <stdexcept>
 #include <unordered_map>
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -677,4 +677,4 @@ std::optional<Rack> RackFilter::SampleRack(std::mt19937_64& rng) const {
   return hypotheses_.back().rack;
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

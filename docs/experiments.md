@@ -179,3 +179,15 @@ gunzip -k configs/enable_leaves_gen10.csv.gz
 build/engine/kingbble_selfplay --lexicon lexica/ENABLE.txt --leaves configs/enable_leaves_gen10.csv \
   --a sim+peg+eg --b equity --games 2 --seed 7 --sim-time 1 --threads 2 --results build/enable_check.txt
 ```
+
+## Extreme level of the desktop app (v1.1)
+
+ENABLE with the gen 10 leaves, 300 paired games each against `sim+eg`, 10 candidates x
+100 iterations, 2 threads, seed 7000, pre-endgame and endgame 2 s:
+
+| Bot a | a win % (95 % CI) | a spread (95 % CI) |
+|---|---|---|
+| `sim+peg+eg` | 51.0 (45.3-56.7) | -0.7 (-1.6..+0.2) |
+| `sim+inf:rf+eg` | 44.8 (39.2-50.4) | -16.6 (-26.5..-6.7) |
+
+The app's Extreme is `sim+peg+eg`; hard RangeFinder inference is weaker than none.

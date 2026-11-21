@@ -42,21 +42,21 @@
 #include <string>
 #include <vector>
 
+#include "kingbble/endgame_bot.hpp"
+#include "kingbble/equity.hpp"
+#include "kingbble/equity_bot.hpp"
+#include "kingbble/features.hpp"
+#include "kingbble/gaddag.hpp"
+#include "kingbble/game.hpp"
+#include "kingbble/human_reply.hpp"
+#include "kingbble/inference.hpp"
+#include "kingbble/leaves.hpp"
+#include "kingbble/preendgame_bot.hpp"
+#include "kingbble/risk_bot.hpp"
+#include "kingbble/sim_bot.hpp"
 #include "results_file.hpp"
-#include "scrabble/endgame_bot.hpp"
-#include "scrabble/equity.hpp"
-#include "scrabble/equity_bot.hpp"
-#include "scrabble/features.hpp"
-#include "scrabble/gaddag.hpp"
-#include "scrabble/game.hpp"
-#include "scrabble/human_reply.hpp"
-#include "scrabble/inference.hpp"
-#include "scrabble/leaves.hpp"
-#include "scrabble/preendgame_bot.hpp"
-#include "scrabble/risk_bot.hpp"
-#include "scrabble/sim_bot.hpp"
 
-using namespace scrabble;
+using namespace kingbble;
 
 namespace {
 

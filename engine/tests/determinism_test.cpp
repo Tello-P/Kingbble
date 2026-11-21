@@ -10,7 +10,7 @@
 #include "../apps/bot_factory.hpp"
 #include "../apps/run_seeds.hpp"
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -126,4 +126,4 @@ TEST(Determinism, EndgameByDepthIsReproducible) {
   EXPECT_EQ(PlayRun("equity+eg", "equity", 11, 0, 2), PlayRun("equity+eg", "equity", 11, 0, 2));
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

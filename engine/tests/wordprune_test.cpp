@@ -1,4 +1,4 @@
-#include "scrabble/wordprune.hpp"
+#include "kingbble/wordprune.hpp"
 
 #include <gtest/gtest.h>
 
@@ -6,13 +6,13 @@
 #include <string>
 #include <vector>
 
-#include "scrabble/endgame.hpp"
-#include "scrabble/equity.hpp"
-#include "scrabble/greedy_bot.hpp"
-#include "scrabble/leaves.hpp"
-#include "scrabble/preendgame.hpp"
+#include "kingbble/endgame.hpp"
+#include "kingbble/equity.hpp"
+#include "kingbble/greedy_bot.hpp"
+#include "kingbble/leaves.hpp"
+#include "kingbble/preendgame.hpp"
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -141,4 +141,4 @@ TEST_F(WordPruneTest, PreEndgameSolverGivesTheSameResults) {
   }
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

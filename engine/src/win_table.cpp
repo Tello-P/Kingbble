@@ -1,4 +1,4 @@
-#include "scrabble/win_table.hpp"
+#include "kingbble/win_table.hpp"
 
 #include <algorithm>
 #include <fstream>
@@ -6,7 +6,7 @@
 #include <sstream>
 #include <stdexcept>
 
-namespace scrabble {
+namespace kingbble {
 
 WinTable WinTable::FromFile(const std::string& path) {
   std::ifstream in(path);
@@ -50,4 +50,4 @@ double WinTable::Win(double spread, int unseen) const {
   return row[low] + (position - low) * (row[low + 1] - row[low]);
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

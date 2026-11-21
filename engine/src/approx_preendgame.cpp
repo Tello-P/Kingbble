@@ -1,4 +1,4 @@
-#include "scrabble/approx_preendgame.hpp"
+#include "kingbble/approx_preendgame.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -7,9 +7,9 @@
 #include <stdexcept>
 #include <thread>
 
-#include "scrabble/equity.hpp"
+#include "kingbble/equity.hpp"
 
-namespace scrabble {
+namespace kingbble {
 
 namespace {
 
@@ -113,4 +113,4 @@ std::vector<ApproxPreEndgamePlay> ApproxPreEndgameSolver::Solve(
   return plays;
 }
 
-}  // namespace scrabble
+}  // namespace kingbble

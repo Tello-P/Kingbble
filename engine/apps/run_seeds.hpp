@@ -6,7 +6,7 @@
 
 #include <cstdint>
 
-namespace scrabble {
+namespace kingbble {
 
 // SplitMix64: decorrelates per-game seeds so different run seeds share no games.
 inline std::uint64_t MixSeed(std::uint64_t x) {
@@ -28,4 +28,4 @@ inline std::uint64_t StreamSeed(std::uint64_t seed, int deal, int seat) {
                  static_cast<std::uint64_t>(seat));
 }
 
-}  // namespace scrabble
+}  // namespace kingbble
